@@ -248,3 +248,42 @@ for i, token in ipairs(tokens) do
 end
 return #tokens
 `)
+
+// 按身份令牌签发时刻撤销(Manager.RevokeIssuedBefore):官方通行证改密之后,只作废改密之前那些登录的家族。
+// 遍历账号索引里的每一枚 refresh,载荷的 identity_issued_at 不晚于 ARGV[4](没有这一项按 0 算)就撤:删 refresh、
+// 删家族记录(只在 head 就是它时),从索引摘掉;它签出的 access 因家族不在立即失效。与淘汰脚本同一套归属核对,数据不对就整个报错、一个都不删。
+// ARGV:账号、refresh 前缀、family 前缀、截止时刻(unix 秒)。两个前缀都带账号 tag,现拼的键与 KEYS[1] 同槽。
+var retireIssuedBeforeScript = redis.NewScript(`
+local kind = redis.call("TYPE", KEYS[1]).ok
+if kind == "none" then return 0 end
+if kind ~= "zset" then return redis.error_reply("invalid account refresh index") end
+local cutoff = tonumber(ARGV[4])
+local tokens, families = {}, {}
+for _, token in ipairs(redis.call("ZRANGE", KEYS[1], 0, -1)) do
+    local raw = redis.call("GET", ARGV[2] .. token)
+    if raw then
+        local ok, data = pcall(cjson.decode, raw)
+        if not ok or type(data) ~= "table" or data.account ~= ARGV[1] then
+            return redis.error_reply("invalid refresh ownership")
+        end
+        if (tonumber(data.identity_issued_at) or 0) <= cutoff then
+            local family = data.family_id
+            if type(family) ~= "string" or #family ~= 22 or not string.match(family, "^[%w_-]+$") then
+                return redis.error_reply("invalid refresh family identity")
+            end
+            tokens[#tokens + 1] = token
+            local key = ARGV[3] .. family
+            if redis.call("TYPE", key).ok == "hash" and redis.call("HGET", key, "account") == ARGV[1] and
+               redis.call("HGET", key, "head") == token then
+                families[#tokens] = key
+            end
+        end
+    end
+end
+for i, token in ipairs(tokens) do
+    redis.call("DEL", ARGV[2] .. token)
+    if families[i] then redis.call("DEL", families[i]) end
+    redis.call("ZREM", KEYS[1], token)
+end
+return #tokens
+`)

@@ -165,6 +165,10 @@
 
     <TradeManual v-if="hasPermission('gm:trade:read')" @busy-change="tradeManualBusy = $event" />
 
+    <OpsCommands v-if="canViewOps" @busy-change="opsBusy = $event" />
+
+    <GatewayAdmin v-if="hasPermission('gm:gateway:write')" />
+
     <SystemMail
       v-if="canViewSystemMail"
       :busy="mutationBusy"
@@ -353,6 +357,9 @@
   import SystemMail from './SystemMail.vue';
   import ApprovalPanel from './ApprovalPanel.vue';
   import TradeManual from './TradeManual.vue';
+  import OpsCommands from './OpsCommands.vue';
+  import GatewayAdmin from './GatewayAdmin.vue';
+  import { OPS_TARGETS } from '/@/api/gm/ops';
   import { APPROVAL_STATUS_COLORS, APPROVAL_STATUS_LABELS, awaitsAnotherApprover, dualControl, type ApprovalView } from '/@/api/gm/approval';
   import { PLAYER_OPERATIONS } from '/@/api/gm/playerCommands';
   import {
@@ -411,8 +418,13 @@
   const playerCommandBusy = ref(false);
   const systemMailBusy = ref(false);
   const tradeManualBusy = ref(false);
+  const opsBusy = ref(false);
   const mutationBusy = computed(
-    () => preparing.value || sending.value || playerCommandBusy.value || systemMailBusy.value || tradeManualBusy.value
+    () => preparing.value || sending.value || playerCommandBusy.value || systemMailBusy.value || tradeManualBusy.value || opsBusy.value
+  );
+  // 运营处置页:持有任一下游的查看或发起权限、或审计权限就显示。
+  const canViewOps = computed(
+    () => hasPermission('gm:audit:read') || OPS_TARGETS.some((target) => hasPermission(`gm:${target.value}:read`) || hasPermission(`gm:${target.value}:prepare`))
   );
   const mailCurrencies = ref<MailCurrencyRow[]>([{ currencyType: 0, amount: '' }]);
   const mailItems = ref<MailItemRow[]>([{ configId: '', count: '' }]);

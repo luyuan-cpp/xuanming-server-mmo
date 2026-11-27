@@ -159,11 +159,34 @@ func TestPackVerifyExtractAndPermanentIDRollback(t *testing.T) {
 
 	// 从 v2 回滚到 v1 时 Item 1002 消失:CheckPermanentIDRollback 必须检出。
 	require.NotEqual(t, d1, d2)
-	losses, err := CheckPermanentIDRollback(srcV2, srcV1)
+	losses, err := CheckPermanentIDRollback(srcV2, srcV1, testSchema, d2, d1)
 	require.NoError(t, err)
 	require.Len(t, losses, 1)
 	require.Equal(t, "Item", losses[0].Table)
 	require.Equal(t, []uint64{1002}, losses[0].MissingIDs)
+}
+
+// 目录必须就是这次回滚的两包(数据覆写审计 r2 第 4 轮 r2-ops#1):current-dir 不是线上生效包、target-dir 不是回滚目标、
+// 同一目录传两次、schema 线不对,比出来的「没有丢行」都不作数,一律报错。
+func TestCheckPermanentIDRollbackRejectsDirsThatAreNotTheTwoBundles(t *testing.T) {
+	root := t.TempDir()
+	srcV1 := filepath.Join(root, "v1")
+	srcV2 := filepath.Join(root, "v2")
+	d1 := writeTestTableDir(t, srcV1, 1, `{"data":[{"id":1001}]}`, `{"data":[{"id":1}]}`)
+	d2 := writeTestTableDir(t, srcV2, 2, `{"data":[{"id":1001},{"id":1002}]}`, `{"data":[{"id":1}]}`)
+
+	cases := map[string]struct {
+		currentDir, targetDir, schema, live, target string
+	}{
+		"current dir is not the live bundle":             {srcV1, srcV1, testSchema, d2, d1},
+		"same dir twice: target dir is not the target":   {srcV2, srcV2, testSchema, d2, d1},
+		"wrong schema line":                              {srcV2, srcV1, "0123456789abcdef", d2, d1},
+		"missing live digest (nothing verified as live)": {srcV2, srcV1, testSchema, "", d1},
+	}
+	for name, tc := range cases {
+		_, err := CheckPermanentIDRollback(tc.currentDir, tc.targetDir, tc.schema, tc.live, tc.target)
+		require.Error(t, err, name)
+	}
 }
 
 func TestVerifyAndExtractRejectsTraversalAndSymlinks(t *testing.T) {

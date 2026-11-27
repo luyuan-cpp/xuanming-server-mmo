@@ -6,8 +6,8 @@
 > **P1-1 ~ P1-4（准入前移到 Acceptor、拒绝发 RST、新建连接速率闸、连接类指标，2026-11-12 落码，未编译）**、
 > **P2-2（gate 按来源前缀限速，缺省关闭、开了只在承压时生效，2026-11-19 落码，未编译）**。
 > **2026-11-26 落码（未编译）：G10 验签前只收 4KB 以内的帧、§5 第 5 条已验签连接重发验签改为不回包并计非法包、
-> G12 会话号序号位宽改用自己的常量、P2-1 `TCP_DEFER_ACCEPT`（gate 与 battle 直连）。**
-> **2026-11-26 定案：P2-4 票据先行定为不做（理由见该节）；P1-5 的 sysctl 定为不做；P1-5 的 NetworkPolicy 已由端口白名单那批做完；
+> G12 会话号序号位宽改用自己的常量、P2-1 `TCP_DEFER_ACCEPT`（gate 与 battle 直连）、P1-5 的 safe sysctl（gate / battle Pod 上的 keepalive 与收发缓冲上限，部署模板，未运行）。**
+> **2026-11-26 定案：P2-4 票据先行定为不做（理由见该节）；P1-5 的 NetworkPolicy 已由端口白名单那批做完；
 > P2-3 第 4 条（排队）已由 login 登录排队承担。**
 > P2-3 第 3 条（断线重连优先）核对后已由 login 做了（见该条）。P1-5 的 `resources.requests` 2026-11-26 由会话「gate 未验签连接预算、LRU 淘汰与按概率早拒」落码，状态以 P1-5 那张表为准。
 > **2026-11-26 全线复核（最高档模型，未编译）：** 修了 battle 两处（契约测试跟着成员改名对齐；找最老一条未认证直连不再另取时钟），
@@ -731,10 +731,46 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
   `New-GateServiceYaml`(现 `k8s_deploy.ps1:2405`)只剩 podip 单副本的 `gate-entry`。本节其余条目(resources、sysctl、NetworkPolicy)的现状见本节末尾「2026-11-26 逐条状态」表。
   注意:gate 票据绑 `gate_node_id`,"外部 L4 LB"只能按实例透传,不能把多台 gate 放进一个后端池(`k8s_gate_exposure_guidance.md`)。
   括号里的"或 LB 开 PROXY protocol"目前不可用:gate 不解析 PROXY protocol(`cpp/` 下无实现),LB 单方面开启会在每条连接前多出 PROXY 头、gate 按业务包解析(静态推断,未实测);代理型 LB 下 G9 前置仍不满足(§4.2.1 表)。
-- **safe sysctl**（pod 里 `securityContext.sysctls` 直接写，不用动节点）：
-  `net.ipv4.tcp_keepalive_time`/`_intvl`/`_probes`（v1.29+）——这是部署层对应的死连接回收阀门；
-  `net.ipv4.tcp_rmem`/`tcp_wmem`（v1.32+）调小能直接抬高同一内存预算下的连接天花板。
-  ⚠️ keepalive 只杀**真死**的对端，活着不说话的攻击者杀不掉——那必须靠 P0-2。
+- **safe sysctl**（Pod 的 `securityContext.sysctls` 直接写，只作用于本 Pod 的网络命名空间，含 sidecar；不动节点、不改 kubelet 参数）。
+  **2026-11-26 定值并落码（部署模板，未运行）**：gate、battle 的四套 Pod 模板都写同一份，scene 不写；取值只在
+  `tools/scripts/lib/k8s_client_entry.ps1` 的 `Get-ClientFacingPodSysctlsYaml` 一处，契约测试独立钉一份。
+
+  | sysctl | 取值 | 内核缺省 |
+  | --- | --- | --- |
+  | `net.ipv4.tcp_keepalive_time` / `_intvl` / `_probes` | `120` / `10` / `6` | `7200` / `75` / `9` |
+  | `net.ipv4.tcp_rmem`（最小 / 初始 / 上限） | `4096 131072 524288` | `4096 131072 6291456` |
+  | `net.ipv4.tcp_wmem`（最小 / 初始 / 上限） | `4096 16384 524288` | `4096 16384 4194304` |
+
+  1. **keepalive 兜的是应用层不跟踪的连接。** muduo 每条 `TcpConnection` 构造时都开 `SO_KEEPALIVE`（`TcpConnection.cc:63`，Windows 副本与
+     Linux 两个 gitlink b55b0ac / f1fc77e 相同），所以这三项对 Pod 里所有 TCP 连接生效。客户端连接应用层已有更快的两道（验签前 10 秒握手期限、
+     验签后 30 秒心跳判死，`gate-client-heartbeat.md`；battle 直连同一套），keepalive 对它们只是兜底。真正受益的是节点间长连接与 sidecar 的出站连接：
+     对端整机掉电或网络分区时收不到 FIN / RST，连接空闲时按内核缺省要 7200 + 75 × 9 秒（约 2 小时 11 分）才发现；改后 120 + 10 × 6 = 约 3 分钟。
+     - 起探 120 秒：低于常见云 L4 负载均衡 / NAT 的空闲回收（Azure LB 缺省 4 分钟、AWS NLB 350 秒），空闲长连接不会先被中间设备静默丢掉；
+       再往下压没有收益，客户端连接本来就有 10 秒一次的应用层心跳，压低只是给每台 gate 上数万条连接多加探测包。
+     - 10 秒 × 6 次：容忍约一分钟的丢包才判死，移动网络短暂掉线不误杀。
+     - ⚠️ keepalive 只杀**真死**的对端，活着不说话的攻击者杀不掉——那靠 P0-2（握手期限、未验签预算）。
+     - 这三项只对开了 `SO_KEEPALIVE` 的 socket 生效。Java 版 Netty 的子 channel 缺省不开（`ChannelOption.SO_KEEPALIVE` 缺省 false），
+       Java 版将来上集群照抄这组 sysctl 时要同时打开，否则不起作用（Java 仓现在没有 K8s 清单）。
+  2. **收发缓冲只压上限。** 原文「调小能直接抬高同一内存预算下的连接天花板」不准确：内核按排队的数据分配 socket 缓冲，空闲连接不占缓冲，
+     压初始值省不了空闲连接的内存，只会让突发时的自动调整从更小的窗口起步，所以最小值与初始值照内核缺省。上限决定的是**最坏情况**：
+     对端不读（慢读客户端、故意不读的攻击者）时发送缓冲涨到 `tcp_wmem` 上限，本端 loop 卡住时接收缓冲涨到 `tcp_rmem` 上限。
+     cgroup v2 下 socket 缓冲算进 Pod 的内存（`memory.stat` 的 `sock`），缺省上限下单连接最坏 6MB + 4MB，乘上连接上限是没法预算的数；
+     压到 512KB 后单连接内核侧最坏 1MB，§9.5「连接上限 × 每连接高水位」能算出确定的上界。
+     - 吞吐够不够：单连接吞吐上限约为「有效窗口 ÷ 往返时延」，有效窗口约为缓冲上限的一半。客户端 200ms 往返时仍有约 1.3MB/s，游戏下行是 KB/s 量级；
+       集群内往返 ≤ 1ms 时单连接百 MB/s 以上，gate ↔ scene 的汇聚流量不受影响。同一 Pod 里 sidecar 跨公网下载大包会比缺省慢，它们是后台任务，可接受。
+     - 为什么不更小：256KB 时客户端 200ms 往返只剩约 650KB/s，进场景的大快照可能多卡几百毫秒。512KB 是两头都够的最小整档。
+  3. **集群要求。** keepalive 三项 Kubernetes 1.29 起、收发缓冲两项 1.32 起才进 safe sysctl 名单，节点内核还要 ≥ 4.15
+     （kubelet 按内核版本判断这几项是否随网络命名空间隔离）。本仓钉的 Agones 1.58 只支持 1.33~1.35（`deploy/k8s/kind-config.yaml` 注释），kind 钉 1.35.8，
+     所以装得上 Agones 的集群都满足。不满足时 kubelet 以 `SysctlForbidden` 拒收 Pod，失败是显式的；namespace 若开了 Pod Security `baseline`
+     且把 `enforce-version` 钉在 1.32 以前也会拒收。部署要求与核对命令写在 `deploy/k8s/README.md`（C++ 节点 requests 那条之后）。
+     版本与内核门槛 2026-11-26 按源码核过：Kubernetes v1.28 / v1.29 / v1.31 / v1.32 的 `pkg/kubelet/sysctl/safe_sysctls.go`、
+     v1.32 的 `pkg/util/kernel/constants.go`（keepalive 4.5、收发缓冲 4.15）与 Pod Security 的 `policy/check_sysctls.go`（baseline 1.29 / 1.32）。
+     **只能在 Pod 上写，节点上配不到 Pod 里**（Linux v6.12 `tcp_sk_init` 核过）：新网络命名空间的 keepalive 三项取编译期缺省 7200 / 75 / 9，
+     不继承节点；`tcp_rmem` / `tcp_wmem` 只在建命名空间时从节点复制一次。所以 `docs/ops/gate-kernel-tuning-runbook.md` §二的主机 sysctl
+     只管直接在主机网络里跑的 gate（裸机 / VM），K8s 上靠本条的 Pod 模板。
+  4. **不给 scene。** scene 没有客户端连接；节点间连接的实例消失靠 etcd 摘除感知；收发缓冲上限对 scene 与存盘服务之间的大流量没有实测依据，不动。
+  5. **生效方式。** `-ClientEntryMode external` 下 gate 是 OnDelete 的 StatefulSet，已在跑的 Pod 要按 `k8s_gate_drain.ps1` 逐台排空删 Pod 才换上新值；
+     Deployment 形态的 gate、battle 与 battle Fleet 随下次发布滚动。
 - NetworkPolicy default-deny：现在全仓**零 NetworkPolicy**，集群里任意 pod 都能直连
   gate:18000 / scene:20000 / etcd:2379 / mysql:3306 / redis:6379 / kafka:9092。
 
@@ -745,7 +781,7 @@ gate 与 battle 直连共用一份，gate 的 `connection_admission.h` 用 using
 | `resources.requests` | **已落码（2026-11-26，未运行）**。gate / scene / battle 主容器都带 requests，五套模板（`k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`、`New-SceneFleetYaml`，lib 的 gate StatefulSet、battle Fleet、battle hostPort）取同一张表 `Get-CppNodeResourceRequests`：staging / prod 档 gate、battle 为 cpu `1`、memory `512Mi`，scene 为 cpu `1`、memory `1Gi`；dev 档 cpu `100m`，memory `128Mi`（scene `256Mi`）。只配 requests：cpu 不配 limit，免得 CFS 限流把单线程 loop 的 tick 打出毛刺；memory 不配 limit，limit 要和「连接上限 × 每连接高水位」对齐，那个乘积要先按 §9.5 实测。取值都是估计，压测后按 `process_resident_memory` 调这张表 |
 | `readinessProbe` / `terminationGracePeriodSeconds` / PDB | 已有：集群外入口的 gate StatefulSet 模板（`tools/scripts/lib/k8s_client_entry.ps1`）带这三项 |
 | `externalTrafficPolicy: Local` | 已有（2026-09-29 那条更正） |
-| safe sysctl（`tcp_keepalive_*`、`tcp_rmem` / `tcp_wmem`） | **定为不做**。keepalive 要回收的死连接，应用层已经有更快的两道：验签前 10 秒握手期限、验签后 30 秒心跳判死（`gate-client-heartbeat.md`）；这几个 sysctl 还要求集群 ≥ 1.29 / 1.32，版本不够时 Pod 直接起不来。收发缓冲调小会换来吞吐下降，没有实测不动内核缺省 |
+| safe sysctl（`tcp_keepalive_*`、`tcp_rmem` / `tcp_wmem`） | **已落码（2026-11-26，未运行）**。gate、battle 的四套模板（`k8s_deploy.ps1` `New-NodeDeploymentYaml` 的 gate / battle 两个角色，lib 的 gate StatefulSet、battle Fleet、battle hostPort）在 Pod spec 上紧跟 `terminationGracePeriodSeconds` 写同一份五项（取值与理由见上面「safe sysctl」条）；scene 的两套模板不写。契约测试 `k8s_deploy_contract.tests.ps1`「P1-5:gate / battle 的 Pod spec 紧跟 terminationGracePeriodSeconds 带五项 safe sysctl」按 DryRun 核五套模板。同日早些时候「定为不做」的两条理由复核后都不成立：应用层的握手期限与心跳只管客户端连接，节点间长连接与 sidecar 连接空闲时没人回收；版本要求被 Agones 1.58 的 1.33+ 覆盖。收发缓冲只压上限、不动初始值，吞吐推算见上 |
 | NetworkPolicy | 已有：`k8s_deploy.ps1` 生成的入站端口白名单（「在线服务端口白名单」那批）。被选中的 Pod 只放行白名单端口，其余入站默认拒绝 |
 
 ### P1-6 · 验签前的按包防护（对应 G10、§5 第 3 / 5 条）
@@ -1050,6 +1086,8 @@ conntrack -C; cat /proc/sys/net/netfilter/nf_conntrack_max
 
 ⚠️ 定容时 `GateMaxConnections` 与每连接高水位是**相乘的**：20000 × 2MB = 40GB 理论最坏
 output buffer。单独看每个都合理，乘起来超过任何合理预算。
+内核侧排队数据的最坏值（对端不读 / 本端卡住）由 P1-5 的 safe sysctl 封到每连接收、发各 512KB（2026-11-26），cgroup v2 下算进 Pod 内存；
+定 memory limit 时在用户态高水位之外每连接再加这 1MB。
 
 ### 9.6 P1-1 ~ P1-4 与 P0-2 未验签预算的验收（2026-11-12 补，2026-11-19 补 P0-2）
 
@@ -1088,6 +1126,7 @@ output buffer。单独看每个都合理，乘起来超过任何合理预算。
 | 验签前只收小帧（G10，2026-11-26 补） | 建一条连接，不验签，先发一个长度头声明 8192 字节的帧，再慢慢补字节 | 发出长度头后连接立刻被关（读到 EOF 或 `ECONNRESET`），gate 不等后面的字节；`codec` 的采样 ERROR 行 `reason=kInvalidLength`。同样的帧在验签之后发，连接不被关（之后按业务上限处理） |
 | 已验签连接重发验签（§5 第 5 条，2026-11-26 补） | 正常验签成功后，在同一条连接上再连发验签请求 | 不再收到应答；连发到 `GATE_ILLEGAL_PACKET_THRESHOLD` 条时连接被关，日志有 `repeated token verify` |
 | `TCP_DEFER_ACCEPT`（P2-1，2026-11-26 补） | 前后各取一次 `nstat -az TcpExtTCPDeferAcceptDrop`；裸 dial 循环建 100 条连上就断的连接，再建 20 条连上后一直不发包的连接，最后跑一轮 robot 登录 | 连上就断的 100 条不出现在 `gate_accepted_total` 里（内核里就结束了）；不发包的 20 条约 1 秒后才计入 `gate_accepted_total`，10 秒后被握手期限关掉；计数器 `TcpExtTCPDeferAcceptDrop` 增加；robot 全部登录成功，握手耗时分布与开启前一致 |
+| Pod 级 safe sysctl（P1-5，2026-11-26 补；要在集群里看） | kind 上 `zone-up` / `infra-up` 之后，对 gate、battle、scene 各一个 Pod 执行 `kubectl exec <pod> -c <容器> -- cat /proc/sys/net/ipv4/tcp_keepalive_time /proc/sys/net/ipv4/tcp_keepalive_intvl /proc/sys/net/ipv4/tcp_keepalive_probes /proc/sys/net/ipv4/tcp_rmem /proc/sys/net/ipv4/tcp_wmem`；再在 gate Pod 里对一条已登录连接看 `ss -tno`（运行时镜像没有 iproute2，用 `kubectl debug <pod> -it --target=gate --image=<带 ss 的镜像>` 挂临时容器，它与 gate 共用网络命名空间） | gate、battle 读到 `120`、`10`、`6`、`4096 131072 524288`、`4096 16384 524288`；scene 读到内核缺省；`kubectl get events` 里没有 `SysctlForbidden`；`ss -tno` 那条连接带 `timer:(keepalive,…)`，剩余时间不超过 2 分钟（内核缺省时约 2 小时） |
 
 判据仍是 §9.4 那三条：攻击进行中已登录玩家的延迟不变、新玩家登录成功率高于阈值、进程 RSS 不涨。
 

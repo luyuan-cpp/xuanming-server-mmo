@@ -159,6 +159,9 @@ type ServiceContext struct {
 	AccountRealNames AccountRealNameStore
 	// ChannelIdentities 读写第三方渠道身份与玩家画像(content_guard / chat 用)。
 	ChannelIdentities ChannelIdentityStore
+	// ChannelIdentityAuth 验 GetPlayerChannelIdentity 的调用证明,只认 content_guard 与 chat(channelIdentityVerifier);
+	// 两把密钥都缺时为 nil,该 RPC 回 Unavailable。
+	ChannelIdentityAuth *serviceauth.Verifier
 	// PaymentDirectoryAuth 验 go/payment 的调用证明,只给 GetAccountRealName 用;密钥缺失时为 nil,该 RPC 回 Unavailable。
 	PaymentDirectoryAuth      *serviceauth.Verifier
 	AccountDirectoryAuth      *serviceauth.Verifier
@@ -577,6 +580,7 @@ func NewServiceContextWithAdmission(c config.Config, root, relay *drainproof.Ses
 		}
 		s.AccountRealNames = directory
 		s.ChannelIdentities = directory
+		s.ChannelIdentityAuth = channelIdentityVerifier(os.Getenv)
 		if auth, err := serviceauth.New(map[string]string{accountdirectory.PaymentCaller: os.Getenv(accountdirectory.PaymentSecretEnv)}); err != nil {
 			logx.Errorf("[real-name] %s unavailable; GetAccountRealName disabled", accountdirectory.PaymentSecretEnv)
 		} else {

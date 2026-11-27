@@ -174,7 +174,30 @@ public class GmInstallation implements ApplicationRunner, WebMvcConfigurer {
             grant("gm_role_auditor", "trade", List.of("gm_trade_permission_0"));
             db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
         });
+        runMigration(9, () -> opsPermissions(List.of("mall"), "商城"));
         ready = true;
+    }
+
+    /**
+     * 运营处置(GmOpsController)的下游各有查看、发起、批准三个权限串 gm:&lt;target&gt;:read / prepare / approve;
+     * 写法与迁移 8 相同:建菜单行、授给 admin,再按发起 / 批准 / 只读分给三个标准角色。新接入的下游另开一次迁移调它。
+     */
+    private void opsPermissions(List<String> targets, String label) {
+        String roleId = db.queryForObject("SELECT id FROM sys_role WHERE role_code='admin'", String.class);
+        String[] actions = {"read", "prepare", "approve"};
+        String[] verbs = {"查看", "发起", "批准"};
+        for (String target : targets) {
+            for (int i = 0; i < actions.length; i++) {
+                String id = "gm_ops_" + target + "_permission_" + i;
+                addMenu(id, "gm_console", verbs[i] + label + "运营处置", null, null, 2, GmOpsController.permission(target, actions[i]));
+                db.update("INSERT INTO sys_role_permission(id,role_id,permission_id) VALUES(?,?,?)", "gm_admin_ops_" + target + "_" + i, roleId, id);
+            }
+            String prefix = "gm_ops_" + target + "_permission_";
+            grant("gm_role_operator", "ops_" + target, List.of(prefix + 0, prefix + 1));
+            grant("gm_role_approver", "ops_" + target, List.of(prefix + 0, prefix + 2));
+            grant("gm_role_auditor", "ops_" + target, List.of(prefix + 0));
+        }
+        db.update("UPDATE sys_permission SET is_leaf=0 WHERE id='gm_console'");
     }
 
     /** 给迁移 7 建好的标准角色追加权限;tag 让各次迁移写入的关系行 id 互不相撞。 */

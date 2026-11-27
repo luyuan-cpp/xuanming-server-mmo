@@ -99,7 +99,7 @@
 6. **冒烟**
    - 起 login、网关、`sandbox_mock`，按沙盒手册 §G.3、§H.3、§I.2 的 curl 跑，期望值写在命令注释里。
    - robot 跑一轮登录进场，`login_assign_gate_auth_total{result="authenticated"}` 应递增。
-   - 关掉 `LegacyGateLoginEnabled` 之后，不带令牌的 `/api/assign-gate` 应回 401。
+   - 关掉 `LegacyGateLoginEnabled`，或者打开登录排队之后，不带令牌的 `/api/assign-gate` 应回 401。
 
 ## 3. 实名认证与未成年人防沉迷
 
@@ -202,7 +202,7 @@
   - 只认一个 ClientId。
   - 不做挑战式 nonce，改为身份令牌一次性消费（11-19 定，见账号注销交接）。
 - **分配 gate**
-  - 不带令牌的匿名分配，只在 `LegacyGateLoginEnabled` 开着时允许。
+  - 不带令牌的匿名分配，只在 `LegacyGateLoginEnabled` 开着、并且排队关着时允许（排队这一条是登录排队线 2026-11-26 加的，`anonymousAssignAllowed`）。签出的票绑定持票账号，见[登录排队](../design/login-queue-2026-05.md) §5「票据绑定账号」。
   - 令牌被拒回 401，令牌存储故障回 500。
 - **实名**：Disconnect 不为上报重放；会话收尾的 End 失败只记日志，由账本清扫在租约到期后补报下线（现在没有 GETDEL 了，原来写的「GETDEL 失败、丢一条下线上报可以接受」已过时，口径以实名细节单 §4 为准）。
 - **小游戏**：转小游戏包上线前再做，走 Unity 7。

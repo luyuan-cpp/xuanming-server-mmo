@@ -87,7 +87,10 @@
         "RoleRenameInProgress": 2053,
         "RoleRenameFrozen": 2054,
         "RoleRenameSameName": 2055,
-        "RoleRenameExpired": 2056
+        "RoleRenameExpired": 2056,
+        "LoginRoleTradeFrozen": 2057,
+        "LoginEnterGameBusy": 2058,
+        "LoginPassportCredentialChanged": 2059
       }
     },
     "scene_error": {

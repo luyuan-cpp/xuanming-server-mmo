@@ -575,7 +575,7 @@ function Read-LocalSqlBootJavaPlan {
     $ports = [Collections.Generic.HashSet[int]]::new()
     $databases = @{}
     $instances = @(foreach ($item in $plan.instances) {
-        Assert-MaintenanceProperties -Value $item -Required @('instanceKey','service','port','database','jarSha256') -Optional @('loginGrpcEndpoints','redisEndpoint','etcdEndpoint','mallAdminUrl')
+        Assert-MaintenanceProperties -Value $item -Required @('instanceKey','service','port','database','jarSha256') -Optional @('loginGrpcEndpoints','redisEndpoint','etcdEndpoint')
         $service = [string]$item.service; $key = [string]$item.instanceKey
         if ($key -cnotin @('mall','mall-replica','gateway','gateway-replica') -or $service -cnotin @('mall','gateway') -or ($key -replace '-replica$','') -cne $service -or -not $keys.Add($key)) { throw 'Java计划角色或实例键重复/不符。' }
         if ($item.port -isnot [long] -and $item.port -isnot [int]) { throw 'Java监听端口必须是整数。' }
@@ -589,7 +589,7 @@ function Read-LocalSqlBootJavaPlan {
         $jar = [IO.Path]::GetFullPath((Join-Path $RepoRoot "java/$module/target/$jarName"))
         if ($item.jarSha256 -cnotmatch '^[a-f0-9]{64}$' -or (Get-MaintenanceSha256 $jar) -cne $item.jarSha256) { throw 'Java运行包不是当前计划固定的R产物。' }
         if ($service -ceq 'gateway') {
-            foreach ($required in @('loginGrpcEndpoints','redisEndpoint','etcdEndpoint','mallAdminUrl')) { if (-not $item.Contains($required)) { throw '网关计划缺两区Go login或本轮协调/商城地址。' } }
+            foreach ($required in @('loginGrpcEndpoints','redisEndpoint','etcdEndpoint')) { if (-not $item.Contains($required)) { throw '网关计划缺两区Go login或本轮协调地址。' } }
             $mapped = [Collections.Generic.HashSet[int]]::new()
             foreach ($endpoint in ([string]$item.loginGrpcEndpoints -split ',')) {
                 if ($endpoint -cnotmatch '^(?<zone>[1-9][0-9]*)=(?<endpoint>127\.0\.0\.1:[0-9]+)$' -or -not $mapped.Add([int]$Matches.zone)) { throw '网关只能显式按区绑定本机Go login，不能轮询到别区。' }
@@ -597,18 +597,13 @@ function Read-LocalSqlBootJavaPlan {
             }
             if ((@($mapped | Sort-Object) -join ',') -cne (@($Zones | Sort-Object) -join ',') -or $Zones.Count -ne 2) { throw '网关Go login映射必须恰好覆盖本次两个zone。' }
             $null = Assert-LocalSqlBootEndpoint ([string]$item.redisEndpoint)
-            foreach ($name in @('etcdEndpoint','mallAdminUrl')) {
-                $uri = $null
-                if (-not [uri]::TryCreate([string]$item[$name], [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'http' -or $uri.Host -cne '127.0.0.1' -or $uri.Port -lt 1 -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -cne '/') { throw 'Java协调与商城地址必须为显式本机HTTP根地址。' }
-            }
-        } elseif (@('loginGrpcEndpoints','redisEndpoint','etcdEndpoint','mallAdminUrl') | Where-Object { $item.Contains($_) }) { throw 'Mall计划不得夹带Gateway寻址字段。' }
+            # 商城管理入口已迁进后台(java/gm_admin,双人复核批 4),网关不再代理商城,计划里也不再有商城地址。
+            $uri = $null
+            if (-not [uri]::TryCreate([string]$item['etcdEndpoint'], [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'http' -or $uri.Host -cne '127.0.0.1' -or $uri.Port -lt 1 -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -cne '/') { throw 'Java协调地址必须为显式本机HTTP根地址。' }
+        } elseif (@('loginGrpcEndpoints','redisEndpoint','etcdEndpoint') | Where-Object { $item.Contains($_) }) { throw 'Mall计划不得夹带Gateway寻址字段。' }
         [pscustomobject]@{ InstanceKey = $key; Service = $service; Port = $port; Database = $database; Java = $true; Running = $false; ConfigPath = (Join-Path $RepoRoot "java/$module/src/main/resources/application.yaml"); Jar = $jar; JarSha256 = $item.jarSha256; Settings = $item; JavaExecutable = $plan.javaExecutable; JavaSha256 = $plan.javaSha256 }
     })
     if ($keys.Count -ne 4 -or $databases.mall -ceq $databases.gateway) { throw 'Mall和Gateway必须分别拥有独立的全局逻辑库。' }
-    foreach ($gateway in @($instances | Where-Object Service -CEQ 'gateway')) {
-        $target = ([uri]$gateway.Settings.mallAdminUrl).Port
-        if ($target -notin @($instances | Where-Object Service -CEQ 'mall' | ForEach-Object Port)) { throw '网关商城地址没有绑定本计划的Mall端口。' }
-    }
     return $instances
 }
 
@@ -629,7 +624,6 @@ function New-LocalSqlBootJavaConfig {
         if ($etcdList.Matches($text).Count -ne 1) { throw '网关etcd源配置形状改变，拒绝猜测列表替换。' }
         $literal = ConvertTo-LocalSqlBootYamlString $Instance.Settings.etcdEndpoint
         $text = $etcdList.Replace($text, [Text.RegularExpressions.MatchEvaluator]{ param($m) $m.Groups[1].Value + "  endpoints: [$literal]`n" })
-        $values['mall-admin.base-url'] = (ConvertTo-LocalSqlBootYamlString $Instance.Settings.mallAdminUrl)
     }
     foreach ($key in $values.Keys) { $text = Set-LocalSqlBootYamlScalar -Content $text -KeyPath $key -Literal $values[$key] }
     return $text

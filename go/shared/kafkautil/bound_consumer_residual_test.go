@@ -850,13 +850,26 @@ func TestDeadLetterMessageRoundTripsTheOriginal(t *testing.T) {
 		t.Fatalf("死信 topic 契约不对: %+v", spec)
 	}
 	// 死信比原件多 dlq.* 头:死信 topic 与写入端的上限都要高于原 topic 的缺省上限(约 1MiB),贴着上限的原件才写得进去。
-	sink, err := NewKafkaDeadLetterSink([]string{"localhost:9092"}, spec.Name)
+	sink, err := NewKafkaDeadLetterSink([]string{"localhost:9092"}, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sink.Close()
-	if spec.MaxMessageBytes != 2<<20 || sink.writer.BatchBytes != spec.MaxMessageBytes {
+	if spec.MaxMessageBytes != 2<<20 || sink.writer.BatchBytes != spec.MaxMessageBytes || sink.writer.Topic != spec.Name {
 		t.Fatalf("死信的单条上限应为 2MiB,topic 与写入端一致: topic=%d writer=%d", spec.MaxMessageBytes, sink.writer.BatchBytes)
+	}
+	// 原 topic 上限更高(data_service 快照 16MiB):死信上限 = 原件上限 + 头部余量,写入端跟着同一份契约。
+	big := DeadLetterTopicSpecFor("player-snapshot", false, 16<<20)
+	if big.MaxMessageBytes != 16<<20+deadLetterHeaderHeadroom || big.Name != "player-snapshot-dlq" || big.RequireDurability {
+		t.Fatalf("原件上限 16MiB 时死信契约不对: %+v", big)
+	}
+	bigSink, err := NewKafkaDeadLetterSink([]string{"localhost:9092"}, big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bigSink.Close()
+	if bigSink.writer.BatchBytes != big.MaxMessageBytes {
+		t.Fatalf("写入端的单批上限应跟死信契约一致: %d", bigSink.writer.BatchBytes)
 	}
 }
 

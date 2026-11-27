@@ -164,10 +164,8 @@ func main() {
 	// 构建-发布-滚动更新。规则布局与优先级见 shared/killswitch 包注释。
 	//
 	// New 出来立刻可用(规则为空 = 全放行),Start 非阻塞、etcd 为 nil 也合法,
-	// 所以整段接线不会让 db 的启动多出任何一个失败点。
-	// NodeTypes:本进程以 PlayerStoreNodeService 注册(player_store_wiring.go),认 type/PlayerStoreNodeService/ 下的规则;
-	// 注册成功后再 AddInstance(docs/design/rpc-kill-switch.md §5)。
-	ks := killswitch.New(killswitch.Config{NodeTypes: []string{playerStoreNodeTypeName()}})
+	// 所以整段接线不会让 db 的启动多出任何一个失败点。节点类型与受保护方法见 newPlayerStoreKillSwitch。
+	ks := newPlayerStoreKillSwitch()
 	ksCtx, ksCancel := context.WithCancel(context.Background())
 	defer ksCancel()
 	etcdCli := newKillSwitchEtcdClient(config.AppConfig.Etcd)
@@ -338,6 +336,19 @@ func main() {
 	<-quit
 	rootAdmission.CloseAdmission()
 	fmt.Println("Shutting down gracefully...")
+}
+
+// newPlayerStoreKillSwitch 装配本进程的热关停(docs/design/rpc-kill-switch.md §5、§8)。
+//   - NodeTypes:本进程以 PlayerStoreNodeService 注册(player_store_wiring.go),认 type/PlayerStoreNodeService/ 下的规则;
+//     注册成功后再 AddInstance。
+//   - Protected:SavePlayer 是周期存盘、下线与停机的最后一笔存盘、实体已没时的空行释放共用的方法,挡住它玩家下线存不了盘,
+//     停机存盘等到看门狗截止就丢掉自上次提交以来的进度。所以 `*`、`服务/*`、类型通配都关不掉它,只有精确到方法的规则能关
+//     (存盘本身打爆存档库时运维还有手段)。LoadAndClaim 是进场认领写权,属于新工作,不保护。
+func newPlayerStoreKillSwitch() *killswitch.Switch {
+	return killswitch.New(killswitch.Config{
+		NodeTypes: []string{playerStoreNodeTypeName()},
+		Protected: []string{storepb.PlayerStore_SavePlayer_FullMethodName},
+	})
 }
 
 // newKillSwitchEtcdClient 按 RpcServerConf.Etcd 建一个只给热关停 watch 用的

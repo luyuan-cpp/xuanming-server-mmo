@@ -153,16 +153,32 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 	// 两个审计 topic 只许加分区、可以原地加(2026-11-06,缺口清单第 15 条):落库不依赖分区内顺序(流水按 tx_id
 	// 主键 INSERT IGNORE,快照按 guid 唯一键去重),加分区只改 key 到分区的映射。配置调大分区数、滚动 data_service,
 	// 第一个起来的副本就把 topic 加到配置值,之后再加副本才有分区可领。见 docs/design/audit-pipeline-horizontal-scale-20261106.md §2.A。
+	// 死信 topic 的耐久跟原 topic 走(两个审计 topic 用部署的缺省副本数,不要求严格耐久)。
+	txDeadLetters := kafkautil.DeadLetterTopicSpecFor(cfg.TxLogGroup, false, 0)
+	snapDeadLetters := kafkautil.DeadLetterTopicSpecFor(cfg.SnapshotGroup, false, snapshotTopicMaxMessageBytes)
 	if err := kafkautil.EnsureTopics(cfg.Brokers, []kafkautil.TopicSpec{
 		{Name: cfg.TxLogTopic, Partitions: cfg.TxLogPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.TxLogRetentionBytes,
 			AllowPartitionGrowth: true},
 		{Name: cfg.SnapshotTopic, Partitions: cfg.SnapshotPartitions, RetentionMs: cfg.RetentionMs, RetentionBytes: cfg.SnapshotRetentionBytes,
 			MaxMessageBytes: snapshotTopicMaxMessageBytes, AllowPartitionGrowth: true},
+		// 两个消费组各自的死信 topic(dead_letter.go):坏消息的原件先写进来再提交。快照的死信要装得下 16MiB 的原件。
+		txDeadLetters, snapDeadLetters,
 	}); err != nil {
 		return nil, fmt.Errorf("ensure kafka topics: %w", err)
 	}
+	txDeadLetterSink, err := kafkautil.NewKafkaDeadLetterSink(cfg.Brokers, txDeadLetters)
+	if err != nil {
+		return nil, err
+	}
+	snapDeadLetterSink, err := kafkautil.NewKafkaDeadLetterSink(cfg.Brokers, snapDeadLetters)
+	if err != nil {
+		_ = txDeadLetterSink.Close()
+		return nil, err
+	}
 
 	if err := cfg.Owner.attach(); err != nil {
+		_ = txDeadLetterSink.Close()
+		_ = snapDeadLetterSink.Close()
 		return nil, err
 	}
 	probeCtx, cancelProbe := context.WithCancel(ctx)
@@ -176,6 +192,7 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 	consumers.wg.Add(2)
 	safego.Go("data_service.kafka.transaction_log", func() {
 		defer consumers.wg.Done()
+		defer closeDeadLetterSink(ConsumerTxLog, txDeadLetterSink) // supervisor 退出之后不会再写死信
 		var reader *ownedReader
 		superviseOwned(ctx, ConsumerTxLog, cfg.ResumeAfter, func() (runner, MessageReader, error) {
 			businessCtx, cancel := context.WithCancel(ctx)
@@ -191,11 +208,13 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 			}
 			c := NewTxLogConsumer(cfg.TxLog, reader, &ownedTxLogSink{owner: cfg.Owner, sink: txSink})
 			c.health = consumers.TxLog
+			c.deadLetter = deadLetterTarget{sink: txDeadLetterSink, group: cfg.TxLogGroup}
 			return &ownedRunner{runner: c, ctx: businessCtx, cancel: cancel}, reader, nil
 		}, cfg.Owner)
 	})
 	safego.Go("data_service.kafka.player_snapshot", func() {
 		defer consumers.wg.Done()
+		defer closeDeadLetterSink(ConsumerSnapshot, snapDeadLetterSink)
 		var reader *ownedReader
 		superviseOwned(ctx, ConsumerSnapshot, cfg.ResumeAfter, func() (runner, MessageReader, error) {
 			businessCtx, cancel := context.WithCancel(ctx)
@@ -211,6 +230,7 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 			}
 			c := NewSnapshotConsumer(cfg.Snapshot, reader, &ownedSnapshotSink{owner: cfg.Owner, sink: snapSink})
 			c.health = consumers.Snapshot
+			c.deadLetter = deadLetterTarget{sink: snapDeadLetterSink, group: cfg.SnapshotGroup}
 			return &ownedRunner{runner: c, ctx: businessCtx, cancel: cancel}, reader, nil
 		}, cfg.Owner)
 	})
@@ -243,6 +263,12 @@ func Start(ctx context.Context, cfg StartConfig, txSink TxLogSink, snapSink Snap
 
 type runner interface {
 	Run(ctx context.Context) error
+}
+
+func closeDeadLetterSink(name string, sink *kafkautil.KafkaDeadLetterSink) {
+	if err := sink.Close(); err != nil {
+		logx.Errorf("[%s] close dead-letter writer: %v", name, err)
+	}
 }
 
 // supervise 保留既有测试接缝；生产用同一个 ownedReader 的消费组和票据。

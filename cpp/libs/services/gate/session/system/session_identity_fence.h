@@ -139,6 +139,15 @@ namespace gate_session_fence
 		return "unknown";
 	}
 
+	// 断线租约到期事件(player_locator LeaseMonitor → gate PlayerLeaseExpiredEvent)说的是不是本地这条会话。
+	// 会话号在同一 gate 进程里每 131072 条连接回绕一圈：同一名玩家落回同号、旧连接的到期又迟到时，只比玩家会踢掉他的新连接。
+	// 两边代次都非 0 且不等就是这种情形，不踢;任一边为 0(旧版 player_locator、没有代次的会话)按会话号认，与改动前一致。
+	// 规则同 player_locator SetDisconnecting 的代次核对(gate-online-identity.md §10.4)。
+	inline bool LeaseExpiryTargetsThisSession(uint64_t sessionIncarnation, uint64_t eventSessionIncarnation)
+	{
+		return sessionIncarnation == 0 || eventSessionIncarnation == 0 || sessionIncarnation == eventSessionIncarnation;
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// scene 推来的踢线(KickPlayer 34)来源栅栏(docs/design/cross-zone-scene-travel.md §13.2「上限到期一律踢线」残余、
 	// §12.5.6 残余 1)。

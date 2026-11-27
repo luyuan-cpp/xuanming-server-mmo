@@ -655,13 +655,19 @@ func recallEvidenceOf(v assetop.ManualVerdict, detail string) string {
 //     请求与 Claim 下发的同一套还原(store.RecallStore.ReadOpState),载荷解不开按证据不足;
 //  2. 读这名玩家已提交的账本(GetPlayerStoreLedger,写权行与账本同一次读)。读失败不终结,回故障码;
 //  3. 判证据(assetop.JudgeManual,安静间隔 assetop.ManualQuietGap(svc.RecallLeaseDuration())),按 recallManualAllows 放行;
-//  4. 带读行时的租约与发送时刻终结(store.RecallStore.ResolveManuallyIfQuiet,与重投循环同一个 settle)。
-//     读证据之后这一行被领过、发过或已终结,终结落空,回 ErrCodeRecallOpChanged,重新调用即重新读证据。
+//  4. 带读行时的租约、发送时刻与 attempts 终结(store.RecallStore.ResolveManuallyIfQuiet,与重投循环同一个 settle)。
+//     读证据之后这一行被领过、排过或已终结,终结落空,回 ErrCodeRecallOpChanged,重新调用即重新读证据。
 func ResolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string) (RecallResolveResult, error) {
 	return resolveRecallOp(ctx, svcCtx, opID, final, operator, reason, time.Now)
 }
 
 // resolveRecallOp 是 ResolveRecallOp 的实现,时钟显式传入:判「安静」与终结时刻用同一个。
+//
+// 不像两个 assetopfix 那样在「从未应用」终结前等观察窗口(assetop.ManualObserveWindow),理由:这里在 data_service 进程的
+// RPC 里判,进程启动核过钟(clockcheck,偏差 ≤ 30 秒;运行期靠 NTP 与超过 1 秒的节点时钟告警),写下 lease_until_ms /
+// last_send_ms 的重投副本也是 data_service,同一套核对,钟差远小于 30 分钟的安静间隔;RPC 里也不能挂几分钟。
+// 读证据之后的领取与重排由 settle 比见证三列挡住。边界:clockcheck 读不到参照、或开了 warn 应急开关时只告警照常启动,
+// 那台副本的钟就没核过,与 assetopfix 加观察窗口之前是同一个残余,靠时钟告警发现。
 func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint64, final uint32, operator, reason string, now func() time.Time) (RecallResolveResult, error) {
 	if opID == 0 || !validRecallText(operator, recallOperatorMaxRunes) || !validRecallText(reason, recallReasonMaxRunes) {
 		return RecallResolveResult{ErrorCode: constants.ErrCodeInvalidRequest}, nil
@@ -692,8 +698,9 @@ func resolveRecallOp(ctx context.Context, svcCtx *svc.ServiceContext, opID uint6
 		return RecallResolveResult{ErrorCode: constants.ErrCodeSnapshotDBError, Status: row.Status},
 			fmt.Errorf("read committed asset ledger of player %d for recall op %d: %w", row.Op.PlayerID, opID, err)
 	}
-	// Op 里的 LastReason、LastSendMs 就是行上的这两列(ReadOpState 同一次扫出)。
-	manual := assetop.ManualRow{Op: row.Op, LastReason: row.Op.LastReason, LeaseUntilMs: row.LeaseUntilMs, LastSendMs: row.Op.LastSendMs}
+	// Op 里的 LastReason、LastSendMs、Attempts 就是行上的这几列(ReadOpState 同一次扫出)。
+	manual := assetop.ManualRow{Op: row.Op, LastReason: row.Op.LastReason, LeaseUntilMs: row.LeaseUntilMs, LastSendMs: row.Op.LastSendMs,
+		Attempts: row.Op.Attempts}
 	verdict, detail := judgeRecallOp(row, manual, ledger, nowMs)
 	result := RecallResolveResult{Status: row.Status, Evidence: recallEvidenceOf(verdict, detail)}
 	if !recallManualAllows(verdict, status) {
@@ -726,7 +733,7 @@ func judgeRecallOp(row store.RecallOpState, manual assetop.ManualRow, ledger Pla
 }
 
 // recallQuietResolver 把 assetop.ResolveManually 接到带见证的结算上(同 trade、guild 的 assetopfix):
-// 入参校验与成功日志走包级函数,落库只认读证据时的租约与发送时刻。
+// 入参校验与成功日志走包级函数,落库只认读证据时的租约、发送时刻与 attempts。
 type recallQuietResolver struct {
 	recall  svc.RecallStore
 	witness assetop.QuietWitness

@@ -16,7 +16,10 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.apache.shiro.SecurityUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.subject.Subject;
 import org.springframework.beans.BeanWrapperImpl;
@@ -33,9 +36,25 @@ import org.springframework.web.server.ResponseStatusException;
 @Lazy(false)
 @RequestMapping(value = "/gm", produces = "application/json;charset=UTF-8")
 public class GmController {
+    private static final Logger LOG = LoggerFactory.getLogger(GmController.class);
+    /** 网关管理面的写操作(乙级,设计 §3):单人可做,要个人身份与留痕。只转发这张白名单里的方法与路径。 */
+    static final String GATEWAY_WRITE = "gm:gateway:write";
+    private static final String ID = "[1-9][0-9]{0,18}";
+    private static final List<Pattern> GATEWAY_WRITES = List.of(
+            Pattern.compile("POST /admin/zones"),
+            Pattern.compile("(PUT|DELETE) /admin/zones/" + ID),
+            Pattern.compile("POST /admin/zones/" + ID + "/(maintenance|open|create-role/close|create-role/open)"),
+            Pattern.compile("PUT /admin/zones/" + ID + "/role-capacity"),
+            Pattern.compile("POST /admin/whitelist"),
+            Pattern.compile("DELETE /admin/whitelist/" + ID + "/" + ID),
+            Pattern.compile("POST /admin/announcements"),
+            Pattern.compile("DELETE /admin/announcements/" + ID),
+            Pattern.compile("PUT /admin/killswitch"),
+            Pattern.compile("DELETE /admin/killswitch\\?key=[A-Za-z0-9_.$*%-]{1,320}"));
     private static final Set<String> PERMISSIONS = Set.of("gm:zone:read", "gm:player:read", "gm:mail:prepare", "gm:mail:send",
             "gm:system-mail:prepare", "gm:system-mail:send", "gm:audit:read",
-            "gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant");
+            "gm:currency:add", "gm:currency:deduct", "gm:currency:block", "gm:currency:unblock", "gm:player:level", "gm:pet:grant", "gm:item:grant",
+            GATEWAY_WRITE);
     private static final Set<String> DRAFT_FIELDS = Set.of("clientRequestId", "playerId", "title", "body", "reason",
             "currencyType", "currencyAmount", "itemConfigId", "itemCount", "currencies", "items", "validDays");
     private static final Set<String> SYSTEM_MAIL_FIELDS = Set.of("clientRequestId", "title", "body", "reason", "validDays");
@@ -101,6 +120,51 @@ public class GmController {
                 Thread.currentThread().interrupt(); result.put("zonesAvailable", false);
             } catch (Exception e) { result.put("zonesAvailable", false); }
         }
+        return ok(result);
+    }
+
+    /**
+     * 网关管理面写操作的唯一人用入口(docs/design/admin-identity-and-dual-control.md §8 批 6):网关口令留在服务端,
+     * X-Admin-Operator 取登录会话里的操作人,网关据此要求合规的操作人头并打 AUDIT 行;这里另打一行进后台日志。
+     * 回包原样带回网关的状态码与正文(最多 256 KiB)。
+     */
+    @PostMapping("/gateway/admin")
+    public String gatewayAdmin(@RequestBody String body) {
+        String actor = require(GATEWAY_WRITE);
+        ObjectNode input = parse(body, DEFAULT_MAX_BODY_BYTES);
+        input.fieldNames().forEachRemaining(key -> { if (!Set.of("method", "path", "body").contains(key)) bad("存在未知字段"); });
+        String method = text(input, "method", 3, 6);
+        String path = text(input, "path", 1, 400);
+        if (GATEWAY_WRITES.stream().noneMatch(rule -> rule.matcher(method + " " + path).matches())) bad("不支持的网关管理操作");
+        JsonNode payload = input.get("body");
+        if (payload != null && !payload.isObject()) bad("body 必须是对象");
+        if (!actor.matches("[A-Za-z0-9._@-]{1,64}")) bad("当前管理员名称不能作为网关操作人");
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(gateway.toString().replaceAll("/+$", "") + path))
+                .timeout(Duration.ofSeconds(8)).header("X-Admin-Key", gatewayKey).header("X-Admin-Operator", actor)
+                .header("Content-Type", "application/json")
+                .method(method, payload == null ? HttpRequest.BodyPublishers.noBody()
+                        : HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8));
+        int status;
+        String reply;
+        try {
+            HttpResponse<java.io.InputStream> response = http.send(request.build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (var stream = response.body()) {
+                byte[] bytes = stream.readNBytes(262145);
+                if (bytes.length > 262144) throw new java.io.IOException("gateway admin response too large");
+                status = response.statusCode();
+                reply = new String(bytes, StandardCharsets.UTF_8);
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "网关管理请求已取消，请刷新核对结果");
+        } catch (java.io.IOException | RuntimeException unavailable) {
+            LOG.warn("GM gateway admin write outcome unknown operator={} method={} path={}", actor, method, path);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "网关管理请求结果未知，请刷新核对后再决定是否重做");
+        }
+        LOG.info("GM gateway admin write operator={} method={} path={} status={}", actor, method, path, status);
+        ObjectNode result = json.createObjectNode().put("status", status);
+        try { result.set("body", reply.isEmpty() ? json.nullNode() : json.readTree(reply)); }
+        catch (java.io.IOException notJson) { result.put("body", reply); }
         return ok(result);
     }
 

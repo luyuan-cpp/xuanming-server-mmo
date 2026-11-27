@@ -1,6 +1,7 @@
 package assetop
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -19,7 +20,9 @@ import (
 //     收据唯一、correlation 与请求摘要逐字节一致,回收要有明细,托管扣出要有可用原件);
 //   - aborted:账本记已拒绝(含中止占位)且收据是这一条请求;或者写权行已释放、账本没见过这个 seq,而且这一行「安静」
 //     (RowQuiet:此刻没人持租约,距最后一次可能的发送超过安全间隔)。读证据之后到终结之间,重投循环可能刚领走这一行、
-//     发出一次投递,所以终结的 CAS 还要带上读证据时的租约与发送时刻(QuietWitness),对不上就落空;
+//     发出一次投递,所以终结的 CAS 还要带上读证据时的租约、发送时刻与 attempts(QuietWitness),对不上就落空。
+//     RowQuiet 拿本机的钟比副本写下的时刻,钟差超过安全间隔时正在投的行也像安静,所以两个 assetopfix 在按「从未应用」
+//     终结之前,还要在本机单调时钟上等满观察窗口(ManualObserveWindow)再读一次行与账本,都没变才终结;
 //   - 其余一律不终结:账本判不了(seq 滑出窗口、纪元比账本旧、跳号过远、账本损坏、没有写权行)、收据不是这一条请求、
 //     部分发放(账本的部分标记,或行上粘性的 last_reason = ReasonPartialApplied)、还有 scene 持有这名玩家
 //     (它内存里可能已经应用、只是还没提交)、行不安静。
@@ -40,7 +43,7 @@ const (
 	// ManualVerdictRejected 已提交:已拒绝(含中止占位),收据是这一条请求。scene 没应用,以后也不会。
 	ManualVerdictRejected
 	// ManualVerdictNeverApplied 写权行已释放、账本没见过这个 seq,而且这一行安静:读证据时没有任何实体能应用它,
-	// 也没有在途投递。终结时还要带 QuietWitness,保证读完之后没人再领过它。
+	// 也没有在途投递(按本机的钟判,钟差由 ManualObserveWindow 兜住)。终结时还要带 QuietWitness,保证读完之后没人再领过它。
 	ManualVerdictNeverApplied
 
 	manualVerdictCount
@@ -92,9 +95,9 @@ func ManualQuietGap(lease time.Duration) time.Duration {
 	return max(ManualQuietFloor, lease)
 }
 
-// ManualRow 是判定要用到的行上事实,两个服务各自从本表的行转出来。
+// ManualRow 是判定要用到的行上事实,各服务各自从本表的行转出来。
 // Op 是重建出的请求,核收据身份要用它的 PlayerID、Stream、StreamEpoch、Seq、CorrelationID、TxType、Bundle;
-// 另外三列单独给,不依赖 Op 里有没有填。
+// 另外四列单独给,不依赖 Op 里有没有填。
 type ManualRow struct {
 	Op Op
 	// LastReason 是行上粘性的 last_reason。ReasonPartialApplied 表示 scene 答过部分发放,即使账本的部分标记已经不在。
@@ -102,18 +105,62 @@ type ManualRow struct {
 	// LeaseUntilMs、LastSendMs 是读行时的租约到期与最后一次可能发送的时刻(毫秒),判安静与终结 CAS 都用它们。
 	LeaseUntilMs uint64
 	LastSendMs   uint64
+	// Attempts 是读行时的 attempts 列。只进终结 CAS 的见证,不参与判定。
+	Attempts uint32
 }
 
-// QuietWitness 是读证据那一刻行上的租约与发送时刻。人工终结的 CAS 要求它们没变:任何领取都会改 lease_until_ms,
-// 发过请求的重排会推进 last_send_ms,读完之后只要有人领过、发过,终结就落空,不会和一次刚开始的投递抢结局。
+// QuietWitness 是读证据那一刻行上的租约、发送时刻与 attempts。人工终结的 CAS 要求三列都没变:任何领取都会改 lease_until_ms,
+// 发过请求的重排会推进 last_send_ms,任何一次重排都给 attempts 加一。读完之后只要有人领过、排过,终结就落空,
+// 不会和一次刚开始的投递抢结局。
+//
+// 为什么要比 attempts(2026-11-26):last_send_ms 按写入它的副本自己的钟推进(GREATEST(last_send_ms, 它的 now)),
+// 钟慢的副本发了请求也推不动;结局不明的重排又把 lease_until_ms 清回 0,行上这两列与读证据时一模一样,只比它们就漏掉了
+// 这一次发送。attempts 每次重排必加一,与时钟无关。
+// 代价:只领没发的重排(玩家不在线,本地 NOT_HERE)也会加 attempts,读证据之后碰上一次,终结就落空、要重跑。这是有意的:
+// 宁可让操作员重跑,也不放过一次发送。设计记录见 docs/design/data-consistency-guarantee-map-20261020.md §6.2 第 2 条。
 type QuietWitness struct {
 	LeaseUntilMs uint64
 	LastSendMs   uint64
+	Attempts     uint32
 }
 
 // Witness 给终结 CAS 用的见证值。
 func (r ManualRow) Witness() QuietWitness {
-	return QuietWitness{LeaseUntilMs: r.LeaseUntilMs, LastSendMs: r.LastSendMs}
+	return QuietWitness{LeaseUntilMs: r.LeaseUntilMs, LastSendMs: r.LastSendMs, Attempts: r.Attempts}
+}
+
+// Matches 报告重读的行是否还是读证据时的样子:租约、发送时刻、attempts 都没变。两个 assetopfix 观察窗口之后的复核、
+// data_service 回收 settle 在行锁下的比对都用它;trade 的条件写按同样三列写 SQL(guild 的那条 2026-11-26 还只比前两列,待补)。
+// 比对口径只此一份。
+func (w QuietWitness) Matches(r ManualRow) bool {
+	return w == r.Witness()
+}
+
+// ManualObserveFloor 是观察窗口的下限,见 ManualObserveWindow。
+const ManualObserveFloor = time.Minute
+
+// ManualObserveWindow 是两个 assetopfix 按「从未应用」终结之前,要在本机单调时钟上等满的时长:
+// ManualObserveFloor 与两倍重投租约取较大者。
+//
+// 为什么要等:RowQuiet 用工具自己的墙钟比副本写下的 lease_until_ms / last_send_ms。工具可能在集群外的机器上跑,
+// 没核过钟(clockcheck 只在集群里有参照);工具的钟快了、或者某个副本的钟慢了超过安全间隔,一次正在进行的投递就像「安静」。
+//
+// 为什么等这么久就够:读证据那一刻在途的投递,都落在一个已经领到的租约里,而处理预算短于租约,所以至迟在读证据之后一个租约内收尾。
+// 成功 → 行被终结(status 变了);结局不明 → 重排(attempts 加一、租约清零);进程崩溃 → 行不变,但 scene 若已应用,
+// 要么还持有玩家(账本 Released=false,判 none),要么已存盘(账本见过这个 seq,判 applied / rejected,-as aborted 不许)。
+// 所以等满之后行仍是 PENDING、见证对得上(Matches)、账本重判仍是 never_applied,就说明读证据之后没有在途投递。
+// 这个结论只用到本机的单调时钟,与任何一台机器的墙钟都无关。两倍租约和一分钟下限,是给收尾那次写库的锁等待与事务重试留的余量。
+//
+// 边界:前提与 ManualQuietFloor 相同,一次投递请求的生命期以秒计,不会在网络或 scene 的队列里滞留到窗口之外。
+// applied / rejected 有账本里的收据作证,不用等。data_service 的回收人工终结不等(理由见 logic.resolveRecallOp)。
+func ManualObserveWindow(lease time.Duration) time.Duration {
+	return max(ManualObserveFloor, 2*lease)
+}
+
+// WaitManualObserveWindow 在本机单调时钟上等 d(time.Timer,不受墙钟调整影响),ctx 先结束就返回它的错误。
+// 两个 assetopfix 的观察窗口用它;单测注入不真等的替身。
+func WaitManualObserveWindow(ctx context.Context, d time.Duration) error {
+	return sleepCtx(ctx, d)
 }
 
 // JudgeManual 拿这名玩家已提交的账本判一行待定的资产指令。detail 是给人看的一句话(英文,进工具输出与审计日志)。

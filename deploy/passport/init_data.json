@@ -4,13 +4,25 @@
       "owner": "admin",
       "name": "xuanming",
       "displayName": "Xuanming Passport",
-      "passwordType": "bcrypt",
+      "passwordType": "argon2id",
       "passwordOptions": [
         "AtLeast8"
       ],
+      "countryCodes": [
+        "CN"
+      ],
       "initScore": 0,
       "enableSoftDeletion": false,
-      "recordRetentionDays": 180
+      "recordRetentionDays": 180,
+      "securityPolicy": {
+        "stuffingFailureThreshold": 30,
+        "stuffingBlockMinutes": 15,
+        "smsPerPhoneHourly": 5,
+        "smsPerPhoneDaily": 10,
+        "smsPerPrefixHourly": 100,
+        "smsDomesticOnly": true,
+        "smsDailyAlertCount": 10000
+      }
     }
   ],
   "applications": [

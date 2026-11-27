@@ -425,6 +425,8 @@ func sendLeaseExpiredToGate(ctx context.Context, svcCtx *svc.ServiceContext, ses
 		SceneId:        session.SceneId,
 		GateId:         session.GateId,
 		GateInstanceId: session.GateInstanceId,
+		// gate 按代次核对:同号的新连接不被这条旧到期踢掉(gate_event.proto 字段注释)。
+		SessionIncarnation: session.SessionIncarnation,
 	}
 	eventPayload, err := proto.Marshal(event)
 	if err != nil {

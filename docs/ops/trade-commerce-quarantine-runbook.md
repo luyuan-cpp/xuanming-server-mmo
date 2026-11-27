@@ -128,7 +128,7 @@ cd go/trade && go run ./cmd/assetopfix -f etc/trade.yaml resolve -op <op_id> -as
 | `partial`：账本记部分发放，或行上 `last_reason` 是部分发放 | 都不许：逐件核对 |
 | `none`：账本判不了（滑出窗口、纪元不符、没有写权行）、收据不是这一条请求、还有 scene 持有这名玩家、行不安静 | 都不许：留在 PENDING，卡死行告警进入逐件核对 |
 
-终结用条件写：读证据时的 `lease_until_ms`、`last_send_ms` 必须没变，读完之后重投循环领过或发过这一行，本次作废（退出码 3），重跑重新取证。读不到账本（data_service 不可达）就不终结，稍后重跑。写库要带写者身份（`authoritysql.LoadWriterConfig` 读的环境变量），和服务进程同一套；维护排空期间不要运行。终结之后合同下一轮推进按结局继续：`aborted` 走与 scene 判拒相同的补偿，实例扣款判 `applied` 时没有托管原件，合同隔离为 Manual。
+终结用条件写：读证据时的 `lease_until_ms`、`last_send_ms`、`attempts` 必须都没变，读完之后重投循环领过、排过这一行，本次作废（退出码 3），重跑重新取证。按 `aborted` 终结 `never_applied` 的行时，工具会先在本机等一个观察窗口（两倍重投租约，至少 1 分钟；trade 就是 1 分钟，等之前打一行提示），再读一次行与账本，期间被领过、排过或账本变了就拒绝（退出码 3），重跑即可；`applied`、`rejected` 不等。等待中途中断不改任何数据（退出码 1）。玩家离线的行默认约 30 分钟本地重排一次，窗口碰上的机会很小；停放档关掉（`AssetOp.OfflineAfterAttempts: 0`）时离线行约每分钟重排一次，几乎次次碰上，先打开停放档再终结（设计 [data-consistency-guarantee-map-20261020.md](../design/data-consistency-guarantee-map-20261020.md) §6.2 第 2 条补记）。读不到账本（data_service 不可达）就不终结，稍后重跑。写库要带写者身份（`authoritysql.LoadWriterConfig` 读的环境变量），和服务进程同一套；维护排空期间不要运行。终结之后合同下一轮推进按结局继续：`aborted` 走与 scene 判拒相同的补偿，实例扣款判 `applied` 时没有托管原件，合同隔离为 Manual。
 
 转人工的合同用 `go/trade/cmd/commercefix` 处理（2026-11-05 写，2026-11-12 改走管理 RPC；未编译，未演练）。六种动作的语义和拒绝条件见设计 [§15.7、§15.7.1](../design/jubaozhai-market.md)：
 
@@ -179,7 +179,7 @@ commercefix -endpoint <trade Pod IP>:<端口> resolve -commerce <commerce_id> -a
 5. **写库要两个人（2026-11-26 起，设计 [admin-identity-and-dual-control.md](../design/admin-identity-and-dual-control.md) §5.6、§5.7；未编译，未演练）**：生产上 trade 只接受带后台批准记录的 EXECUTE，`commercefix -execute` 会被拒（`dual_control_approval_required`）。在后台「交易人工处置」页：发起人打开合同、选动作、填参数、环境名与原因，后台先跑一次 DRY_RUN，通过才生成申请；另一名管理员打开申请，后台按当前合同重算一遍计划，核对后「批准并执行」。发起人自己批不了（后台流水与 trade 各判一次）。版本已变（合同被处理或推进过）时申请被拒，回到第 1 步重新取证、重新发起。结果未知时在申请上「沿用原申请重试」：trade 按批准号判重，已经执行过的只回当时那一条留痕（回包 `already_executed=true`），不会再加腿。只有本机开发的 trade 打开了 `Commerce.ManualResolutionAllowUnapproved` 时 `-execute` 才可用；打开期间每一次都打 ERROR 并计入 `trade_manual_resolution_unapproved_execute_total`。
 6. 下一轮引擎给新腿发号、投递。用 §3.2 的查询确认新 op 行出现并到账，合同结案。
 
-工具与入口只改合同行，不碰 op 行，不发资产；新腿由引擎发号投递，与玩家操作同一条写路径。官方商城交付与人民币寄售的人工处理要和商城订单一起做，不用这个工具。
+工具与入口只改合同行，不碰 op 行，不发资产；新腿由引擎发号投递，与玩家操作同一条写路径。官方商城交付的人工处理要和商城订单一起做，不用这个工具。人民币寄售（kind 6）在交付阶段转人工时，商城的寄售人工单停在 MANUAL：先在这里把合同推出 `manual`（隔离 `corrupt` 的原因消除后 `resume`；交付腿部分发放的见 §6），再到商城管理入口对这张寄售单做 `RETRY_DELIVERY`，商城把交付待办交还 trade，按合同现状重新回执；付款已被渠道撤销的才用 `RETURN_TO_SELLER`（设计 [jubaozhai-market.md](../design/jubaozhai-market.md) §16.1）。
 
 ### 4.3 角色冲突
 
@@ -212,6 +212,7 @@ commercefix -endpoint <trade Pod IP>:<端口> resolve -commerce <commerce_id> -a
 ## 6. 待补
 
 - 管理后台的页面与审批流（两人复核）：现在入口是管理 RPC 加命令行（§4.2），请求里的操作人名字证明不了身份；有管理后台的登录身份之后在入口里接。
-- 官方商城交付、人民币寄售的人工处理：要和商城订单一起做，不在本工具。
+- 官方商城交付的人工处理：要和商城订单一起做，不在本工具。
+- 人民币寄售交付腿部分发放（原因 `applied_partial`）：部分发放的腿只有 `partial` 收（别的动作在补记腿结局时就被拒），而 `partial` / `refund` / `redirect` 都不收寄售，trade 侧一个动作都做不了，还没有出口（设计 [jubaozhai-market.md](../design/jubaozhai-market.md) §16.1「代价与边界」）。
 - 部分扣出的实例、宝宝：没有托管原件，只能按 `player_snapshot` 人工补发。
 - Java 版对齐，见设计 §15.3「2026-10-22 修复」的残余项与 §15.7.1。

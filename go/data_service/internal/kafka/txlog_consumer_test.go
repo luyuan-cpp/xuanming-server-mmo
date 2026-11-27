@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"data_service/internal/store"
+	"shared/kafkautil"
 
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
@@ -135,10 +136,13 @@ func TestTxLogConsumer_PartitionsBatchAndCommitIndependently(t *testing.T) {
 	assert.NoError(t, waitDone(t, done))
 }
 
-func TestTxLogConsumer_SkipsUndecodableAndZeroTxIdButCommitsThem(t *testing.T) {
+// 坏消息(解不出 / tx_id=0)不落库;提交之前先把原件写进本组的死信(2026-11-26),写成功才提交越过它们。
+func TestTxLogConsumer_DeadLettersUndecodableAndZeroTxIdThenCommitsThem(t *testing.T) {
 	reader := newFakeReader(nil)
 	sink := &fakeTxSink{}
 	c := NewTxLogConsumer(TxLogConsumerConfig{BatchSize: 1, FlushInterval: 50 * time.Millisecond}, reader, sink)
+	dlq := &fakeDeadLetterSink{}
+	c.deadLetter = deadLetterTarget{sink: dlq, group: "txlog-group"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -158,6 +162,16 @@ func TestTxLogConsumer_SkipsUndecodableAndZeroTxIdButCommitsThem(t *testing.T) {
 	// 坏消息也被提交(offset 3),且没有第二次落库调用。
 	require.Eventually(t, func() bool { return reader.committedMax()[0] == 3 }, eventually, 10*time.Millisecond)
 	assert.Equal(t, 1, sink.callCount())
+	// 两条坏消息的原件都在死信里:组名、原位置、原字节、原因;重放工具按 unprocessable 处理。
+	records := dlq.written()
+	require.Len(t, records, 2)
+	assert.Equal(t, "txlog-group", records[0].Group)
+	assert.Equal(t, int64(1), records[0].Original.Offset)
+	assert.Equal(t, []byte{0xFF, 0xFF, 0xFF}, records[0].Original.Value)
+	assert.Contains(t, records[0].Reason, "decode_error")
+	assert.Equal(t, int64(3), records[1].Original.Offset)
+	assert.Equal(t, "invalid: tx_id=0", records[1].Reason)
+	assert.Equal(t, kafkautil.DeadLetterCauseUnprocessable, records[1].Cause)
 
 	cancel()
 	assert.NoError(t, waitDone(t, done))

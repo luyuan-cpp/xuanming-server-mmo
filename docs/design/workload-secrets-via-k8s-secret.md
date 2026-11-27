@@ -32,6 +32,7 @@
 | 会话身份签名私钥(2026-11-11 起取代共用的 HMAC 验签密钥 `MMORPG_INTERNAL_AUTH_SECRET`,见 gate-online-identity.md §10.1) | `MMORPG_INTERNAL_AUTH_SIGNING_KEY` | 无(不进任何 ConfigMap) | 只有 gate,Secret `gate-identity-auth`(键 `signing-key`);login 与在线服务只拿公钥列表 `MMORPG_INTERNAL_AUTH_PUBLIC_KEYS`(不是密钥,明文 env) | zone |
 | 登录排队令牌 | `MMORPG_LOGIN_QUEUE_TOKEN_SECRET`(排队开才有) | login `Secrets.QueueToken.Value` | login | zone |
 | 口令库只读连接串(`-LoginPasswordAuth` 才有,见 §1) | 不是部署输入:运维预置的 Secret,名字写在 SQL boot 目录 login 条目的 `passwordAuthSecret` | 无(以前 K8s 上不开口令登录) | login(`PasswordAuth.DSNEnv` 指的变量,缺省 `LOGIN_PASSWORD_AUTH_DSN`),Secret 键 `dsn` | zone |
+| match 发件签名(群仙问道赛领奖邮件,2026-11-26) | 不是部署输入:运维在 infra 的 `domain-service-secrets` 预置 key `mail-producer-match`,容器变量 `MAIL_PRODUCER_SECRET_MATCH`(match ConfigMap 只写 `MailSecretEnv` 变量名) | 无(以前全仓没有注入,match 领奖把奖励标成已领取、附件不发) | match(签,`Add-MatchAuthoritySecretEnv` 注入)、mail(验,清单手写 `secretKeyRef`),两边 `optional: false` | infra |
 | MySQL 部署口令 | 11-12 起不再是部署输入(以前是 `MMORPG_MYSQL_PASSWORD`) | db `Database.Passwd`;data-service `SnapshotMySQL.Password`;trade / friend / player-inbox `MySQL.Password` | 没有读者:五个服务都是写者,常驻进程与迁移 Job 用 Secret 里的槽位 / schema 账号;route-tool 用控制身份(§4.2) | — |
 | gateway 数据源口令 | 11-12 起不再是部署输入(以前是 `MMORPG_GATEWAY_DB_PASSWORD`) | gateway `spring.datasource.password` | 没有读者:gateway 是写者,数据源账号与口令在 `runtimeConfigSecret` 里 | — |
 

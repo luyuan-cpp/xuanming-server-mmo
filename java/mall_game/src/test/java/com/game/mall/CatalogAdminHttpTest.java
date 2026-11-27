@@ -60,9 +60,31 @@ class CatalogAdminHttpTest {
         assertThrows(IllegalStateException.class, () -> factory.create(source, properties));
     }
 
+    /** 后台双人复核的批准记录:请求号就是批准号(docs/design/admin-identity-and-dual-control.md §5.5)。 */
+    private static AdminApproval approval(String approvalId) { return new AdminApproval(approvalId, "alice", "bob", 1_700_000_000_000L); }
+
+    @Test void 写命令缺省必须带合格的批准记录_拒绝发生在任何写入之前() throws Exception {
+        var terms = new CatalogAdminApi.Terms(82, "admin-sku-821", 1250, "CNY", true, 10, 1, "玄铁");
+        assertEquals(403, call("/internal/admin/skus/create", "admin", "catalog-admin",
+            new CatalogAdminApi.Create("820000001", 821, terms, 5)).statusCode(), "不带批准记录");
+        assertEquals(403, call("/internal/admin/skus/create", "admin", "catalog-admin",
+            new CatalogAdminApi.Create("820000002", 821, terms, 5, new AdminApproval("820000002", "alice", "alice", 1L))).statusCode(), "自己批自己");
+        assertEquals(403, call("/internal/admin/skus/create", "admin", "catalog-admin",
+            new CatalogAdminApi.Create("820000003", 821, terms, 5, approval("820000099"))).statusCode(), "请求号不是批准号");
+        assertEquals(403, call("/internal/admin/skus/create", "admin", "catalog-admin",
+            new CatalogAdminApi.Create("820000004", 821, terms, 5, new AdminApproval("820000004", "alice", "bo b", 1L))).statusCode(), "主体不合规");
+        assertEquals(403, call("/internal/admin/manual/incomes/dispute", "admin", "catalog-admin",
+            new ManualAdminApi.ResolveIncomeDispute("820000005", "1", "FREEZE_DISPUTE", 1, "CASE-1", "核对")).statusCode(), "收入争议同样要批准");
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM pms_sku_stock WHERE id=821", Integer.class));
+        for (String requestId : new String[] {"820000001", "820000002", "820000003", "820000004", "820000005"}) {
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM commerce_admin_command WHERE request_id=?", Integer.class,
+                requestId.getBytes(java.nio.charset.StandardCharsets.US_ASCII)), requestId);
+        }
+    }
+
     @Test void 管理命令签名与重放_保留预占和订单快照_不能直接改支付状态() throws Exception {
         var terms = new CatalogAdminApi.Terms(81, "admin-sku-811", 1250, "CNY", true, 10, 1, "玄铁");
-        var create = new CatalogAdminApi.Create("admin-create-http", 811, terms, 5);
+        var create = new CatalogAdminApi.Create("810000001", 811, terms, 5, approval("810000001"));
         for (String role : new String[] {"gateway", "payment", "delivery"}) {
             assertEquals(401, call("/internal/admin/skus/create", role, subject(role), create).statusCode());
         }
@@ -79,8 +101,12 @@ class CatalogAdminHttpTest {
         assertEquals(409, send(signed).statusCode(), "认证nonce不能重放");
         assertEquals(original, json.readTree(call("/internal/admin/skus/create", "admin", "catalog-admin", create).body()));
         assertEquals(409, call("/internal/admin/skus/create", "admin", "catalog-admin",
-            new CatalogAdminApi.Create(create.requestId(), 811, terms, 6)).statusCode());
+            new CatalogAdminApi.Create(create.requestId(), 811, terms, 6, approval("810000001"))).statusCode());
         assertEquals(1, count("commerce_admin_command"));
+        assertEquals("alice", new String(jdbc.queryForObject("SELECT proposer FROM commerce_admin_command WHERE request_id=?", byte[].class,
+            "810000001".getBytes(java.nio.charset.StandardCharsets.US_ASCII)), java.nio.charset.StandardCharsets.US_ASCII));
+        assertEquals("bob", new String(jdbc.queryForObject("SELECT approver FROM commerce_admin_command WHERE request_id=?", byte[].class,
+            "810000001".getBytes(java.nio.charset.StandardCharsets.US_ASCII)), java.nio.charset.StandardCharsets.US_ASCII));
 
         var bought = call("/api/orders", "gateway", "33", new CommerceApi.CreateOrder("admin-buyer-http", 811, 2, "测试账号", "1"));
         assertEquals(200, bought.statusCode(), bought.body());
@@ -88,7 +114,7 @@ class CatalogAdminHttpTest {
         assertEquals(2500, order.path("amountMinor").asLong());
         var changedTerms = new CatalogAdminApi.Terms(81, "admin-sku-811", 2800, "CNY", true, 20, 2, "新玄铁");
         var changed = call("/internal/admin/skus/update", "admin", "catalog-admin",
-            new CatalogAdminApi.Update("admin-update-http", 811, 1, changedTerms));
+            new CatalogAdminApi.Update("810000002", 811, 1, changedTerms, approval("810000002")));
         assertEquals(200, changed.statusCode(), changed.body());
         assertEquals(2, json.readTree(changed.body()).path("revision").asLong());
         assertEquals(5, value("stock"));
@@ -105,9 +131,9 @@ class CatalogAdminHttpTest {
         assertEquals(1, jdbc.queryForObject("SELECT count_per_unit FROM commerce_order_grant WHERE order_sn=?", Integer.class, orderId));
 
         assertEquals(409, call("/internal/admin/skus/stock", "admin", "catalog-admin",
-            new CatalogAdminApi.AdjustStock("admin-invalid-stock", 811, 2, -4)).statusCode());
+            new CatalogAdminApi.AdjustStock("810000003", 811, 2, -4, approval("810000003"))).statusCode());
         assertEquals(5, value("stock"));
-        var stockInput = new CatalogAdminApi.AdjustStock("admin-stock-http", 811, 2, -3);
+        var stockInput = new CatalogAdminApi.AdjustStock("810000004", 811, 2, -3, approval("810000004"));
         var adjusted = call("/internal/admin/skus/stock", "admin", "catalog-admin", stockInput);
         assertEquals(200, adjusted.statusCode(), adjusted.body());
         assertEquals(2, value("stock"));

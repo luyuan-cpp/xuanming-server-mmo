@@ -294,7 +294,7 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
   | guild | `guild-grpc-allowlist` | client-rpc-router、mail、data-service | 客户端协议；mail 判帮会邮件可见性（读 GetPlayerGuild）；护栏协调者 |
   | trade | `trade-grpc-allowlist` | client-rpc-router、data-service | 客户端协议；护栏协调者。trade → scene 的资产通道是 trade 往外拨，不经这个口 |
   | friend | `friend-grpc-allowlist` | client-rpc-router、data-service | 客户端协议；护栏协调者 |
-  | mail | `mail-grpc-allowlist` | client-rpc-router、rank、scene 三种、data-service | 客户端协议；榜单发奖；战斗掉落放不下时 scene 改投邮件（`MailAdmin.SendPersonalMail`）；护栏协调者 |
+  | mail | `mail-grpc-allowlist` | client-rpc-router、rank、match、scene 三种、data-service | 客户端协议；榜单发奖；群仙问道赛领奖邮件（match，2026-11-26 补）；战斗掉落放不下时 scene 改投邮件（`MailAdmin.SendPersonalMail`）；护栏协调者 |
   | chat | `chat-grpc-allowlist` | client-rpc-router | 只有客户端协议；世界频道广播走 Kafka |
   | rank | `rank-grpc-allowlist` | client-rpc-router、match | 客户端协议；match 结算后上报评分 |
 
@@ -365,6 +365,7 @@ nonce 签进了 canonical，同一进程内截获的签名头不论原样重放�
     - 规则同实例号：请求与记录的代次都非 0 且不等，判为同号旧连接迟到的上报，忽略并回成功（gate 随之移出这条通知），记录一个字节都不改；任一方为 0（旧版 login 写入或发出）不比较，照旧按会话号与实例号处理。判定落在 GET 到的同一份字节上，与随后的整字节 CAS 之间没有窗口。
     - 被忽略时 player_locator 打一行 Info（带两边的代次），不单设指标：要会话号回绕再加上同号重登才会出现。
     - 混跑时 login 不能先于 player_locator 升级：旧版 player_locator 处理 Reconnect 时会把旧记录里它不认识的代次字段原样留下，记录就带着旧连接的代次，升级之后这条会话自己的断线会被忽略。项目未上线，两者同批上线，不留这个窗口。
+    - 断线租约到期的另一头（2026-11-26 补，未生成协议、未编译）：LeaseMonitor 发给 gate 的 `PlayerLeaseExpiredEvent.session_incarnation`（字段 7）从会话记录照抄。gate 的 `PlayerLeaseExpiredEventHandler` 原来只比玩家，同一玩家落回同号的新连接会被旧到期踢掉，要重新登录。现在多比一次代次（`session_identity_fence.h` 的 `LeaseExpiryTargetsThisSession`，规则同上：都非 0 且不等就不踢，任一边为 0 按会话号认），用例 `LeaseExpiryFence.EarlierConnectionOnTheSameSessionIdIsNotTheTarget`。
 - **失败时的后果**：续租失败不影响在线玩家的任何请求。连续失败超过一个寿命时登录态过期，这段时间里这条连接不计入设备数；故障恢复后，已在游戏里的连接由下一次续租重建并重新计数，还在选角的连接要重新登录（§7.3）。
 - **水平扩展**：每个 gate 只续自己的连接，gate 之间没有共享状态；login 无状态，任何副本都能受理。负载估算见 §6。
 - **观测**：login 的 `loginsession_renew_total{result}`；gate 每分钟一行 `[LoginRenewal] summary`，断线通知另有 `gate_login_disconnect_pending` 与 `gate_login_disconnect_total{result}`（§5）。

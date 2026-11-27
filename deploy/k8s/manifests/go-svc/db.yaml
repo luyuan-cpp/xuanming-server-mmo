@@ -131,9 +131,13 @@ spec:
             # 与 ConfigMap 的 MetricsListenAddr ":9160" 及上面 prometheus.io/port 注解一致(9160 = db)。
             - containerPort: 9160
               name: metrics
+          # 就绪看 /readyz(指标端口):RPC 已对外服务,而且这一代每个存档库都有写资格。写者注册时连不上的库这一代不注册、一直关着,
+          # 这种副本照常注册、服务别的库,但不算就绪:滚动发布停在它这里,集群恢复之后重建它
+          # (docs/design/data-service-startup-isolation.md §7.3)。存活仍看 gRPC,不就绪的副本不能被当成坏了重启。
           readinessProbe:
-            grpc:
-              port: 6000
+            httpGet:
+              path: /readyz
+              port: 9160
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:

@@ -102,7 +102,7 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 
 ### 4.5 执行与完成
 
-执行者跑在 login(令牌、会话、Apple 密钥都在 login)。每个副本一个后台循环,每 30 秒一轮:
+执行者跑在 login(令牌、会话、Apple 密钥都在 login)。每个副本一个后台循环,每 30 秒一轮。执行者自身不存状态,互斥只靠 data_service 账号行上的认领租约,所以加 login 副本就加执行吞吐,不用选主;账号目录按账号分片,认领逐片扫,单片不成瓶颈:
 
 1. data_service `ClaimAccountDeletions(limit=8)`:逐片扫 `deletion_state IN (1,2) AND deletion_execute_after_ms <= now`,逐行条件更新 `SET deletion_state=2, deletion_lease_until_ms=now+120s WHERE … AND deletion_lease_until_ms <= now`,回改成的账号。1 → 2 之后不可撤销。
 2. 对每个认领到的账号:`RevokeAll`;读角色(`Read(create=false)`),逐个下线(§7.2:踢 gate 并按正常登出结束会话)、再 `RemoveAccountRoles(account, [{player_id, owner_revision}])`(一次一名,修订号取自 `Lookup`)。删角回挂起(`ErrConflict`,多半是持有节点还在存盘释放)或可重试的,这一轮跳过,下一轮再来。
@@ -165,13 +165,13 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 | data_service 流水库 | — | `player_snapshot`(存档快照,审计保留期缺省 30 天)、`transaction_log`(缺省 180 天)由现有的 `RunAuditRetention` 按期删;`gm_recall_*`、`rollback_audit*`、`player_debt`:回收审计。都是防欺诈、回档举证用,只有 `player_id`,账号已无法还原;隐私政策写明保留期 |
 | friend | `friend`、`friend_request`、`friend_block` 里这名玩家在任一侧的行;`friend_capacity` | — |
 | guild | `guild_member`、`guild_player_state`、`guild_application`、`guild_daily_counter`、`guild_player_op_seq`、`guild_client_request` 里这名玩家的行;他还是帮主时自动让位,帮里只剩他就解散帮会(§6.3) | 终态的 `guild_asset_op` 与历练记录:资产审计,也是其他成员的活动历史 |
-| mail | `mail_box`、收件人是他的 `mail_message`、`mail_state`、`mail_player_op_seq`、已封存活动(state=2)里的 `mail_campaign_recipient`;清理之后再寄给他的个人邮件在发件事务里锁他的副本复核,拒收(`kMailRecipientDeleted`,发件方按终态处理) | 终态的 `mail_asset_op`:资产审计;**还在导入的活动名单里他那一行**:封存要核收件人行数等于导入人数,删了整份名单封不上,别人的奖励也发不出去 |
+| mail | `mail_box`、收件人是他的 `mail_message`、`mail_state`、`mail_player_op_seq`、已封存活动(state=2)里的 `mail_campaign_recipient`;清理之后再寄给他的个人邮件在发件事务里锁他的副本复核,拒收(`kMailRecipientDeleted`,发件方按终态处理,理由见 §6.4) | 终态的 `mail_asset_op`:资产审计;**还在导入的活动名单里他那一行**:封存要核收件人行数等于导入人数,删了整份名单封不上,别人的奖励也发不出去 |
 | player_inbox | `player_inbox_item`、`player_inbox_stream` | `player_inbox_audit` |
 | trade | `trade_favorite` | 终态的 `trade_listing`、`trade_commerce`、`trade_asset_op`:与交易对手共有的成交记录,防欺诈与对账;合同里原身份的账号串一并保留,隐私政策写明;**`trade_player_op_seq`**:模块以「seq 行永不删除」做锁分析,`TestSeqTableRowsAreNeverDeleted` 守着,只是按玩家的计数 |
 | match(含组队) | `match_rating`、`match_network_profile`、`match_player_battle_report`(随之用 `releaseBattleReportsTx` 给共享战报减引用)、已到期的 `match_role_occupancy`、终态的观战与意图行(`match_spectator_head` 只在他已没有观战意图时删)、终态的 `match_join_intent`、`team_action_receipt`、他写的战斗剧本 `match_battle_script` 与选用 `match_battle_script_loadout`(选用只指向本人剧本或官方剧本,没有别人的引用) | 对局报告、结算、匹配票原件:多名玩家共有;**`match_rating_applied`**:按对局记「这一局评分只入账一次」,不是按玩家,删了重放会给同局其他人再算一次分;`team_membership` 离队墓碑(组队 epoch 不能回退);`match_battle_script_review` 剧本审核流水:审核留痕(谁审了哪一版正文),按审计保留 180 天后删(按审核时刻算,配置 `BattleScript.ReviewRetentionDays`,`docs/design/battle-script.md` §6.4);隐私政策写明保留期 |
 | payment | — | 订单与支付流水:法定保留(税务、退款争议);未成年人额度行 `payment_spend` 只有身份摘要,随订单的合规保留 |
 | chat | — | 世界频道与私聊原件按现有 TTL 30 天过期;滥用举证要用,隐私政策写明 |
-| rank | 评级榜(match 是唯一的玩家榜生产者)上他的条目:match 的清理在删评分行的同一事务里,按他有评分的计分模式各写一行 `match_rank_removal`(事务发件箱);投榜循环调 `RemoveRankEntry`(rank 同一事务删分并立墓碑,迟到的旧批次带不回他),确认后删行;榜已封、已隐藏或不存在按摘完处理。发给他的榜单奖励邮件被拒收(`kMailRecipientDeleted`)时直接转放弃,不重投、不报人工 | 已封榜的快照:是当期结算的凭证 |
+| rank | 评级榜(match 是唯一的玩家榜生产者)上他的条目:match 的清理在删评分行的同一事务里,按他有评分的计分模式各写一行 `match_rank_removal`(事务发件箱);投榜循环调 `RemoveRankEntry`(rank 同一事务删分并立墓碑,迟到的旧批次带不回他),确认后删行;榜已封、已隐藏或不存在按摘完处理。发给他的榜单奖励邮件被拒收(`kMailRecipientDeleted`)时直接转放弃,不重投、不报人工(步骤与理由见 §6.4) | 已封榜的快照:是当期结算的凭证 |
 | 玩家域 Redis | 会话键(`MarkOffline`)、位置与位置修订(`LeaveScene`);名字、展示缓存由删角收尾失效;挂机月卡投影到期自动消失(`EXAT`),同步摘要 30 天、已确认位点 7 天、交接标记 5 分钟、持有者租约 15 秒按 TTL 消失 | 永久的单调计数:`login_generation`、`location_revision_floor`、`owner_epoch`、`handoff_fence`。它们只有 player_id 和一个计数,保证同一 id 的代次永不倒退,与目录里永久保留的角色墓碑、`player_route` 同类 |
 | Kafka、日志 | — | 按 topic 保留期与日志保留期滚动删除;日志里账号只记掩码(`MaskAccount`) |
 
@@ -191,12 +191,28 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 
 这不是替玩家改帮会结构的新规则:帮主角色已经不存在,帮会必须有帮主,规则与按职位、帮贡排序的常见做法一致。
 
-实现上的三个取舍(`go/guild/internal/data/role_fence_purge.go`):
+实现上的四个取舍(`go/guild/internal/data/role_fence_purge.go`):
 
 - **怎么区分申请与执行**:参与者的挂起判定(`PendingFunc`)签名不变,`rolefence.Probing(ctx)` 告诉它这一次是不是试探。只有「要玩家自己先处理、执行时由收尾代为处理」的挂起看它,目前只有帮主;其余挂起两种情况一律同样判。不改签名,六个参与者的挂起判定一个都不用动。
 - **提交后的副作用**:让位、解散之后要失效帮会缓存、摘帮会榜、给留下的成员推送。这些是 Redis 与 Kafka 的写,不能放进清理事务。清理函数用 `rolefence.OnCommit` 登记,参与者在事务提交成功之后才跑;回滚不跑,失败只记日志,缓存按 TTL 过期、帮会榜启动时重建、客户端打开界面时重新拉取。
 - **锁序**:清理照退帮的锁序:副本 → guild → 状态行 → 成员行(多行按主键升序)→ 申请 → seq → 每日计数 → 幂等键。解散那一支先碰了捐献指令、活动进度、在途历练行,之后才删他自己的申请、seq、计数与幂等键,看上去是回头取靠前的表。不成环的理由:这些行只属于他;墓碑之后能写它们的入口都先锁他的副本,而副本锁在清理手里;剩下的只有一次只持一行、不等别的锁的后台清理。只剩他一个人的帮会解散时,要在事务里补建他的状态行(共用的解散逻辑缺状态行就拒)。这破了「事务内只对已存在的行点锁」的规矩,但他已是墓碑,别的入口都在他的副本上被拒,补建不会和别人抢。
 - **选继任者不看对方的副本**:持着 guild 行锁再去锁别人的副本会违反「副本在最前」的锁序,所以只按成员行选。代价是可能选中同样在删除中的成员;轮到他收尾时会再让一次,成员有限,最终收敛。
+
+### 6.4 评级榜与邮件:删角之后别人还会碰到他的两处
+
+**评级榜**:榜在 rank 服务,match 是唯一的玩家榜生产者(每个计分模式一张永久榜,代次 1)。删角收尾不能在事务里调 rank 的 RPC(事务里不调 RPC),所以用事务发件箱:
+
+1. match 清理删评分行的同一事务里,按他有评分的计分模式各写一行 `match_rank_removal(mode, player_id)`。有评分行才可能上榜,不计分的模式没有榜,不写。
+2. 投榜循环每轮最多取 16 行,对本模式已绑定的榜调 `RemoveRankEntry`:代次 1,请求号就是 `player_id`(一名玩家在一张榜上只摘一次,重放同号同载荷,rank 回成功)。
+3. rank 在同一事务里删分并立墓碑,所以摘榜与旧批次谁先到都对:摘榜之前产出、还没投出去的旧批次里有他,迟到时被墓碑拒掉。
+4. 榜回成功删行;榜已封、已隐藏或不存在,都没有可摘的了,同样删行;其余拒绝与调用失败留行,下一轮重投。
+5. 各副本都处理、不按片分工:只有删角会写这张表,量很小;rank 按请求号幂等、删行按主键,两个副本同摘一行只多一次调用。
+
+**邮件**:删角收尾删了他的邮箱与个人邮件;之后系统发件方(榜单奖励、交易、战斗)若再寄个人邮件,要明确拒收,不能照收后留在库里等过期:
+
+- 发件事务先锁收件人的护栏副本再锁邮箱(锁序 副本 → `mail_box`,与领取、删角收尾同序),副本是墓碑就回 `ErrRecipientDeleted`(tip `kMailRecipientDeleted`)。收尾先提交,发件读到墓碑拒收;发件先提交,那一封随收尾一起删掉。
+- 建邮箱行之前另做一次不加锁的预检,避免给已删除的角色建空邮箱。唯一的缝是收尾恰好提交在预检与建行之间:会留一行只有 `player_id` 的空邮箱行,没有邮件。
+- 发件方按终态处理:rank 的奖励投递见到这个码直接转放弃,只记 Info,不重投、不报人工,也不挂起排空证明。scene 的待寄队列只在角色还在场景里时投,而删角要求先离场,碰不到这个码,不用改。
 
 ## 7. 一致性
 
@@ -321,3 +337,17 @@ ACTIVE(0) ──申请:重新认证 + 预检通过──▶ PENDING(1) ──冷
 | 多地域 | §7.4 定范围:注销的是本地域的账号 | 本文 |
 
 ## 11. 不做
+
+- Apple 服务器到服务器通知、客户端凭据状态检查(`getCredentialState` / `credentialRevokedNotification`)。
+- 删口令凭据(§6.2)。
+- 删号前导出个人数据。
+
+## 12. 验证计划(落码后由 Gemini 执行,命令写进 PROGRESS)
+
+- data_service 真 TiDB:申请、撤销、认领、删行的状态机;`reserveRef` 在 1、2 状态下拒绝建角与过户;删行后读为空、再登录建新行并读到回执;两个执行者并发认领同一账号。
+- `shared/rolefence`:非墓碑的 `PurgeRemovedRole` 拒绝;试探带 `Probing` 标记、真正冻结不带;提交后动作只在提交成功后跑;六个参与者各自的清理真库用例(删掉的表无行、保留的表不动、重复调用幂等)。
+- guild:帮主只在试探里拦;收尾时长老接任、只剩他时解散;转让给冻结中的目标被拒。match:待摘榜行的写入与投榜循环的摘榜(成功删行、被拒留行、已封榜删行);剧本与选用随角色删、审核流水留着。mail:清理之后寄给他的个人邮件拒收、不建邮箱。rank:收件人已注销的奖励直接放弃。
+- 冒烟:有挂机月卡的角色在线时申请注销 → 设备收到「冷静期」下线原因,角色离开世界(别的玩家看到他消失);冷静期满执行时删角不再卡在「还在场景里」。
+- login:口令与第三方的申请、撤销;执行者对假 data_service 的各种回答(挂起、可重试、完成);`access_token` 登录在行不在时拒绝;Apple `client_secret` 签名与 mock 换票、撤销;一次性消费的重放拒绝与 Redis 故障。
+- Java 网关:两个新接口的控制器与服务测试,`/api/login` 新字段的序列化。
+- 客户端:EditMode 覆盖回调解析、错误映射、注销界面状态;真机(iOS、安卓)需要 Apple 与 Google 开发者账号,现在没有,只能等账号到位。

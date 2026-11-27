@@ -5399,6 +5399,25 @@ Test-Case 'go_svc_image.ps1 与 k8s_deploy.ps1 的 guild 镜像名一致(否则�
     Assert-Equal -Expected $deployName.Groups['n'].Value -Actual $imageName.Groups['n'].Value -Because 'ImageName 必须一致'
 }
 
+# 群仙问道赛领奖(match 以 match 身份发个人邮件;docs/planning/season-team-tournament-v1.md 第七节,数据覆写审计 r2 第 4 轮)。
+# 带附件的奖励只经邮件发:K8s 上 match 要带 MailRpc 与发件密钥(非 dev 档缺了拒启),mail 的 Producers 要认 match。
+Test-Case 'match 发件接线:MailRpc 直连 infra 的 mail Service,发件密钥只写变量名、只经 Secret 注入,mail 的 Producers 认同名变量' {
+    Assert-Equal -Expected 0 -Actual $guildInfraRun.ExitCode -Because "带全局 Go 服务的 infra-up DryRun 必须成功。输出: $($guildInfraRun.Output)"
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-match-config')
+    Assert-Equal -Expected '[mail.contract-battle-infra:50900]' -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MailRpc.Endpoints') -Because 'mail 不写 Etcd.Key(D-13),直连 infra 的 Service;不能把本机 127.0.0.1 搬上集群'
+    Assert-Equal -Expected (Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'MailRpc.Timeout') -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MailRpc.Timeout') -Because '超时镜像服务 yaml'
+    $envName = Get-EtcValue -RelativePath 'go/match/etc/match_service.yaml' -KeyPath 'MailSecretEnv'
+    Assert-Equal -Expected 'MAIL_PRODUCER_SECRET_MATCH' -Actual $envName -Because '与 go/mail/etc/mail.yaml 的 Producers.match 同名'
+    Assert-Equal -Expected $envName -Actual (Get-FlatValue -Flat $flat -KeyPath 'data.match_service.yaml.MailSecretEnv') -Because 'ConfigMap 只写变量名'
+    $matchWorkload = @(Get-ManifestBlocks -Output $guildInfraRun.Output | Where-Object {
+        $_ -cmatch '(?m)^kind: StatefulSet\s*$' -and $_ -cmatch '(?m)^  name: match\s*$'
+    }) | Select-Object -First 1
+    Assert-True -Condition ($null -ne $matchWorkload) -Because 'infra-up 产物里应当有 match 的 StatefulSet'
+    Assert-Match -Text $matchWorkload -Pattern "name: $envName\s+valueFrom:\s+secretKeyRef:\s+name: domain-service-secrets\s+key: mail-producer-match" -Because '发件密钥只经运维预置的 Secret 进容器,缺键时 Pod 起不来'
+    $mailFlat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $guildInfraRun.Output -Name 'go-svc-mail-config')
+    Assert-Equal -Expected $envName -Actual (Get-FlatValue -Flat $mailFlat -KeyPath 'data.mail.yaml.Producers.match') -Because 'mail 认 match 这个调用方,验签取同名变量'
+}
+
 # ─────────────────────────────────────────────────────────────────
 # 邮件 mail 上 K8s(M1d,docs/design/mail-system.md §7.2 / §12.3,2026-10-16)
 # ─────────────────────────────────────────────────────────────────
@@ -5416,7 +5435,7 @@ Test-Case 'mail 现役部署:全局双副本、滚动冗余、PDB及跨节点偏
 
 Test-Case 'mail 现役签名:各生产者与资产密钥只引用必需Secret' {
     $manifest = Get-Content -LiteralPath (Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/mail.yaml') -Raw
-    foreach ($name in @('MAIL_PRODUCER_SECRET_ADMIN','MAIL_PRODUCER_SECRET_RANK','MAIL_PRODUCER_SECRET_GUILD','MAIL_PRODUCER_SECRET_BATTLE','MMORPG_ASSET_OP_SECRET_MAIL')) {
+    foreach ($name in @('MAIL_PRODUCER_SECRET_ADMIN','MAIL_PRODUCER_SECRET_RANK','MAIL_PRODUCER_SECRET_GUILD','MAIL_PRODUCER_SECRET_BATTLE','MAIL_PRODUCER_SECRET_MATCH','MMORPG_ASSET_OP_SECRET_MAIL')) {
         Assert-Match -Text $manifest -Pattern ('name: '+$name+'\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: [^,]+, optional: false\}') -Because '缺密钥时容器拒绝启动，不能静默降级或把值写入ConfigMap'
     }
 }
@@ -6616,11 +6635,11 @@ Test-Case 'infra-up -AssetOps on:guild / trade 各自只拿自己那把密钥、
         # battle 提交战斗结果(MatchInternal.CommitBattleOutcome);金丝雀 battle 池是 app: battle-canary。
         @{ Name = 'match-grpc-allowlist'; Svc = 'match'; Allowed = 'client-rpc-router,guild,gate,data-service,scene,scene-world,scene-instance,battle,client-rpc-router-canary,guild-canary,battle-canary'; Port = 50500 }
         # 其余收玩家会话身份的全局服务(docs/design/gate-online-identity.md §10.2)。friend / trade / mail 是角色护栏参与者,协调者 data-service 要进得来;
-        # rank 给 mail 发榜单奖励,scene 在战斗掉落放不下时改投邮件;match 结算后向 rank 上报评分。
+        # rank 给 mail 发榜单奖励,match 给 mail 投群仙问道赛领奖邮件,scene 在战斗掉落放不下时改投邮件;match 结算后向 rank 上报评分。
         @{ Name = 'chat-grpc-allowlist'; Svc = 'chat'; Allowed = 'client-rpc-router,client-rpc-router-canary'; Port = 50700 }
         @{ Name = 'friend-grpc-allowlist'; Svc = 'friend'; Allowed = 'client-rpc-router,data-service,client-rpc-router-canary'; Port = 50400 }
         @{ Name = 'trade-grpc-allowlist'; Svc = 'trade'; Allowed = 'client-rpc-router,data-service,client-rpc-router-canary'; Port = 50800 }
-        @{ Name = 'mail-grpc-allowlist'; Svc = 'mail'; Allowed = 'client-rpc-router,data-service,rank,scene,scene-world,scene-instance,client-rpc-router-canary,rank-canary'; Port = 50900 }
+        @{ Name = 'mail-grpc-allowlist'; Svc = 'mail'; Allowed = 'client-rpc-router,data-service,rank,match,scene,scene-world,scene-instance,client-rpc-router-canary,rank-canary,match-canary'; Port = 50900 }
         @{ Name = 'rank-grpc-allowlist'; Svc = 'rank'; Allowed = 'client-rpc-router,match,client-rpc-router-canary,match-canary'; Port = 51100 }
         # payment 只收客户端请求(gate → 路由服)。渠道回调口与指标口算「清单里声明的其它端口」,对所有来源开放:回调来自集群外的负载均衡。
         # 它不提供金丝雀副本(不在 $script:CanaryReadyGoSvcs 里),策略只选中它自己。
@@ -10244,6 +10263,55 @@ Test-Case 'P1-5:五套 C++ 模板的主容器都带本角色那一档的 resourc
     }
 }
 
+# Pod 级 safe sysctl(2026-11-26,gate 准入设计 P1-5):取值只在 lib Get-ClientFacingPodSysctlsYaml 一处,这里独立钉一份,改值要同改设计稿 P1-5。
+# 按缩进拼出期望文本:Pod spec 键所在缩进 + securityContext.sysctls 五项(keepalive 120 / 10 / 6,收发缓冲上限 512KB)。
+function Get-ExpectedClientFacingPodSysctls {
+    param([Parameter(Mandatory = $true)][string]$Indent)
+    $items = [ordered]@{
+        'net.ipv4.tcp_keepalive_time'   = '120'
+        'net.ipv4.tcp_keepalive_intvl'  = '10'
+        'net.ipv4.tcp_keepalive_probes' = '6'
+        'net.ipv4.tcp_rmem'             = '4096 131072 524288'
+        'net.ipv4.tcp_wmem'             = '4096 16384 524288'
+    }
+    $lines = @("${Indent}securityContext:", "${Indent}  sysctls:")
+    foreach ($name in $items.Keys) {
+        $lines += "${Indent}    - name: $name"
+        $lines += "${Indent}      value: `"$($items[$name])`""
+    }
+    return $lines -join "`n"
+}
+
+Test-Case 'P1-5:gate / battle 的 Pod spec 紧跟 terminationGracePeriodSeconds 带五项 safe sysctl(keepalive、收发缓冲上限),scene 两套模板不带' {
+    foreach ($case in @(
+        @{ Label = 'zone-up 缺省'; Run = $devRun; Expected = @('Deployment/gate', 'Deployment/scene') }
+        @{ Label = 'zone-up external gate + Agones scene'; Run = $zoneRedisEntryRun; Expected = @('StatefulSet/gate', 'Fleet/scene') }
+        @{ Label = 'infra-up battle Deployment'; Run = $battleInfraRun; Expected = @('Deployment/battle') }
+        @{ Label = 'infra-up battle hostPort'; Run = $oflBattleHostPortWarnRun; Expected = @('Deployment/battle') }
+        @{ Label = 'infra-up battle Agones Fleet'; Run = $battleZoneRedisFleetRun; Expected = @('Fleet/battle') }
+    )) {
+        Assert-Equal -Expected 0 -Actual $case.Run.ExitCode -Because "$($case.Label):DryRun 应当成功。输出: $($case.Run.Output)"
+        $workloads = @(Get-CppWorkloadBlocks -Output $case.Run.Output)
+        $keys = @($workloads | ForEach-Object { $_.Key })
+        foreach ($key in $case.Expected) {
+            Assert-True -Condition ($keys -ccontains $key) -Because "$($case.Label):这次 DryRun 要渲染 $key(夹具前提;实际 $($keys -join ','))"
+        }
+        foreach ($workload in $workloads) {
+            $label = "$($case.Label) $($workload.Key)"
+            $isScene = $workload.Key.Split('/')[1] -like 'scene*'
+            if ($isScene) {
+                Assert-NotMatch -Text $workload.Block -Pattern 'sysctls:' -Because "${label}:scene 没有客户端连接,不写 Pod 级 sysctl"
+                continue
+            }
+            $grace = [regex]::Matches($workload.Block, '(?m)^(?<ind>[ ]+)terminationGracePeriodSeconds: \d+[ ]*$')
+            Assert-Equal -Expected 1 -Actual $grace.Count -Because "${label}:Pod spec 恰好一行 terminationGracePeriodSeconds(夹具前提)"
+            $expected = "$($grace[0].Value)`n" + (Get-ExpectedClientFacingPodSysctls -Indent $grace[0].Groups['ind'].Value)
+            Assert-Equal -Expected 1 -Actual ([regex]::Matches($workload.Block, [regex]::Escape($expected)).Count) -Because "${label}:Pod spec 紧跟宽限期写这五项、值与设计稿 P1-5 一致(漏了这一套模板,这套 Pod 的死连接回收仍是内核缺省 2 小时 11 分、单连接缓冲上限仍是 6MB / 4MB)"
+            Assert-Equal -Expected 1 -Actual ([regex]::Matches($workload.Block, '(?m)^[ ]+sysctls:[ ]*$').Count) -Because "${label}:只写这一处(sysctl 是 Pod 级,不进任何容器)"
+        }
+    }
+}
+
 Test-Case 'B0-4:C++ Deployment(gate / scene / battle)显式 maxUnavailable 0、maxSurge 留缺省;battle hostPort 仍是 maxSurge 0 / maxUnavailable 1' {
     # scene 缺省 4 副本,K8s 缺省 25% 向下取整 = 先缩 1 台旧 scene;新 Pod 因 nofile 硬限不够拒启时,这份容量一直缺到回滚。
     foreach ($case in @(
@@ -10801,7 +10869,10 @@ Test-Case 'content-guard 外部平台审核不配(基线 dev infra-up):ConfigMap
         Assert-Match -Text $out -Pattern ('(?m)^\[dry-run\] kubectl delete secret ' + [regex]::Escape($platform.SecretName) + ' -n \S+ --ignore-not-found\s*$') -Because "不粘滞:上次接过、这次没给,要删掉残留的 Secret $($platform.SecretName)(集群里没有就是空操作)"
     }
     $manifest = [IO.File]::ReadAllText((Join-Path (Get-RepoRoot) 'deploy/k8s/manifests/go-svc/content-guard.yaml'))
-    Assert-NotMatch -Text $manifest -Pattern '(?m)^[ \t]*[^#\s][^\r\n]*secretKeyRef' -Because '清单不引用任何 Secret:没接平台时不能要求 Secret 存在;接了才由 k8s_deploy.ps1 注入'
+    # 清单只引用部署托管的那把查渠道身份密钥(domain-service-secrets 的 account-directory-content-guard,部署总会补齐)。
+    # 两个平台的 Secret 没接平台时不能要求它存在,接了才由 k8s_deploy.ps1 注入。
+    $manifestRefs = @([regex]::Matches($manifest, '(?m)^[ \t]*[^#\s][^\r\n]*secretKeyRef[^\r\n]*') | ForEach-Object { $_.Value.Trim() })
+    Assert-Equal -Expected 'secretKeyRef: {name: domain-service-secrets, key: account-directory-content-guard, optional: false}' -Actual ($manifestRefs -join ' | ') -Because '清单只引用部署托管的查渠道身份密钥,不引用两个平台的 Secret'
     Assert-NotMatch -Text $manifest -Pattern '(?m)^[ \t]*-[ \t]+name:[ \t]*"?MMORPG_CONTENT_GUARD_' -Because '两把 AppSecret 的变量由 k8s_deploy.ps1 注入,清单里手写会被 Add-GoSvcSecretEnv 拒绝'
     Assert-Match -Text $out -Pattern 'content-guard platform review: wechat=False douyin=False' -Because '写路径入口要写明两个平台都没开'
     Assert-Match -Text $out -Pattern '\[dry-run\] Skipping content-guard platform review' -Because 'DryRun 不查集群现状,只打一行说明(真跑时防误关闸在任何写操作之前查)'

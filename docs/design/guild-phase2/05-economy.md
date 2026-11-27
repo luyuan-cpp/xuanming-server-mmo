@@ -796,13 +796,15 @@ DELETE FROM guild_daily_counter WHERE period_key BETWEEN 100000 AND ?weekCutoff 
 
 终结的 CAS 带着读行时的 `lease_until_ms` / `last_send_ms` 做条件(`GuildAssetStore.ResolveManuallyIfQuiet`):读证据之后只要有人领过这一行(领取必改 `lease_until_ms`)或发过请求,CAS 就落空,退出码 3,重跑重新读证据。没有这一条,`never_applied` 读完之后玩家恰好上线、唤醒投递,scene 应用了而这边判了 aborted,就是一物两得。工具没配 `DataServiceRpc` 就拒绝执行。
 
+**2026-11-26 补(未编译):按 aborted 终结 `never_applied` 的行之前,工具先等一个观察窗口。** 「安静」是拿工具自己的钟比副本写下的时刻,工具不核钟,钟差超过 30 分钟时一次正在进行的投递也像安静。所以工具先在本机单调时钟上等满 `assetop.ManualObserveWindow` = max(1 分钟, 2 × `AssetOp.LeaseMs`)(默认 1 分钟,`LeaseMs` 上限 600 秒时 20 分钟;等之前打一行提示),再读一次行与账本:`lease_until_ms`、`last_send_ms`、`attempts` 都没变(`assetop.QuietWitness.Matches`)、账本重判仍是 `never_applied` 才终结;期间被领过、排过或账本变了就拒绝,退出码 3,重跑即可。`attempts` 防的是钟慢的副本发过请求、`last_send_ms` 推不动、重排又把租约清回 0 的情形;代价是只领没发的本地重排也会让这一次落空。`applied` / `rejected` 不等。离线行默认停放约 30 分钟才重排一次,窗口碰上的机会很小;停放档关掉(`OfflineAfterAttempts: 0`)时约每分钟重排一次,几乎次次碰上,先打开停放档再终结。终结 SQL 目前还只比租约与发送时刻,`AND attempts = ?` 待补(观察窗口里的复核已在 Go 里比)。设计记录见 [data-consistency-guarantee-map-20261020.md](../data-consistency-guarantee-map-20261020.md) §6.2 第 2 条补记。
+
 - `assetopfix -f etc/guild.yaml list [-min-age-min 60] [-limit 50]`:`SELECT op_id, player_id, stream, seq, kind, attempts, last_outcome, last_reason, created_ms FROM guild_asset_op WHERE status = ?P AND created_ms < ? ORDER BY created_ms LIMIT ?`;每名玩家读一次已提交账本,多出 `evidence`、`allowed`(证据支持的唯一 `-as`)两列,`resolvable` 合并行级前置与证据。读不到账本的行记 `evidence=error`,命令以 1 退出。
 - `assetopfix -f etc/guild.yaml resolve -op <op_id> -as applied|aborted -operator <名字> -confirm <op_id> -txlog-checked`:
   1. 读行,必须同时满足:PENDING;`created_ms` 早于 30 分钟前;`last_outcome == UNKNOWN(0) && attempts ≥ 10`。任一不满足即拒绝(带 `-force` 才跳过第三条;**证据一条也不跳过**)。
   2. 读已提交账本,所选结局不在上表「能选的结局」里即拒绝(退出码 2),输出证据与来源;读不到账本退出码 1。
   3. `-confirm` 必须等于 `-op`;缺 `-txlog-checked` 就打印核对清单后退出:确认 scene 可达、Loki 里循环仍在报 UNKNOWN(`[AssetOp] … corr=<op_id>`)。交易流水里 correlation_id=op_id 的行只作线索,不作结论。
   4. DONATE_REFUND 禁止 `-as aborted`:应先用 GM 发放补偿,再 `-as applied`。
-  5. 走包级 `assetop.ResolveManually`(入参校验),落库经 `GuildAssetStore.ResolveManuallyIfQuiet`:与 `Finalize` 同一份对侧账、同一把 `status = PENDING` CAS,另带读行时的租约与发送时刻;不置 `durable`、不改 `last_outcome`(`OnFinalized` 为 nil)。CAS 返回 false 时打印"已不是 PENDING,或读证据之后被领过",退出码 3。
+  5. 证据是 `never_applied` 时先等观察窗口、再复核一次(见上段 2026-11-26 补),不过就退出码 3。走包级 `assetop.ResolveManually`(入参校验),落库经 `GuildAssetStore.ResolveManuallyIfQuiet`:与 `Finalize` 同一份对侧账、同一把 `status = PENDING` CAS,另带读行时的租约与发送时刻(`attempts` 待补);不置 `durable`、不改 `last_outcome`(`OnFinalized` 为 nil)。CAS 返回 false 时打印"已不是 PENDING,或读证据之后被领过",退出码 3。
   6. 审计:`logx.Error("[AssetOpManual] operator=%s op_id=%d player_id=%d stream=%d seq=%d kind=%d as=%s reason=%q evidence=%s evidence_source=player_store finalized=%v force=%v")`,ERROR 级确保进 Loki;同时要求操作者把输出贴到运维工单。
 
 告警(写进 `docs/design/guild-phase2.md` 运维节):`increase(assetop_unknown_total{service="guild"}[10m]) > 0` 报警;`assetop_pending_oldest_age_seconds{service="guild",stream="2"} > 86400` 提示。stream 1 不设年龄告警:离线玩家的过期捐献会一直 PENDING,直到上线后才中止,属于正常情况。

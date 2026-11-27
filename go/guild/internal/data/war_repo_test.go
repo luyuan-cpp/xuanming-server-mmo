@@ -349,15 +349,16 @@ func TestSettleWarBattle_StaleLeylineSnapshotConflicts(t *testing.T) {
 	in.Record.LeylineId = 1
 	in.BannerDelta = &d
 
-	// 另一场结算抢先提交,把旗势扣到 380。
-	mustExec(t, f.ctx, f.db, "UPDATE guild_war_leyline SET banner_hp=? WHERE zone_id=? AND leyline_id=?", 380, warTestZone, 1)
+	// 另一场结算抢先提交,把旗势扣到 260(取一个与 d.HPAfter 不同的值:被盲写覆盖的话这里会变成 d.HPAfter)。
+	require.NotEqual(t, uint32(260), d.HPAfter)
+	mustExec(t, f.ctx, f.db, "UPDATE guild_war_leyline SET banner_hp=? WHERE zone_id=? AND leyline_id=?", 260, warTestZone, 1)
 	_, err := f.war.SettleWarBattle(f.ctx, in)
 	require.ErrorIs(t, err, ErrWarSettleStale)
 	assert.Zero(t, warBattleRows(t, f, 5006), "冲突时整笔回滚")
 	rows, err := f.war.ListLeylines(f.ctx, warTestZone)
 	require.NoError(t, err)
 	cur, _ := war.FindLeylineBasis(rows, 1, warTestHunterGuild)
-	assert.Equal(t, uint32(380), cur.GetBannerHp(), "先提交的扣减没有被覆盖")
+	assert.Equal(t, uint32(260), cur.GetBannerHp(), "先提交的扣减没有被覆盖")
 
 	// 攻方帮另占着一座灵脉,也算快照过时(每帮限占 1 座的判定变了)。
 	mustExec(t, f.ctx, f.db, "UPDATE guild_war_leyline SET banner_hp=? WHERE zone_id=? AND leyline_id=?", 500, warTestZone, 1)

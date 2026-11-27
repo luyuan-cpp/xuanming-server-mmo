@@ -164,14 +164,12 @@ gateway:
 #       changelog: "修复若干问题"
 
 # Admin API security
+# api-key 只挂给后台(java/gm_admin)工作负载:写操作还要带后台从登录会话填的 X-Admin-Operator(AdminApiKeyFilter)。
+# machine-key 是配置表发布 / 回滚(go/table_sync/cmd/table-bundle)的机器口令:只能访问 /admin/tables/**,操作人必须是 table-bundle;
+# 留空就不开这条路,两把口令相同则拒绝启动(docs/design/admin-identity-and-dual-control.md §8 批 6)。
 admin:
   api-key: "change-me-in-production"
-
-# 可选商城目录后台；不配置地址即关闭代理。签名密钥只留在服务端。
-mall-admin:
-  base-url: ${GATEWAY_MALL_ADMIN_URL:}
-  secret: ${COMMERCE_ADMIN_SECRET:}
-  subject: ${COMMERCE_ADMIN_SUBJECT:mall-admin}
+  machine-key: ""
 
 # Actuator
 management:

@@ -505,14 +505,19 @@ type PermanentIDLoss struct {
 
 // CheckPermanentIDRollback 比对旧包(当前线上)与目标包(回滚目标)的所有 ids_permanent 表,
 // 列出目标包中缺失的 id(设计 §9:命中时发布工具须要求 -force 才允许回滚)。
-func CheckPermanentIDRollback(currentDir, targetDir string) ([]PermanentIDLoss, error) {
-	curManifest, err := VerifyDirManifest(currentDir, "", "")
-	if err != nil {
-		return nil, fmt.Errorf("verify current dir: %w", err)
+// 两个目录先按清单核对身份:schema_digest 都等于 schemaDigest,currentDir 的 content_digest 等于线上生效包 currentContentDigest,
+// targetDir 的等于回滚目标 targetContentDigest。传错目录(或同一目录传两次)时比的就不是这次回滚的两包,检查等于没做,所以直接报错。
+func CheckPermanentIDRollback(currentDir, targetDir, schemaDigest, currentContentDigest, targetContentDigest string) ([]PermanentIDLoss, error) {
+	if !IsLowerHex(schemaDigest, 16) || !IsLowerHex(currentContentDigest, 64) || !IsLowerHex(targetContentDigest, 64) {
+		return nil, errors.New("schema digest (16 hex) and both content digests (64 hex) are required")
 	}
-	targetManifest, err := VerifyDirManifest(targetDir, curManifest.SchemaDigest, "")
+	curManifest, err := VerifyDirManifest(currentDir, schemaDigest, currentContentDigest)
 	if err != nil {
-		return nil, fmt.Errorf("verify target dir: %w", err)
+		return nil, fmt.Errorf("verify current dir against the live bundle: %w", err)
+	}
+	targetManifest, err := VerifyDirManifest(targetDir, schemaDigest, targetContentDigest)
+	if err != nil {
+		return nil, fmt.Errorf("verify target dir against the rollback target: %w", err)
 	}
 
 	names := make([]string, 0, len(curManifest.Tables))
@@ -527,7 +532,8 @@ func CheckPermanentIDRollback(currentDir, targetDir string) ([]PermanentIDLoss, 
 	for _, name := range names {
 		curJSON, ok := findJSONArtifact(curManifest.Tables[name])
 		if !ok {
-			continue
+			// 读不出行就判不了会不会丢行:跳过等于放行,按无法检查报错。
+			return nil, fmt.Errorf("ids_permanent table %s has no json artifact in the current bundle; cannot check rows", name)
 		}
 		curIDs, err := extractRowIDsFromJSON(filepath.Join(currentDir, curJSON))
 		if err != nil {

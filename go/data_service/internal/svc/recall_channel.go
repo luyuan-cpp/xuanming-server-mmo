@@ -112,7 +112,7 @@ type RecallStore interface {
 	ConsumedSources(ctx context.Context, txIDs []uint64) (map[uint64]bool, error)
 	CreateBatch(ctx context.Context, batch *store.RecallBatchRow, ops []*store.RecallOpPlan, nowMs uint64) error
 	CancelBatch(ctx context.Context, requestID uint64, operator, reason string, nowMs uint64) error
-	// ReadOpState、ResolveManuallyIfQuiet 是人工终结的两步:读行核证据,再带读到的租约与发送时刻终结。
+	// ReadOpState、ResolveManuallyIfQuiet 是人工终结的两步:读行核证据,再带读到的租约、发送时刻与 attempts 终结。
 	ReadOpState(ctx context.Context, opID uint64) (store.RecallOpState, error)
 	ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error)
 	// SourceState、RegisterReviewHandled 是 needs_review 指令交人工处置的登记:看这些流水登记过没有,再在一个事务里按已消费登记。

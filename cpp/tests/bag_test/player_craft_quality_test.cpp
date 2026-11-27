@@ -1,10 +1,13 @@
 // V1 装备 5 档品相、只升不降打磨保底、重铸继承、防染毒绑定、率土式分卷宗技能制书与主城原子代打单测。
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/type_define/player_guid_comp.h"
@@ -181,6 +184,7 @@ protected:
             return PlayerMailOutboxSystem::SendStart::kSent;
         };
         PlayerMailOutboxSystem::SetDependenciesForTest(std::move(deps));
+        InstallReputationLedger();
         PlayerEquipmentV1System::SetPersistForTest(&DummyPersist);
         PlayerCraftSystem::SetPersistForTest(&DummyPersist);
         PlayerEquipmentV1System::SetQualityRollForTest(&FixedQualityRoll);
@@ -194,6 +198,7 @@ protected:
 
     void TearDown() override {
         PlayerMailOutboxSystem::SetDependenciesForTest({});
+        PlayerCraftSystem::SetProxyReputationLedgerForTest({});
         PlayerCraftSystem::ClearProxyStallDirectoryForTest();
         tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Reset();
         PlayerEquipmentV1System::SetPersistForTest(nullptr);
@@ -227,6 +232,53 @@ protected:
     uint64_t nextMailId{500};
     std::vector<mailpb::SendMailRequest> sentMailRequests;
     std::vector<PlayerMailOutboxSystem::SendDone> pendingMailDone;
+
+    // 口碑待回账台账的内存实现(r2-craft#4):字段名同 Redis(<id>:o 等)。取走在调用时就从台账删掉(同脚本在 Redis 上执行),
+    // deferReputationTakes 为 true 时应答压住,由用例手动放出(模拟应答迟到)。
+    std::map<std::string, int64_t> reputationCounters;
+    std::map<uint64_t, std::string> reputationBuyers;
+    bool deferReputationTakes{false};
+    std::vector<std::function<void()>> deferredReputationTakes;
+
+    void InstallReputationLedger() {
+        reputationCounters.clear();
+        reputationBuyers.clear();
+        deferReputationTakes = false;
+        deferredReputationTakes.clear();
+        PlayerCraftSystem::ProxyReputationLedger ledger;
+        ledger.add = [this](uint64_t masterId, const char* suffix, int64_t delta) {
+            reputationCounters[std::to_string(masterId) + suffix] += delta;
+        };
+        ledger.setLastBuyer = [this](uint64_t masterId, const std::string& buyerName) {
+            if (!buyerName.empty()) reputationBuyers[masterId] = buyerName;
+        };
+        ledger.take = [this](uint64_t masterId, PlayerCraftSystem::ProxyReputationTakeDone done) {
+            const std::string id = std::to_string(masterId);
+            const auto takeField = [&](const char* suffix) {
+                const auto it = reputationCounters.find(id + suffix);
+                if (it == reputationCounters.end()) return int64_t{0};
+                const int64_t value = std::max<int64_t>(it->second, 0);
+                reputationCounters.erase(it);
+                return value;
+            };
+            PlayerCraftSystem::TakenProxyReputation taken;
+            taken.orders = static_cast<uint32_t>(takeField(":o"));
+            taken.supreme = static_cast<uint32_t>(takeField(":s"));
+            taken.rare = static_cast<uint32_t>(takeField(":r"));
+            taken.netGold = static_cast<uint64_t>(takeField(":g"));
+            if (const auto buyerIt = reputationBuyers.find(masterId); buyerIt != reputationBuyers.end()) {
+                taken.lastBuyer = buyerIt->second;
+                reputationBuyers.erase(buyerIt);
+            }
+            if (deferReputationTakes) {
+                deferredReputationTakes.push_back([done = std::move(done), taken] { done(taken); });
+            } else {
+                done(taken);
+            }
+            return true;
+        };
+        PlayerCraftSystem::SetProxyReputationLedgerForTest(std::move(ledger));
+    }
 
     Bag& InventoryOf(entt::entity e) { return tlsEcs.actorRegistry.get<PlayerBagsComp>(e).bags[kInventory]; }
 
@@ -1739,9 +1791,12 @@ TEST_F(PlayerCraftQualityTest, OfflineReputationTitleUnlockDigestAckAndWestMarke
     reloadedCraft.set_proxy_scroll_fee_gold(80);
 
     PlayerCraftSystem::SetPersistForTest(&FailPersist);
-    EXPECT_FALSE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+    // 取走已发起;存盘排不上时回滚存档,并把取走的增量原样还回台账(r2-craft#4)。
+    EXPECT_TRUE(PlayerCraftSystem::DrainPendingProxyReputation(master));
     EXPECT_EQ(0u, reloadedCraft.proxy_orders_completed());
     EXPECT_EQ(4u, reloadedCraft.supreme_forged_count());
+    EXPECT_EQ(2, reputationCounters[std::to_string(kMasterId) + ":o"]);
+    EXPECT_EQ(171, reputationCounters[std::to_string(kMasterId) + ":g"]);
 
     // 恢复存盘成功：GetState 自动触发回账，解锁百炼宗师(title=2)，并产出完整未读营业战报。
     PlayerCraftSystem::SetPersistForTest(&DummyPersist);
@@ -1808,6 +1863,154 @@ TEST_F(PlayerCraftQualityTest, OfflineReputationTitleUnlockDigestAckAndWestMarke
     EXPECT_EQ(3u, ranks[kMasterId]);
     EXPECT_EQ(0u, ranks[920003]);
     EXPECT_EQ(0u, ranks[920004]);
+}
+
+// r2-craft#4:回账以原子取走的数额为准。本节点镜像说有待回账、台账里已被别的节点取走时什么都不记;
+// 取走的应答回来时宗师已离开本节点,原样还回台账,下次上线只记一次。
+TEST_F(PlayerCraftQualityTest, ProxyReputationDrainTakesAtomicallyAndGivesBackWhenMasterLeft) {
+    const std::string orders = std::to_string(kMasterId) + ":o";
+    const auto takeMasterOffline = [this] {
+        tlsEcs.playerList.erase(kMasterId);
+        tlsEcs.actorRegistry.destroy(master);
+        master = entt::null;
+    };
+
+    // 宗师离线时买家下单:本节点镜像与台账各记一单。
+    takeMasterOffline();
+    PlayerCraftSystem::RecordProxyOrderReputation(kMasterId, 1u, 0u, 95u, "侠客甲");
+    ASSERT_EQ(1, reputationCounters[orders]);
+
+    // 1. 别的节点已经取走(台账清空),本节点镜像还是旧值:宗师上线回账,什么都不记,镜像作废、不再发起。
+    for (const char* suffix : {":o", ":s", ":g"}) reputationCounters.erase(std::to_string(kMasterId) + suffix);
+    reputationBuyers.clear();
+    master = SpawnPlayer(kMasterId, "欧冶子", 1000);
+    const auto& craft = tlsEcs.actorRegistry.get<PlayerCraftComp>(master);
+    EXPECT_TRUE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+    EXPECT_EQ(0u, craft.proxy_orders_completed());
+    EXPECT_EQ(0u, craft.unread_proxy_digest_orders());
+    EXPECT_FALSE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+
+    // 2. 取走已在台账执行、应答迟到,其间宗师离开本节点:应答回来时原样还回台账,存档不动;同一名宗师至多一次在途。
+    takeMasterOffline();
+    PlayerCraftSystem::RecordProxyOrderReputation(kMasterId, 0u, 1u, 76u, "侠客乙");
+    master = SpawnPlayer(kMasterId, "欧冶子", 1000);
+    deferReputationTakes = true;
+    EXPECT_TRUE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+    EXPECT_EQ(0, reputationCounters[orders]);
+    EXPECT_FALSE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+    takeMasterOffline();
+    for (auto& reply : std::exchange(deferredReputationTakes, {})) reply();
+    EXPECT_EQ(1, reputationCounters[orders]);
+    EXPECT_EQ(1, reputationCounters[std::to_string(kMasterId) + ":r"]);
+    EXPECT_EQ("侠客乙", reputationBuyers[kMasterId]);
+
+    // 3. 宗师再上线:取到还回去的那一单,只记一次。
+    deferReputationTakes = false;
+    master = SpawnPlayer(kMasterId, "欧冶子", 1000);
+    const auto& again = tlsEcs.actorRegistry.get<PlayerCraftComp>(master);
+    EXPECT_TRUE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+    EXPECT_EQ(1u, again.proxy_orders_completed());
+    EXPECT_EQ(1u, again.rare_books_crafted_count());
+    EXPECT_EQ(76u, again.unread_proxy_digest_net_gold());
+    EXPECT_EQ("侠客乙", again.unread_proxy_digest_last_buyer());
+    EXPECT_FALSE(PlayerCraftSystem::DrainPendingProxyReputation(master));
+    EXPECT_EQ(0, reputationCounters[orders]);
+}
+
+// r2-craft#2:未学书架有上界。满了制书、开卷都拒绝且不动材料与银两;揭榜时发榜人书架满,拒绝这次交付,腾出位置后可再揭。
+TEST_F(PlayerCraftQualityTest, BookshelfCapRejectsCraftUnsealAndFulfillWithoutSideEffects) {
+    auto fillShelf = [](PlayerCraftComp& craft, uint64_t firstBookId) {
+        while (static_cast<uint32_t>(craft.skill_books_size()) < equipcraft::kMaxBookshelfBooks) {
+            auto* book = craft.add_skill_books();
+            book->set_book_id(firstBookId++);
+            book->set_skill_table_id(12020);
+            book->set_scroll_id(3);
+            book->set_rarity_tier(0);
+            book->set_bound(false);
+        }
+    };
+    auto& buyerCraft = tlsEcs.actorRegistry.get<PlayerCraftComp>(buyer);
+    fillShelf(buyerCraft, 1);
+    buyerCraft.set_next_book_seq(equipcraft::kMaxBookshelfBooks + 1);
+
+    // 封一本入包(书架 99),再补满到 100:手里有一枚可开卷的封卷道籍。
+    SealSkillBookRequest sealReq;
+    sealReq.set_book_id(1);
+    sealReq.set_expected_revision(0);
+    sealReq.set_client_request_id(++nextKey);
+    SealSkillBookResponse sealResp;
+    PlayerCraftSystem::SealSkillBook(buyer, sealReq, sealResp);
+    ASSERT_FALSE(sealResp.has_error_message()) << sealResp.DebugString();
+    fillShelf(buyerCraft, 1000);
+    ASSERT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), buyerCraft.skill_books_size());
+
+    // 1. 制书:书架满,拒绝,残页与银两都不动。
+    GrantItem(buyer, equipcraft::kScrollFragmentConfigId, 40, false);
+    const uint64_t goldBefore = CurrencySystem::GetBalance(buyer, kCurrencyGold);
+    CraftSkillBookRequest craftReq;
+    craftReq.set_mode(CraftSkillBookRequest::RANDOM_REGULAR);
+    craftReq.set_scroll_id(3);
+    craftReq.set_expected_revision(1);
+    craftReq.set_client_request_id(++nextKey);
+    CraftSkillBookResponse craftResp;
+    PlayerCraftSystem::CraftSkillBook(buyer, craftReq, craftResp);
+    ASSERT_TRUE(craftResp.has_error_message());
+    EXPECT_EQ(static_cast<uint32_t>(kSkillBookshelfFull), craftResp.error_message().id());
+    EXPECT_EQ(40u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kScrollFragmentConfigId));
+    EXPECT_EQ(goldBefore, CurrencySystem::GetBalance(buyer, kCurrencyGold));
+    EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), buyerCraft.skill_books_size());
+    EXPECT_EQ(1u, buyerCraft.scroll_craft_revision());
+
+    // 2. 开卷:书架满,拒绝,封卷道籍留在背包。
+    UnsealSkillBookRequest unsealReq;
+    unsealReq.set_item_id(sealResp.item_id());
+    unsealReq.set_expected_revision(1);
+    unsealReq.set_client_request_id(++nextKey);
+    UnsealSkillBookResponse unsealResp;
+    PlayerCraftSystem::UnsealSkillBook(buyer, unsealReq, unsealResp);
+    ASSERT_TRUE(unsealResp.has_error_message());
+    EXPECT_EQ(static_cast<uint32_t>(kSkillBookshelfFull), unsealResp.error_message().id());
+    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
+    EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), buyerCraft.skill_books_size());
+
+    // 3. 揭榜:发榜人书架满,拒绝这次交付;卖家的封卷与银两、发榜人的悬赏单都不动。
+    auto& masterCraft = tlsEcs.actorRegistry.get<PlayerCraftComp>(master);
+    tlsEcs.actorRegistry.get<CurrencyComp>(master).set_values(kCurrencyGold, 3000);
+    PostSkillBookWantedOrderRequest postReq;
+    postReq.set_skill_table_id(12020);
+    postReq.set_reward_gold(1000);
+    postReq.set_expected_revision(0);
+    postReq.set_client_request_id(++nextKey);
+    PostSkillBookWantedOrderResponse postResp;
+    PlayerCraftSystem::PostWantedOrder(master, postReq, postResp);
+    ASSERT_FALSE(postResp.has_error_message()) << postResp.DebugString();
+    fillShelf(masterCraft, 5000);
+    masterCraft.set_next_book_seq(6000);
+
+    FulfillSkillBookWantedOrderRequest fulfillReq;
+    fulfillReq.set_poster_player_id(kMasterId);
+    fulfillReq.set_order_id(postResp.order().order_id());
+    fulfillReq.set_sealed_item_id(sealResp.item_id());
+    fulfillReq.set_expected_revision(1);
+    fulfillReq.set_client_request_id(++nextKey);
+    FulfillSkillBookWantedOrderResponse fulfillResp;
+    PlayerCraftSystem::FulfillWantedOrder(buyer, fulfillReq, fulfillResp);
+    ASSERT_TRUE(fulfillResp.has_error_message());
+    EXPECT_EQ(static_cast<uint32_t>(kSkillWantedPosterBookshelfFull), fulfillResp.error_message().id());
+    EXPECT_EQ(1u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
+    EXPECT_EQ(goldBefore, CurrencySystem::GetBalance(buyer, kCurrencyGold));
+    EXPECT_EQ(1, masterCraft.wanted_orders_size());
+    EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), masterCraft.skill_books_size());
+
+    // 发榜人腾出一格后,换一个请求号再揭即可成交,书架回到上限而不越过。
+    masterCraft.mutable_skill_books()->RemoveLast();
+    fulfillReq.set_client_request_id(++nextKey);
+    FulfillSkillBookWantedOrderResponse retryResp;
+    PlayerCraftSystem::FulfillWantedOrder(buyer, fulfillReq, retryResp);
+    ASSERT_FALSE(retryResp.has_error_message()) << retryResp.DebugString();
+    EXPECT_EQ(0u, InventoryOf(buyer).GetTotalItemCount(equipcraft::kSealedSkillBookConfigId));
+    EXPECT_EQ(0, masterCraft.wanted_orders_size());
+    EXPECT_EQ(static_cast<int>(equipcraft::kMaxBookshelfBooks), masterCraft.skill_books_size());
 }
 
 } // namespace

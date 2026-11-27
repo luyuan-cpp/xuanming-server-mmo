@@ -302,14 +302,24 @@ func (s *DataServiceServer) UpsertAccountChannelIdentity(ctx context.Context, in
 // GetPlayerChannelIdentity 查渠道身份、建号时刻与角色等级(content_guard / chat 用,只读)。给了 player_id 按角色查;
 // player_id 为 0 时按 account 查(建角送检时角色还没发号),不回角色等级。
 func (s *DataServiceServer) GetPlayerChannelIdentity(ctx context.Context, in *dspb.GetPlayerChannelIdentityRequest) (*dspb.GetPlayerChannelIdentityResponse, error) {
-	if s.svcCtx.ChannelIdentities == nil {
+	if s.svcCtx.ChannelIdentities == nil || s.svcCtx.ChannelIdentityAuth == nil {
 		return nil, status.Error(codes.Unavailable, "channel identity store not configured")
+	}
+	// 应答里有账号与平台 openid:只给 content_guard 与 chat(验签器里只有这两个调用方)。
+	caller, err := s.svcCtx.ChannelIdentityAuth.Verify(ctx, accountdirectory.MethodPrefix+"GetPlayerChannelIdentity", in)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, status.FromContextError(ctxErr).Err()
+		}
+		return nil, status.Error(codes.PermissionDenied, "channel identity lookup proof invalid")
+	}
+	if caller != accountdirectory.ContentGuardCaller && caller != accountdirectory.ChatCaller {
+		return nil, status.Error(codes.PermissionDenied, "channel identity lookup proof invalid")
 	}
 	if in.GetPlayerId() == 0 && in.GetAccount() == "" {
 		return nil, status.Error(codes.InvalidArgument, "player_id or account required")
 	}
 	var out *dspb.GetPlayerChannelIdentityResponse
-	var err error
 	if in.GetPlayerId() != 0 {
 		out, err = s.svcCtx.ChannelIdentities.ChannelIdentityOfPlayer(ctx, in.GetPlayerId())
 	} else {

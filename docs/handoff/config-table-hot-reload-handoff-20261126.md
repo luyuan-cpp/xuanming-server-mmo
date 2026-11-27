@@ -138,6 +138,7 @@ foreach ($m in 'match','guild','login','scene_manager','mail','rank','player_loc
 - 0 失败。
 - `tablebundle` 的 6 条用例要全过：`TestVerifyTableDirManifest*` 三条、`TestManagerStartupFallsBackToImageAndHotReloadsScheduled`、`TestManagerNeedsRestartAndRejectedDoNotRetry`，以及 11-26 新增的 `TestStartupRefusesImageFallbackWhenOwnLineFailedToSync`（本线表包没同步下来时拒绝启动）。
 - `tablebundle` 的 `TestManagerNeedsRestartAndRejectedDoNotRetry` 第二轮加了两处断言：停在 needs_restart 时 `table_bundle_needs_restart` 为 1，指针换走后为 0。
+- `go/table_sync` 里另有数据覆写审计 r2 第 4 轮（r2-ops#1）加的 3 条回滚检查用例：`TestCheckPermanentIDRollbackRejectsDirsThatAreNotTheTwoBundles`、`cmd/table-bundle` 的 `TestRollbackRequiresBothDirsUnlessForce`、`TestRollbackChecksTheLiveBundleAndTheTarget`。改动与说明归那条线，设计稿 §9「回滚」与运维手册 §4 已按它更新。整个模块跑出来是 12 条，红在这 3 条上时，按那条线的交接单处理。
 - `table_sync` 的 9 条也要全过。第二轮新增两条：`TestPruneCapsRecentUnreferencedBundlesAndRemovesOrphanedTempFiles`（没人用的包最多留 2 个、过期临时文件要清）、`cmd/table-sync` 的 `TestStatusIdentityJoinsNamespaceSoSameNamedPodsInDifferentZonesStayApart`；`TestPackVerifyExtractAndPermanentIDRollback` 加了「解包目录是 0755」的断言，Windows 上跳过，Linux 证据要在 Linux 上跑一遍。其余是 `TestPackVerifyExtractAndPermanentIDRollback`、`TestVerifyAndExtractRejectsTraversalAndSymlinks`、`TestKeysAndPruneUnusedBundles`、`TestSigV4PutHeadGetAndSizeLimit`，以及第一轮新增的三条：
   - `TestManifestJSONUsesExporterArrayShape`：清单的 `tables` 是数组，缺名、重名被拒；
   - `TestVerifyDirManifestAcceptsRealExporterOutput`：仓里 `generated/tables` 能过 sidecar 的清单核对。这一条红了说明 sidecar 读不了真实的包，线上一个包都下不来；

@@ -8,6 +8,7 @@ import (
 	"login/internal/config"
 	"login/internal/logic/pkg/accountdeletion"
 	"login/internal/logic/pkg/auth"
+	"login/internal/logic/pkg/passportsession"
 	"login/internal/logic/pkg/sessionmanager"
 	plpb "proto/player_locator"
 	"shared/accountdirectory"
@@ -43,7 +44,7 @@ func (s *ServiceContext) initAccountDeletion(client *accountdirectory.Client) {
 }
 
 // initPassportAdmin 接上官方通行证的管理接口:注销时删通行证里的用户(docs/design/official-passport-registration.md §3.5),
-// 刷新令牌前核对改密 / 封禁(§3.6,clientplayerlogin/refreshtokenlogic.go)。两处共用同一个客户端。
+// 登录、刷新、通行证回调时把改密 / 封禁 / 删除落到游戏登录上(§3.6、§3.7,pkg/passportsession)。两处共用同一个客户端。
 // 管理凭据由 ResolveSecrets 校验并解析:生产配了通行证登录就一定有;dev/test 可以没有,那时两件事都不做。
 func (s *ServiceContext) initPassportAdmin() {
 	p := config.AppConfig.AuthProviders.Passport
@@ -60,8 +61,8 @@ func (s *ServiceContext) initPassportAdmin() {
 	if err != nil {
 		panic(fmt.Errorf("AuthProviders.Passport admin client rejected; refusing to start: %w", err))
 	}
-	s.PassportAdmin = admin
 	s.AccountDeletion.Passport = admin
+	s.PassportSessions = passportsession.New(admin, s.TokenManager, s)
 	logx.Infof("[passport] admin API enabled for account deletion and session checks (admin_client_id=%s)", p.AdminClientId)
 }
 
@@ -81,6 +82,26 @@ func (d deletionSessions) RevokeAll(ctx context.Context, account string) error {
 // 玩家域 Redis 上,gate 命令 topic 也是地域共用的(按 gate 实例 uuid 过滤),所以本区的 player_locator 查得到、踢得到本地域任何一个区的会话。
 func (d deletionSessions) KickPlayer(ctx context.Context, player uint64, reasonTip uint32) error {
 	return kickPlayerSession(ctx, d.s.PlayerLocatorClient, d.s.KickSessionWithReason, player, reasonTip)
+}
+
+// KickAccountPlayers 把账号名下的每个角色都踢下线(在线设备收到 reasonTip),按正常登出收尾(同 KickPlayer);没有会话的角色直接跳过。
+// 官方通行证改密 / 封禁之后吊销了令牌时用(pkg/passportsession)。某个角色踢失败时其余照踢,回第一个错误。
+// 没装配目录或 player_locator(单测替身)时什么都不做。
+func (s *ServiceContext) KickAccountPlayers(ctx context.Context, account string, reasonTip uint32) error {
+	if s.AccountDirectory == nil || s.PlayerLocatorClient == nil {
+		return nil
+	}
+	roles, err := s.AccountDirectory.Read(ctx, account, false)
+	if err != nil {
+		return fmt.Errorf("read roles of %s: %w", account, err)
+	}
+	var first error
+	for _, role := range roles.GetPlayers() {
+		if err := kickPlayerSession(ctx, s.PlayerLocatorClient, s.KickSessionWithReason, role.GetPlayerId(), reasonTip); err != nil && first == nil {
+			first = fmt.Errorf("kick player %d: %w", role.GetPlayerId(), err)
+		}
+	}
+	return first
 }
 
 type kickGateSessionFunc func(ctx context.Context, gateID string, gateInstanceID string, sessionID uint32, playerID uint64, reasonTip uint32) error

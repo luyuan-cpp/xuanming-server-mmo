@@ -181,9 +181,9 @@ func TestPassportSubject(t *testing.T) {
 	}
 }
 
-// 刷新前的登录态核对(CheckSession,official-passport-registration.md §3.6):被删 / 被标记删除、被封、改密时刻不早于身份令牌的
-// 签发时刻都不再续期;改密在签发之前、从没改过照常续期;改密时刻认不出、通行证故障回错误(由调用方放行),既不当照常也不当吊销。
-func TestPassportAdminCheckSession(t *testing.T) {
+// 登录态核对(LookupUser + SessionVerdict,official-passport-registration.md §3.6):被删 / 被标记删除、被封、改密时刻不早于
+// 身份令牌的签发时刻都不认;改密在签发之前、从没改过照常;改密时刻认不出、通行证故障回错误(由调用方放行),既不当照常也不当吊销。
+func TestPassportAdminLookupUserAndSessionVerdict(t *testing.T) {
 	const issuedAt = int64(1795000000)
 	// 用东八区的写法:Casdoor 按服务器本地时区写 RFC 3339,比较要按绝对时刻。
 	at := func(unix int64) string {
@@ -204,16 +204,17 @@ func TestPassportAdminCheckSession(t *testing.T) {
 		"marked deleted":             {user(`,"isDeleted":true`), PassportSessionUserGone},
 		"deleted":                    {"null", PassportSessionUserGone},
 	} {
-		got, err := newPassportAdmin(t, &casdoorStub{getData: tc.getData}).CheckSession(context.Background(), testPassportSub, issuedAt)
-		if err != nil || got != tc.want {
-			t.Errorf("%s: CheckSession = (%q, %v), want %q", name, got, err, tc.want)
+		status, err := newPassportAdmin(t, &casdoorStub{getData: tc.getData}).LookupUser(context.Background(), testPassportSub)
+		if err != nil || status.Sub != testPassportSub || status.SessionVerdict(issuedAt) != tc.want {
+			t.Errorf("%s: LookupUser = (%+v, %v), verdict %q, want %q", name, status, err, status.SessionVerdict(issuedAt), tc.want)
 		}
 	}
 
-	// 签发时刻缺失(0,这个字段加上之前签的令牌)按最早算:改过密码就不再续期。
-	changed := user(`,"lastChangePasswordTime":"` + at(issuedAt) + `"`)
-	if got, err := newPassportAdmin(t, &casdoorStub{getData: changed}).CheckSession(context.Background(), testPassportSub, 0); err != nil || got != PassportSessionPasswordChanged {
-		t.Errorf("issuedAt=0: CheckSession = (%q, %v), want %q", got, err, PassportSessionPasswordChanged)
+	// 改密时刻按绝对时刻换算;签发时刻缺失(0,这个字段加上之前签的令牌)按最早算:改过密码就不认。
+	changed, err := newPassportAdmin(t, &casdoorStub{getData: user(`,"lastChangePasswordTime":"` + at(issuedAt) + `"`)}).
+		LookupUser(context.Background(), testPassportSub)
+	if err != nil || changed.PasswordChangedAt != issuedAt || changed.SessionVerdict(0) != PassportSessionPasswordChanged {
+		t.Errorf("password changed at %d: status=%+v err=%v verdict(0)=%q", issuedAt, changed, err, changed.SessionVerdict(0))
 	}
 
 	for name, stub := range map[string]*casdoorStub{
@@ -222,9 +223,29 @@ func TestPassportAdminCheckSession(t *testing.T) {
 		"another user":           {getData: foundUser("another-id")},
 		"passport is down":       {httpStatus: http.StatusBadGateway},
 	} {
-		got, err := newPassportAdmin(t, stub).CheckSession(context.Background(), testPassportSub, issuedAt)
-		if !errors.Is(err, ErrProviderUnavailable) || got != "" {
-			t.Errorf("%s: CheckSession = (%q, %v), want (\"\", ErrProviderUnavailable)", name, got, err)
+		if _, err := newPassportAdmin(t, stub).LookupUser(context.Background(), testPassportSub); !errors.Is(err, ErrProviderUnavailable) {
+			t.Errorf("%s: LookupUser error = %v, want ErrProviderUnavailable", name, err)
 		}
+	}
+}
+
+// 按名字查(通行证回调只点了名字时,§3.7):查询带 id=<组织>/<用户名>,查到时 Sub 取应答里的用户 id;
+// 查不到回 Gone、Sub 为空;应答里的名字对不上回错误,不拿别人的状态。
+func TestPassportAdminLookupUserByName(t *testing.T) {
+	stub := &casdoorStub{getData: foundUser(testPassportSub)}
+	status, err := newPassportAdmin(t, stub).LookupUserByName(context.Background(), testPassportOrganization, "alice")
+	if err != nil || status.Sub != testPassportSub || status.Gone {
+		t.Fatalf("LookupUserByName = (%+v, %v)", status, err)
+	}
+	if q := stub.seen().lastQuery; q != "id=xuanming%2Falice" {
+		t.Fatalf("get-user query = %q, want id=<organization>/<name>", q)
+	}
+	gone, err := newPassportAdmin(t, &casdoorStub{getData: "null"}).LookupUserByName(context.Background(), testPassportOrganization, "alice")
+	if err != nil || !gone.Gone || gone.Sub != "" {
+		t.Fatalf("missing user: (%+v, %v), want Gone with no Sub", gone, err)
+	}
+	if _, err := newPassportAdmin(t, &casdoorStub{getData: foundUser(testPassportSub)}).
+		LookupUserByName(context.Background(), testPassportOrganization, "bob"); !errors.Is(err, ErrProviderUnavailable) {
+		t.Fatalf("a reply naming another user must be an error, got %v", err)
 	}
 }

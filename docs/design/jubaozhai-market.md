@@ -438,7 +438,7 @@ TRADE_DEBIT,只把 `item_uuids` 换成该玩家的其它装备再发出去,这�
   - `ABANDONED`、`REJECTED`、`ABORTED` 一律按「没扣到」处理，走与 scene 判拒同一条 `plan` 路径：退回另一方已托管的资产，寄售重新开放，竞价冻结失败即结案。
   - `APPLIED_PARTIAL` 照旧转人工。
   - 人工判 `APPLIED` 按已扣到处理。实例扣款被人工判 `APPLIED` 时没有托管原件：`ResolveManually` 不写 `escrow_snapshot`，自动路径缺原件根本不终结。`advance` 在记下结局时即用 `Transfer` 核对已扣出的托管转得动，转不动就隔离。这样不会先上架，等买家付了款才在发货时撞错。
-- 不误退：`ABANDONED` 只出现在 TRADE_DEBIT。[landing-recovery-sync-digest.md](landing-recovery-sync-digest.md) §6.3 的六条证据保证 scene 不可能再收到这条 seq，即「确实没扣」。人工终结的结论只认玩家已提交的账本(`go/shared/assetop/manual_evidence.go` 的 `JudgeManual`,trade 与 guild 共用一份判据),scene 流水 correlation_id 只是线索;终结用带读证据时租约与发送时刻的条件写,并留痕(手册 `trade-commerce-quarantine-runbook.md` §4.2)。
+- 不误退：`ABANDONED` 只出现在 TRADE_DEBIT。[landing-recovery-sync-digest.md](landing-recovery-sync-digest.md) §6.3 的六条证据保证 scene 不可能再收到这条 seq，即「确实没扣」。人工终结的结论只认玩家已提交的账本(`go/shared/assetop/manual_evidence.go` 的 `JudgeManual`,trade 与 guild 共用一份判据),scene 流水 correlation_id 只是线索;终结用带读证据时租约、发送时刻与 attempts 的条件写,判「从未应用」时还要先等一个观察窗口再复核(2026-11-26,[data-consistency-guarantee-map-20261020.md](data-consistency-guarantee-map-20261020.md) §6.2 第 2 条补记),并留痕(手册 `trade-commerce-quarantine-runbook.md` §4.2)。
 - 补偿只一次：
   - 腿的 `Outcome` 写进合同 workflow，与合同版本 CAS 同一事务提交；`Outcome != 0` 的腿不再读。
   - 补偿腿按角色名 `addLeg` 只建一次。
@@ -751,7 +751,7 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 **仍不做的**：
 
 - 审批流（两人复核）：请求里的第二个名字证明不了身份，要有后台的登录身份才有意义；等有管理后台时在入口里接，判定不用改。
-- 官方商城、人民币寄售：它们的人工处理要和商城订单一起改，商城记的 MANUAL 不会因为交易侧补发自动变成已交付，不在这个工具。
+- 官方商城、人民币寄售：它们的人工处理要和商城订单一起改，商城记的 MANUAL 不会因为交易侧补发自动变成已交付，不在这个工具。人民币寄售在交易侧处理完之后，由商城的收敛交付（`RETRY_DELIVERY`，§16.1）让交易按合同现状重新回执。
 
 **回归测试**（都没有运行）：
 
@@ -883,3 +883,68 @@ J-O1至J-O4已由负责人明确采用设计默认值且允许配置：公示48�
 卖家收入是每单不可变的人民币结算账，不复制C++游戏货币。提现以账号guard串行、锁定可用收入逐单分配，在同事务写唯一requestId的提现单和分配明细；预留后其它并发提现不能重复消费。渠道回执与原提现金额／币种绑定，成功只结一次，失败原路解冻分配。mock提现需要独立的持久mock付款事实，prod及未启用mock时拒绝；真实渠道默认关闭。提现、收入、原订单与各类回执均保留审计关联，页面或客户端无“直接置成功”入口。
 
 先完成商城域、原订单接线和mock适配器，再补两版trade门面、角色冻结协同、客户端与真实到账验证。本节仅确立当前实现契约，不表示人民币寄售、提现或角色整链已经完成。V3已用于目录管理，V4用于mock支付退款，V5用于本批寄售／结算结构，后续迁移不复用这些编号。
+
+### 16.1 寄售人工单：付款仍 PAID 不许退还托管，交付结局由 trade 回执定（数据覆写审计 r2-mall#1，2026-11-26，未编译、未运行）
+
+实现在 `java/mall_game` 的 `ManualAdminStore.resolveConsignment`（`POST /internal/admin/manual/consignments/resolve`），运维页 `java/gateway_node/src/main/resources/mall-admin.html`。门控：`Rmb.Enabled`、`AssetOp.Enabled` 缺省关，商城管理密钥缺省为空，缺省配置下不可达。
+
+**问题**：
+
+- trade 的寄售合同在交付阶段转人工（交付腿部分发放 `applied_partial`，或 tick 隔离 `corrupt`；寄售不走 `owner_changed`），`deliver` 回报 `MANUAL`。商城记下 MANUAL 回执：交付待办 MANUAL、订单 1→7、寄售 SOLD→MANUAL。付款仍是 PAID，没有卖家收入，也没有退款待办。
+- 寄售人工单原有的三个动作里，`UNFREEZE_INCOME` / `FORFEIT_INCOME` 要求已有收入行；官方订单入口拒绝寄售订单，退款入口要求已有退款待办。能过的只有 `RETURN_TO_SELLER`。
+- `RETURN_TO_SELLER` 不看付款事实：把交付待办改成 REVOKED、订单 7→9（REVERSED）、寄售改成 RETURNING，不建退款待办。订单离开人工清单，买家付的钱留在商城，此后没有任何接口能再建退款。
+- trade 收到退回请求时合同在 `manual`，`returned` 回 `ErrConflict`，每轮失败。trade 事后把货发完也报不进来：交付待办已不是 PENDING，商城对已有 MANUAL 回执的订单拒收别的终局。
+- 违反计划 [§2.3](jubaozhai-rmb-consignment-plan.md) 第 1 条：钱已收、物不在买家，只能是「发货中」或「人工」，其余情况必须已有退款意图。
+
+**方案**：
+
+1. `RETURN_TO_SELLER` 加前置：订单绑定的那笔付款必须已被渠道撤销（`commerce_payment_receipt.fact = REVOKED`，钱已回到买家）。付款仍 PAID 时回 409，提示改用 `RETRY_DELIVERY`，什么都不改。
+2. 新动作 `RETRY_DELIVERY`（收敛交付）：付款仍 PAID、交付还没有结局时，把交付待办交还 trade，由 trade 按合同现状重新回执。
+   - 前置：寄售 MANUAL，当前订单在 7，付款 PAID，交付待办是 MANUAL（trade 报来的转人工，带一张 MANUAL 回执）或 REVOKED（撤款时商城自己拦下的，没有回执；之后撤款又被撤回，付款回到 PAID）。
+   - 同一事务：删掉 MANUAL 交付回执 → 交付待办回 PENDING → 订单 7→1 → 寄售 MANUAL→SOLD。交付回执按订单只认一张，不删的话 trade 之后的 DELIVERED / REFUND_PENDING 会被 409 拒收。
+   - 之后走原有的交付回执事务（`DeliveryStore.receipt`），回执路径一行没改：trade 已交付 → DELIVERED，同一事务记卖家收入（带冷静期），订单 2；trade 判定不交付（交付腿被拒，合同在 `rmb_refund`）→ REFUND_PENDING，按付款交易键建 DELIVERY_REJECTED 退款待办，订单 5，寄售 RETURNING，trade 的 `returned` 收下退回；trade 仍在人工 → 再回 MANUAL，回到人工清单，处理完再收敛一次。
+3. 写法照官方订单的 `RETRY_REVERSAL`：清掉非终局的 MANUAL 回执，待办回 PENDING，由 trade 重新收敛。
+
+寄售 MANUAL 时按下表选动作：
+
+| 付款 | 交付待办 | 卖家收入 | 动作 |
+|---|---|---|---|
+| PAID | MANUAL（trade 转人工） | 无 | `RETRY_DELIVERY` |
+| PAID | REVOKED（撤款被撤回） | 无 | `RETRY_DELIVERY` |
+| PAID / REVOKED | DELIVERED（交付后撤款，收入已冻结） | 冻结 | `UNFREEZE_INCOME` / `FORFEIT_INCOME` |
+| REVOKED | REVOKED / MANUAL | 无 | `RETURN_TO_SELLER` |
+
+运维顺序：trade 侧先处理合同（`commercefix`，手册 [§4.2](../ops/trade-commerce-quarantine-runbook.md)），把合同推出 `manual`，再在商城做 `RETRY_DELIVERY`。顺序反了不出错，trade 仍在人工只会再回一次 MANUAL。付款已撤销、trade 合同还在人工时做 `RETURN_TO_SELLER`，trade 要等合同离开人工、落到 `rmb_refund` 之后才退回，之前每轮 `returned` 冲突、打 ERROR 日志。
+
+**为什么这样选**：
+
+- 交付的结局只有 trade 知道。托管原件和交付腿的结局都在 trade 库（计划 [§2.1](jubaozhai-rmb-consignment-plan.md) 的权威表）；人工合同可能已部分交付，隔离之前排定的发放腿也还在照常投递（§15.3「隔离截止在途托管扣款」）。商城凭人工判断落任何终局，都可能和 trade 最终的结局对不上。收敛交付不猜结局，只把待办交还 trade，按 trade 的回执和原有的回执事务落定。
+- 沿用现有状态机：不加表、不加列、不加状态，只多一个与 `RETRY_REVERSAL` 同写法的动作。
+- 计划 [§3.10](jubaozhai-rmb-consignment-plan.md) 的人工出口要求确认交付要有 SQL 证据、退款要 trade 先放弃交付，并禁止只在商城侧把订单从人工改成退款中。收敛交付让这两个出口都由 trade 的回执触发。
+
+**被否决的做法**：
+
+- 付款仍 PAID 时同事务建退款待办：商城一退款，trade 的人工合同之后仍可能交付，或者已经部分交付，买家钱货两得、卖家托管落空。计划 §3.10 明令禁止。
+- 商城侧直接标已交付并记卖家收入（官方订单 `MARK_DELIVERED` 的寄售版）：凭人工判断给卖家记可提现收入，证据却在 trade；部分交付时卖家拿全款、买家少拿货。
+- 让 trade 的 `returned` 收下人工合同的退回：部分发放过的托管整包退给卖家就是复制，也违反本节上文「人工状态不猜结局，不自动夺回唯一资产」。trade 侧不改，回归测试钉住这一条。
+- 改 `DeliveryStore.receipt`，让终局回执覆盖 MANUAL 回执：改的是所有订单共用的回执幂等口径（同一订单只认一张回执），影响面大。收敛交付只在人工处置事务里删一张 MANUAL 回执，留痕在 `commerce_admin_command`。
+
+**代价与边界**：
+
+- 删掉的 MANUAL 回执不留原件，与 `RETRY_REVERSAL` 相同。留痕是管理命令日志与提交后的 WARN 日志，trade 侧另有合同与人工处置记录。
+- 收敛之后订单回到待交付，从人工清单消失；trade 仍在人工时会再回 MANUAL、回到清单。
+- 没有补 trade 侧的出口。寄售合同的交付腿部分发放之后，trade 人工入口一个动作都做不了：部分发放的腿只有 `partial` 收（别的动作在补记腿结局时就被拒），而 `partial` / `refund` / `redirect` 都不收寄售（§15.7 表）。隔离 `corrupt` 的合同原因消除后可以 `resume`。这类单现在两边都停在人工（钱在商城、托管在 trade，都在人工清单里），不再被错误终结，但还没有出口。要补的是 trade 侧寄售部分发放的补发：`planPartial` 放开寄售的发放腿；`planRmb` 交付阶段按 `currentLeg` 跟到补发腿，补发失败转人工而不是退款；交付齐了经收敛交付记 DELIVERED。这一批要和 `manual.go` 的双人复核改动错开。
+- 付款已撤销、trade 合同之后却交付了（买家钱货两得），属于交付后拒付。商城没有「记交付并冻结收入」的人工动作：做了 `RETURN_TO_SELLER` 之后寄售停在 RETURNING，trade 每轮 `returned` 冲突。撤款拦交付时也有同类竞态：订单还在待交付，trade 已领走交付意图。这两种都归计划第 13 步的交付后退款与拒付处理。
+
+**回归测试**（都没有运行）：
+
+- `java/mall_game` 的 `ManualAdminStoreTest.寄售交付转人工而付款仍PAID时拒绝退还托管_按交易结局重新收敛交付`，五个场景：
+  - 付款仍 PAID 时退还托管被拒，订单、寄售、退款待办、退回清单都不变；收敛交付清掉回执，同请求号重放回原快照。trade 再回 MANUAL 时回到人工，再收敛之后 DELIVERED 记收入，交付之后不能再收敛。
+  - 收敛之后 trade 回 REFUND_PENDING：建退款待办，寄售转 RETURNING。
+  - 付款在转人工之后被撤销：收敛被拒，退还托管放行，订单 REVERSED。
+  - 撤款拦下交付之后又被撤回：退还托管被拒，只能收敛；收敛之后交付并记收入。
+  - 已交付、收入已冻结的单不能收敛。
+  - 原有用例 `寄售人工单支持退还托管资产_…` 的「交付前撤款 → 退还托管」照常通过。
+- `go/trade` 的 `TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial` 追加一段：交付腿部分发放转人工之后，商城发来的退回请求回 `ErrConflict`，合同行逐字段不变。
+
+**Java 版**：独立仓的 `game-mall` 没有人工单处置入口（没有 `ManualAdmin*`，也没有 `RETURN_TO_SELLER`），这个缺陷不适用；以后补人工单处置时按本节口径做。

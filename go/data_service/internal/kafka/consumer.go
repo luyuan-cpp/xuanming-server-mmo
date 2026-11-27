@@ -722,7 +722,8 @@ func (r *ownedReader) finishAttempt(result error) error {
 	r.owner.mu.Lock()
 	unknown := r.owner.unknown
 	r.owner.mu.Unlock()
-	if errors.Is(result, ErrConsumerStoppedOnDB) && unknown == nil {
+	// 落库或写死信重试用尽而停下:这一批确定没提交(两种都是先成功才提交),交还重投。
+	if (errors.Is(result, ErrConsumerStoppedOnDB) || errors.Is(result, ErrConsumerStoppedOnDeadLetter)) && unknown == nil {
 		outcome = kafkautil.ProcessingNotCommitted
 	}
 	group, ok := r.reader.(*kafkautil.BoundConsumerGroup)

@@ -712,6 +712,30 @@ func TestTerminalWritersLockRowBeforeCAS(t *testing.T) {
 	}
 }
 
+// TestResolveManuallyIfQuietBindsTheWholeWitness:assetopfix 的条件写带读证据时的整份见证,租约、发送时刻、attempts
+// 按语句末尾的顺序绑定。只比前两列时,钟慢的副本发过请求(last_send_ms 推不动)、结局不明重排(租约清回 0)之后
+// 行上两列与读证据时一样,终结照样通过,那一次发送就漏了(assetop.QuietWitness 的注释)。
+func TestResolveManuallyIfQuietBindsTheWholeWitness(t *testing.T) {
+	s := &recovScript{affected: 1, rowsFor: lockRowsFor(true)}
+	witness := assetop.QuietWitness{LeaseUntilMs: 11, LastSendMs: 22, Attempts: 33}
+	done, err := s.repo(t).ResolveManuallyIfQuiet(context.Background(),
+		assetop.ManualResolution{OpID: 31, Final: assetop.StatusAborted, Operator: "ops", Reason: "test"}, witness, 9_000)
+	if err != nil || !done {
+		t.Fatalf("= (%v, %v), want (true, nil)", done, err)
+	}
+	cas := s.callsWithPrefix("UPDATE ")
+	if len(cas) != 1 || cas[0].sql != collapseSpaces(sqlResolveAssetOpQuiet) {
+		t.Fatalf("CAS = %+v, want one %q", callSQLs(cas), sqlResolveAssetOpQuiet)
+	}
+	if !strings.HasSuffix(cas[0].sql, "AND `lease_until_ms` = ? AND `last_send_ms` = ? AND `attempts` = ?") {
+		t.Fatalf("见证条件 = %q", cas[0].sql)
+	}
+	args := cas[0].args
+	if n := len(args); n < 3 || argInt(t, args[n-3]) != 11 || argInt(t, args[n-2]) != 22 || argInt(t, args[n-1]) != 33 {
+		t.Fatalf("见证实参 = %v, want 末尾依次为 (11, 22, 33)", args)
+	}
+}
+
 // TestTerminalWritersWakeOwningContractAfterCommit:终结 / 人工终结 / 放弃提交之后,指令属于交易合同(ref_kind=ORDER)时,
 // 在事务外把那张合同提前到终结时刻到期(缺口清单第 16 条):先读归属,再发一条只往前拉、不改版本的唤醒 UPDATE。
 // 唤醒排在 COMMIT 之后:合同推进的锁序是「合同行 → op 行」,在 op 行锁里再锁合同行会成环。

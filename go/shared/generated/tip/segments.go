@@ -28,7 +28,7 @@ type Segment struct {
 // Segments 按 Base 升序,段两两不重叠(由导表器生成期自检保证)。
 var Segments = []Segment{
 	{Domain: "common", Group: "common_error", Base: 1000, Width: 1000, Lo: 1000, Hi: 1018, Count: 19},
-	{Domain: "login", Group: "login_error", Base: 2000, Width: 1000, Lo: 2000, Hi: 2056, Count: 57},
+	{Domain: "login", Group: "login_error", Base: 2000, Width: 1000, Lo: 2000, Hi: 2059, Count: 60},
 	{Domain: "scene", Group: "scene_error", Base: 3000, Width: 1000, Lo: 3000, Hi: 3028, Count: 29},
 	{Domain: "team", Group: "team_error", Base: 4000, Width: 1000, Lo: 4000, Hi: 4034, Count: 35},
 	{Domain: "mission", Group: "mission_error", Base: 5000, Width: 1000, Lo: 5000, Hi: 5006, Count: 7},

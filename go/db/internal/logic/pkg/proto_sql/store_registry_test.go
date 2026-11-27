@@ -497,3 +497,20 @@ func TestPreparePlacementStoreRejectsMissingColumnWithStorageHint(t *testing.T) 
 	}
 	assertNoDDL(t, rec)
 }
+
+// 写者注册跳过当时连不上的库(docs/design/data-service-startup-isolation.md §7):白名单里这一代没有写资格的存档库按升序列出来,
+// 进程据此不就绪。
+func TestStoreRegistryListsPlayerStoresWithoutAWriterGrant(t *testing.T) {
+	if boot != nil {
+		t.Fatal("test precondition: no boot assembled in this process")
+	}
+	r := &StoreRegistry{allow: dbguard.Allowlist{Names: []string{"player_store_1000001_db", "player_store_1000000_db"}}}
+	if got := r.MissingWriterGrants(); strings.Join(got, ",") != "player_store_1000000_db,player_store_1000001_db" {
+		t.Fatalf("without a boot every store is missing, got %v", got)
+	}
+	boot = &storeBoot{writers: map[string]authoritysql.WriterConfig{"player_store_1000000_db": {}}}
+	t.Cleanup(func() { boot = nil })
+	if got := r.MissingWriterGrants(); strings.Join(got, ",") != "player_store_1000001_db" {
+		t.Fatalf("MissingWriterGrants() = %v, want [player_store_1000001_db]", got)
+	}
+}

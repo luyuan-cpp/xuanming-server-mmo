@@ -32,6 +32,10 @@
 依赖故障先等它恢复;是 bug 先修代码并发布到全部副本。guild-trial:已登记的历练对局多半已由巡检器在结果超时(420s)后从 match 的
 SQL 终局结算过,重放会走幂等闸门回「已结算」;没有登记行的只能靠重放。
 
+data_service 的两个审计组(流水、快照)2026-11-26 起也有死信(告警是 `DataServiceAuditMessagesSkipped`,不是本页的 `KafkaBoundConsumerDeadLettered`):
+原件解不出、主键为 0 或超列宽,cause 一律是 unprocessable。先修生产端(C++ scene)或解码,发布之后再按下面重放,`replay` 要带
+`-allow-unprocessable`。流水与快照落库都按主键 / guid 去重,重放同一条不会重复入库。
+
 ### 1.3 列出
 
 工具在 `go/shared/cmd/kafka_dlq`,需要能直连 broker 的机器(K8s 上在集群内的运维 Pod 里跑,或先把 broker 端口转发出来)。只读:

@@ -3,7 +3,8 @@
 //   - upload:      上传到对象存储(已存在且 sha256 相同则跳过,不同则拒绝覆盖);
 //   - verify:      用真实服务二进制执行 --validate-tables 预检;
 //   - publish:     调 gateway_node PUT /admin/tables,到点前轮询若任一实例 rejected 自动撤回 next,到点后等收敛;
-//   - rollback:    检查 ids_permanent 表是否会丢失行(命中须加 -force),然后立即切回旧包;
+//   - rollback:    检查 ids_permanent 表是否会丢失行(命中须加 -force),然后立即切回旧包。检查缺省必做:要给 -current-dir 与 -target-dir,
+//     并核对它们分别是这条线的线上生效包与回滚目标包;只有 -force 才能不给目录;
 //   - cancel:      撤销未到点的 next(DELETE /admin/tables/next);
 //   - delete-line: 删除已无在线实例回报的旧 schema 线(DELETE /admin/tables);
 //   - status:      查询当前所有轨道指针与实例回报汇总(GET /admin/tables)。
@@ -76,7 +77,7 @@ Subcommands:
   upload       Upload packed bundle to S3-compatible object storage (no overwrite on mismatch)
   verify       Run --validate-tables across service binaries against a table directory
   publish      PUT /admin/tables, auto-cancel on pre-activation rejection, wait for convergence
-  rollback     Immediate switch back to a previous bundle (guards cfg_ids_permanent unless -force)
+  rollback     Immediate switch back to a previous bundle (requires -current-dir/-target-dir to guard cfg_ids_permanent unless -force)
   cancel       DELETE /admin/tables/next before activate_at
   delete-line  DELETE /admin/tables for an unused schema_digest line
   status       GET /admin/tables and display line pointers + pod convergence summary
@@ -295,7 +296,11 @@ func (c *adminClient) doJSON(method, path string, body any) ([]byte, int, error)
 type adminLineView struct {
 	Track        string `json:"track"`
 	SchemaDigest string `json:"schema_digest"`
-	Summary      struct {
+	// Active 是此刻生效的那一包(管理接口按 activate_at 在 current 与 next 里选好的);没有指针时为空。
+	Active *struct {
+		ContentDigest string `json:"content_digest"`
+	} `json:"active"`
+	Summary struct {
 		Total        int `json:"total"`
 		Loaded       int `json:"loaded"`
 		Prepared     int `json:"prepared"`
@@ -321,6 +326,21 @@ func (c *adminClient) getStatus() ([]adminLineView, []byte, error) {
 		return nil, raw, fmt.Errorf("parse GET /admin/tables response: %w", err)
 	}
 	return lines, raw, nil
+}
+
+// activeContentDigest 返回这条轨道、这条 schema 线此刻生效的包。没有生效指针时进程用的是镜像自带的表,
+// 它的摘要从管理接口拿不到、也谈不上「回滚」,按错误返回。
+func (c *adminClient) activeContentDigest(track, schemaDigest string) (string, error) {
+	lines, _, err := c.getStatus()
+	if err != nil {
+		return "", err
+	}
+	for _, line := range lines {
+		if line.Track == track && line.SchemaDigest == schemaDigest && line.Active != nil && line.Active.ContentDigest != "" {
+			return line.Active.ContentDigest, nil
+		}
+	}
+	return "", fmt.Errorf("no active table bundle pointer for track=%s schema_digest=%s; nothing to roll back from", track, schemaDigest)
 }
 
 func (c *adminClient) cancelNext(track, schemaDigest string) error {
@@ -472,27 +492,23 @@ func cmdRollback(args []string) error {
 	targetDigest := fs.String("target-digest", "", "64-hex previous content digest")
 	targetSHA := fs.String("target-sha256", "", "64-hex previous bundle sha256")
 	targetVersion := fs.Uint64("target-version", 0, "previous manifest version")
-	currentDir := fs.String("current-dir", "", "optional current tables dir for cfg_ids_permanent check")
-	targetDir := fs.String("target-dir", "", "optional rollback target tables dir for cfg_ids_permanent check")
-	force := fs.Bool("force", false, "force rollback even if cfg_ids_permanent IDs disappear")
+	currentDir := fs.String("current-dir", "", "tables dir of the live bundle on this line (required unless -force)")
+	targetDir := fs.String("target-dir", "", "tables dir of the rollback target bundle (required unless -force)")
+	force := fs.Bool("force", false, "roll back even if cfg_ids_permanent IDs disappear; without -current-dir/-target-dir the check is skipped")
 	reason := fs.String("reason", "rollback", "audit reason")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if !bundle.IsLowerHex(*schemaDigest, 16) || !bundle.IsLowerHex(*targetDigest, 64) {
+		return errors.New("-schema-digest (16 hex) and -target-digest (64 hex) are required")
+	}
 
-	if *currentDir != "" && *targetDir != "" {
-		losses, err := bundle.CheckPermanentIDRollback(*currentDir, *targetDir)
-		if err != nil {
-			return fmt.Errorf("permanent-id rollback check failed: %w", err)
-		}
-		if len(losses) > 0 && !*force {
-			var parts []string
-			for _, l := range losses {
-				parts = append(parts, fmt.Sprintf("%s=%v", l.Table, l.MissingIDs))
-			}
-			return fmt.Errorf("rollback would remove cfg_ids_permanent IDs (%s); prefer forward fix or pass -force",
-				strings.Join(parts, "; "))
-		}
+	cli, err := newAdminClient(*adminURL, *adminKey, *operator)
+	if err != nil {
+		return err
+	}
+	if err := guardPermanentIDRollback(cli, *track, *schemaDigest, *targetDigest, *currentDir, *targetDir, *force); err != nil {
+		return err
 	}
 
 	return cmdPublish([]string{
@@ -507,6 +523,40 @@ func cmdRollback(args []string) error {
 		"-immediate",
 		"-reason", *reason,
 	})
+}
+
+// guardPermanentIDRollback 是回滚前的只增不删表检查(设计 §9「回滚」)。缺省必做:两个目录都要给,
+// current-dir 必须是这条线此刻生效的那一包(按管理接口的 active 核对),target-dir 必须是 -target-digest 那一包。
+// -force 只放过两件事:不给目录(跳过检查)、比出了丢行(照样回滚);给了目录却对不上,-force 也不放过。
+func guardPermanentIDRollback(cli *adminClient, track, schemaDigest, targetDigest, currentDir, targetDir string, force bool) error {
+	if currentDir == "" || targetDir == "" {
+		if !force {
+			return errors.New("rollback requires -current-dir and -target-dir to check cfg_ids_permanent tables; pass -force to roll back without the check")
+		}
+		fmt.Fprintln(os.Stderr, "[table-bundle] WARN: -force without -current-dir/-target-dir; cfg_ids_permanent check skipped")
+		return nil
+	}
+	liveDigest, err := cli.activeContentDigest(track, schemaDigest)
+	if err != nil {
+		return err
+	}
+	losses, err := bundle.CheckPermanentIDRollback(currentDir, targetDir, schemaDigest, liveDigest, targetDigest)
+	if err != nil {
+		return fmt.Errorf("permanent-id rollback check failed: %w", err)
+	}
+	if len(losses) == 0 {
+		return nil
+	}
+	var parts []string
+	for _, l := range losses {
+		parts = append(parts, fmt.Sprintf("%s=%v", l.Table, l.MissingIDs))
+	}
+	if !force {
+		return fmt.Errorf("rollback would remove cfg_ids_permanent IDs (%s); prefer forward fix or pass -force",
+			strings.Join(parts, "; "))
+	}
+	fmt.Fprintf(os.Stderr, "[table-bundle] WARN: -force rollback removes cfg_ids_permanent IDs (%s)\n", strings.Join(parts, "; "))
+	return nil
 }
 
 func cmdCancel(args []string) error {

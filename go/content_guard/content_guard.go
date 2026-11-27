@@ -30,6 +30,7 @@ import (
 	cgpb "proto/content_guard"
 	dspb "proto/data_service"
 
+	"shared/accountdirectory"
 	"shared/buildinfo"
 	"shared/clockcheck"
 	"shared/dsclient"
@@ -39,6 +40,7 @@ import (
 	"shared/killswitch"
 	sharedregistry "shared/noderegistry"
 	"shared/safego"
+	"shared/serviceauth"
 	"shared/shutdownbudget"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -97,10 +99,22 @@ func main() {
 	eng := engine.New()
 	var lookup platform.IdentityLookup
 	if c.HasDataServiceRpc() {
+		// 查渠道身份要带调用方证明(应答里有账号与平台 openid)。接了平台却没有这把密钥,每次平台审核都会被 data_service 拒掉,
+		// 名字类场景就一律回「检测不可用」:起不来比带病起来好。没接平台时用不到它。
+		identitySecret := strings.TrimSpace(os.Getenv(accountdirectory.ContentGuardSecretEnv))
+		if c.Platform.WeChat.AppID != "" || c.Platform.Douyin.AppID != "" {
+			if _, err := serviceauth.New(map[string]string{accountdirectory.ContentGuardCaller: identitySecret}); err != nil {
+				panic(fmt.Sprintf("content_guard: %s must be set (at least 32 bytes) when Platform.WeChat or Platform.Douyin is configured", accountdirectory.ContentGuardSecretEnv))
+			}
+		}
 		dsCli := zrpc.MustNewClient(dsclient.Conf(c.DataServiceRpc))
 		dsRPC := dspb.NewDataServiceClient(dsCli.Conn())
 		lookup = platform.IdentityLookupFunc(func(callCtx context.Context, playerID uint64, account string) (platform.Identity, error) {
-			resp, rpcErr := dsRPC.GetPlayerChannelIdentity(callCtx, &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID, Account: account})
+			req := &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID, Account: account}
+			if err := accountdirectory.SignChannelIdentityRequest(req, accountdirectory.ContentGuardCaller, identitySecret); err != nil {
+				return platform.Identity{}, fmt.Errorf("sign channel identity lookup: %w", err)
+			}
+			resp, rpcErr := dsRPC.GetPlayerChannelIdentity(callCtx, req)
 			if rpcErr != nil {
 				return platform.Identity{}, rpcErr
 			}

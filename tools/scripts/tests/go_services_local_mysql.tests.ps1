@@ -10,6 +10,8 @@ $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/lib/test_harness.ps1"
 . "$PSScriptRoot/../lib/account_directory_dev_secret.ps1"
 . "$PSScriptRoot/../lib/match_dev_secret.ps1"
+# 起 match 时也取群仙问道赛领奖邮件的发件密钥(Start-ServiceInstance 调 Initialize-ProducerDevSecrets)。
+. "$PSScriptRoot/../lib/producer_dev_secret.ps1"
 . "$PSScriptRoot/../lib/role_fence_dev_secret.ps1"
 . "$PSScriptRoot/../lib/gate_identity_environment.ps1"
 . "$PSScriptRoot/../lib/release_common.ps1"
@@ -88,7 +90,7 @@ $oldDatabaseAllowlist = $env:DB_ALLOWED_DATABASES
 function Resolve-BindablePort { param([int]$Port, [string]$Label, [hashtable]$ReservedPorts) if ($script:PortOverride) { return $script:PortOverride }; return $Port }
 function Start-Process {
     [CmdletBinding()] param($FilePath, $ArgumentList, $WorkingDirectory, $RedirectStandardOutput, $RedirectStandardError, [switch]$PassThru, $WindowStyle)
-    $script:Starts += [pscustomobject]@{ FilePath = $FilePath; Arguments = $ArgumentList; WorkingDirectory = $WorkingDirectory; WindowStyle = $WindowStyle; ProbeSecret = $env:MATCH_PROBE_SECRET; OutcomeSecret = $env:MMORPG_MATCH_OUTCOME_SECRET_BATTLE; InboxSecret = $env:MMORPG_PLAYER_INBOX_SECRET_MATCH; RankSecret = $env:RANK_PRODUCER_SECRET_MATCH; MigrationPassword = $env:MATCH_MIGRATION_PASSWORD }
+    $script:Starts += [pscustomobject]@{ FilePath = $FilePath; Arguments = $ArgumentList; WorkingDirectory = $WorkingDirectory; WindowStyle = $WindowStyle; ProbeSecret = $env:MATCH_PROBE_SECRET; OutcomeSecret = $env:MMORPG_MATCH_OUTCOME_SECRET_BATTLE; InboxSecret = $env:MMORPG_PLAYER_INBOX_SECRET_MATCH; RankSecret = $env:RANK_PRODUCER_SECRET_MATCH; MailSecret = $env:MAIL_PRODUCER_SECRET_MATCH; MigrationPassword = $env:MATCH_MIGRATION_PASSWORD }
     return [pscustomobject]@{ Id = 901; StartTime = [datetime]::UtcNow; Path = $FilePath }
 }
 function Get-CimInstance { throw '测试禁止查询真实进程' }
@@ -373,18 +375,19 @@ try {
         Write-MatchFixture
         $LocalMySQL = $true
         Set-Content -LiteralPath (Join-Path $GoBinDir 'match.exe') -Value '仅供进程桩识别'
-        $names = @((Get-MatchDevSecretAllNames) + 'MATCH_MIGRATION_PASSWORD')
+        $names = @((Get-MatchDevSecretAllNames) + 'MATCH_MIGRATION_PASSWORD' + 'MAIL_PRODUCER_SECRET_MATCH')
         $saved = @{}; foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
         try {
-            foreach ($name in (Get-MatchDevSecretAllNames)) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+            foreach ($name in @((Get-MatchDevSecretAllNames) + 'MAIL_PRODUCER_SECRET_MATCH')) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
             [Environment]::SetEnvironmentVariable('MATCH_MIGRATION_PASSWORD', 'fixture-ddl-password', 'Process')
             $null = Start-ServiceInstance -Name match -Info $ServiceCatalogue.match -Index 1 -Total 1 -Pids ([pscustomobject]@{}) -UseExe
             Assert-Equal 1 $script:Starts.Count '恰好启动一次'
-            foreach ($secret in @($script:Starts[0].ProbeSecret, $script:Starts[0].OutcomeSecret, $script:Starts[0].InboxSecret, $script:Starts[0].RankSecret)) {
-                Assert-True (([string]$secret).Length -ge 32) '四把校验密钥都不短于32字节'
+            foreach ($secret in @($script:Starts[0].ProbeSecret, $script:Starts[0].OutcomeSecret, $script:Starts[0].InboxSecret, $script:Starts[0].RankSecret, $script:Starts[0].MailSecret)) {
+                Assert-True (([string]$secret).Length -ge 32) '五把校验与发件密钥都不短于32字节(含群仙问道赛领奖邮件那一把)'
             }
             Assert-True ([string]::IsNullOrEmpty($script:Starts[0].MigrationPassword)) '常驻进程拿不到建表口令'
             Assert-True ([string]::IsNullOrEmpty($env:MATCH_PROBE_SECRET)) '开发密钥只给子进程'
+            Assert-True ([string]::IsNullOrEmpty($env:MAIL_PRODUCER_SECRET_MATCH)) '发件密钥同样只给子进程'
             Assert-Equal 'fixture-ddl-password' $env:MATCH_MIGRATION_PASSWORD '父环境原样恢复'
         } finally { foreach ($name in $names) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') } }
     }

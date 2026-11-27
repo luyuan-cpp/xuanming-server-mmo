@@ -228,6 +228,16 @@ void GateEventHandler::PlayerLeaseExpiredEventHandler(const contracts::kafka::Pl
         return;
     }
 
+    // 同一玩家落回同号的新连接:到期说的是这个会话号上更早的那条连接，不能踢现在这条(session_identity_fence.h)。
+    if (!gate_session_fence::LeaseExpiryTargetsThisSession(it->second.incarnation, event.session_incarnation()))
+    {
+        LOG_WARN << "LeaseExpired: session incarnation mismatch (expiry belongs to an earlier connection on this session id),"
+                 << " skip kick. session_id=" << sessionId << " player_id=" << event.player_id()
+                 << " event_incarnation=" << event.session_incarnation()
+                 << " session_incarnation=" << it->second.incarnation;
+        return;
+    }
+
     auto conn = it->second.conn.lock();
     if (conn)
     {

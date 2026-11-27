@@ -12,8 +12,10 @@
 // 但发送失败只打日志 —— 有流水最多说明已提交,没流水证明不了没应用。
 //   - applied:账本记这个 seq 已应用(全额),收据与这一行的请求逐字节一致;
 //   - aborted:账本记已拒绝(含中止占位)且收据一致;或者写权行已释放、账本没见过这个 seq,且这一行「安静」——
-//     现在没人持租约、距最后一次可能的发送超过安全间隔。终结的 CAS 带着读证据时的租约与发送时刻,
-//     读完之后有人领过这一行就落空(AssetOpRepo.ResolveManuallyIfQuiet),不会和一次刚开始的投递抢结局;
+//     现在没人持租约、距最后一次可能的发送超过安全间隔。「安静」是拿本机的钟判的,本工具不核钟(可能在集群外跑),
+//     所以按这一条终结之前,先在本机单调时钟上等满观察窗口(assetop.ManualObserveWindow)再读一次行与账本,都没变才终结。
+//     终结的 CAS 带着读证据时的租约、发送时刻与 attempts,读完之后有人领过、排过这一行就落空
+//     (AssetOpRepo.ResolveManuallyIfQuiet),不会和一次刚开始的投递抢结局;
 //   - -force 只跳过「反复 UNKNOWN」这一条行级前置,证据一条也不跳过。
 //
 // 边界:
@@ -23,8 +25,8 @@
 //   - 走包级 assetop.ResolveManually,不造 Loop。
 //   - 不参加维护排空的写者闭合,排空期间不要运行。
 //
-// 退出码:0 成功;1 执行出错(含读不到已提交账本);2 参数不合法、前置条件或证据不满足(含缺 -txlog-checked);
-// 3 行已不在 PENDING,或读证据之后有人领过这一行,本次未做任何改动。
+// 退出码:0 成功;1 执行出错(含读不到已提交账本、观察窗口的等待被打断);2 参数不合法、前置条件或证据不满足(含缺 -txlog-checked);
+// 3 行已不在 PENDING,或读证据之后有人领过这一行(含观察窗口里被领过、证据变了),本次未做任何改动。
 package main
 
 import (
@@ -79,7 +81,7 @@ const (
 	listDefaultLimit     = 50
 	listMaxLimit         = 500
 
-	// opTimeout 是一次 list / resolve 的总预算;AssetOpRepo 每次调用另有 constants.StoreOpTimeout。
+	// opTimeout 是一次 list / resolve 的总预算,resolve 另加观察窗口(withStore);AssetOpRepo 每次调用另有 constants.StoreOpTimeout。
 	opTimeout = 15 * time.Second
 
 	logServiceName = "trade-assetopfix"
@@ -97,6 +99,8 @@ const usageText = `assetopfix:交易资产指令(trade_asset_op)卡死行的人�
   -as applied:账本记这个 seq 已应用(全额),收据与这一行的请求一致;
   -as aborted:账本记已拒绝且收据一致;或写权行已释放、账本没见过这个 seq,且现在没人持租约、
               距最后一次可能的发送超过 30 分钟(终结时若有人领过这一行,本次作废)。
+              按后一条终结之前,工具先在本机等一个观察窗口(两倍重投租约,至少 1 分钟)再读一次行与账本,
+              期间被领过、排过就不终结(退出码 3),重跑即可。
   账本说不清的行(滑出窗口、纪元对不上、收据不是这一条请求、玩家还在某个 scene 上、部分发放)本工具一律不终结,
   留在 PENDING 由卡死行告警进入逐件核对。
 
@@ -120,11 +124,14 @@ type opStore interface {
 	ResolveManuallyIfQuiet(ctx context.Context, r assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error)
 }
 
-// toolDeps 是 list / resolve 的依赖:库、已提交账本,以及判「从未应用」要的安静间隔。
+// toolDeps 是 list / resolve 的依赖:库、已提交账本,判「从未应用」要的安静间隔与观察窗口,
+// 以及观察窗口的等待(withStore 给 assetop.WaitManualObserveWindow,单测注入不真等的替身)。
 type toolDeps struct {
-	store    opStore
-	ledger   assetop.StoreLedgerReader
-	quietGap time.Duration
+	store         opStore
+	ledger        assetop.StoreLedgerReader
+	quietGap      time.Duration
+	observeWindow time.Duration
+	sleep         func(ctx context.Context, d time.Duration) error
 }
 
 func main() {
@@ -199,7 +206,13 @@ func withStore(configPath string, readOnly bool, stderr io.Writer, fn func(ctx c
 	}
 	defer closeLedger()
 
-	ctx, cancel := context.WithTimeout(context.Background(), opTimeout)
+	lease := reconcile.LeaseDuration()
+	observeWindow := assetop.ManualObserveWindow(lease)
+	budget := opTimeout
+	if !readOnly {
+		budget += observeWindow // resolve 按「从未应用」终结之前要先等满观察窗口(observeQuiet)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
 	permission := authoritysql.Reader()
@@ -224,7 +237,8 @@ func withStore(configPath string, readOnly bool, stderr io.Writer, fn func(ctx c
 		fmt.Fprintf(stderr, "Failed to build AssetOpRepo: %v\n", err)
 		return exitError
 	}
-	return fn(ctx, toolDeps{store: repo, ledger: ledger, quietGap: assetop.ManualQuietGap(reconcile.LeaseDuration())})
+	return fn(ctx, toolDeps{store: repo, ledger: ledger, quietGap: assetop.ManualQuietGap(lease),
+		observeWindow: observeWindow, sleep: assetop.WaitManualObserveWindow})
 }
 
 // openLedger 建 data_service 客户端读已提交账本(与服务进程的重投循环同一个适配器)。
@@ -252,9 +266,10 @@ func judge(snapshot assetop.StoreLedger, r *tradepb.TradeAssetOpRecord, nowMs ui
 	return assetop.JudgeManual(snapshot, manualRowOf(r, op), nowMs, quietGap)
 }
 
-// manualRowOf 是判定与终结 CAS 用到的行上事实。
+// manualRowOf 是判定与终结 CAS 用到的行上事实。只取见证(Witness / Matches)时 op 传零值:见证不看请求。
 func manualRowOf(r *tradepb.TradeAssetOpRecord, op assetop.Op) assetop.ManualRow {
-	return assetop.ManualRow{Op: op, LastReason: r.GetLastReason(), LeaseUntilMs: r.GetLeaseUntilMs(), LastSendMs: r.GetLastSendMs()}
+	return assetop.ManualRow{Op: op, LastReason: r.GetLastReason(), LeaseUntilMs: r.GetLeaseUntilMs(), LastSendMs: r.GetLastSendMs(),
+		Attempts: r.GetAttempts()}
 }
 
 // quietResolver 把 assetop.ResolveManually 接到安静 CAS 上:终结只在读证据之后没人领过这一行时成立。
@@ -465,7 +480,7 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 		return exitRejected
 	}
 
-	// 证据:读这名玩家已提交的账本。读的是行之后的状态,终结的 CAS 再用读行时的租约与发送时刻兜住中间的变化。
+	// 证据:读这名玩家已提交的账本。读的是行之后的状态,终结的 CAS 再用读行时的租约、发送时刻与 attempts 兜住中间的变化。
 	snapshot, err := deps.ledger.ReadStoreLedger(ctx, row.GetPlayerId())
 	if err != nil {
 		fmt.Fprintf(stderr, "Failed to read the committed asset ledger of player_id=%d (data_service.GetPlayerAssetOpLedger); no changes made: %v\n", row.GetPlayerId(), err)
@@ -482,14 +497,22 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 	}
 
 	// 前置检查、读证据与下面的 CAS 之间,循环可能已经领过或终结了这一行:安静 CAS(WHERE status=PENDING 且
-	// lease_until_ms / last_send_ms 仍是读行时的值)会落空、返回 false,不会重复入账,也不会和一次刚开始的投递抢结局。
-	witness := assetop.QuietWitness{LeaseUntilMs: row.GetLeaseUntilMs(), LastSendMs: row.GetLastSendMs()}
-	finalized, err := assetop.ResolveManually(ctx, quietResolver{store: deps.store, witness: witness}, assetop.ManualResolution{
-		OpID:     o.opID,
-		Final:    o.final,
-		Operator: o.operator,
-		Reason:   o.reason,
-	}, nil, time.Now)
+	// lease_until_ms / last_send_ms / attempts 仍是读行时的值)会落空、返回 false,不会重复入账,也不会和一次刚开始的投递抢结局。
+	witness := manualRowOf(row, assetop.Op{}).Witness()
+	// 「从未应用」的安静是拿本机的钟判的,先等满观察窗口再复核;applied / rejected 有账本里的收据作证,不用等。
+	refusal := ""
+	if v == assetop.ManualVerdictNeverApplied {
+		refusal, err = observeQuiet(ctx, deps, row, witness, stderr)
+	}
+	finalized := false
+	if err == nil && refusal == "" {
+		finalized, err = assetop.ResolveManually(ctx, quietResolver{store: deps.store, witness: witness}, assetop.ManualResolution{
+			OpID:     o.opID,
+			Final:    o.final,
+			Operator: o.operator,
+			Reason:   o.reason,
+		}, nil, time.Now)
+	}
 
 	// 审计行无论成败都打(ERROR 级确保进日志检索),并原样打到 stdout 供贴进运维工单。
 	// 末尾带证据与 force:凭什么判的、跳过了哪条前置,事后追责必须看得到。
@@ -503,6 +526,11 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 		fmt.Fprintf(stderr, "Manual finalization failed op_id=%d: %v\n", o.opID, err)
 		return exitError
 	}
+	if refusal != "" {
+		logx.Errorf("[AssetOpManual] op_id=%d not finalized after the observation window: %s", o.opID, refusal)
+		fmt.Fprintf(stdout, "op_id=%d not finalized: %s; no changes made (rerun to re-check the evidence; do not adjust the row manually)\n", o.opID, refusal)
+		return exitNotPending
+	}
 	if !finalized {
 		fmt.Fprintf(stdout, "op_id=%d is no longer PENDING, or it was claimed after the evidence was read; no changes made "+
 			"(rerun to re-check the evidence; do not adjust the row manually)\n", o.opID)
@@ -510,6 +538,32 @@ func runResolve(ctx context.Context, deps toolDeps, o resolveOptions, stdout, st
 	}
 	fmt.Fprintf(stdout, "op_id=%d manually finalized as %s. Attach the [AssetOpManual] audit line above to the operations ticket.\n", o.opID, o.as)
 	return exitOK
+}
+
+// observeQuiet 是按「从未应用」终结之前的观察窗口(为什么要等、为什么等这么久就够,见 assetop.ManualObserveWindow):
+// 在本机单调时钟上等满窗口,再读一次行与已提交账本。行仍是 PENDING、见证对得上、账本重判仍是 never_applied,回 ("", nil);
+// 否则回不终结的原因。err 是等待被打断或重读失败,同样什么都没改。
+func observeQuiet(ctx context.Context, deps toolDeps, row *tradepb.TradeAssetOpRecord, witness assetop.QuietWitness, stderr io.Writer) (string, error) {
+	fmt.Fprintf(stderr, "Evidence is never_applied, judged against this machine's clock; waiting %v on the local monotonic clock, then re-reading "+
+		"the row and the committed ledger (a delivery in flight when the evidence was read settles within its lease, whatever the clocks say)\n", deps.observeWindow)
+	if err := deps.sleep(ctx, deps.observeWindow); err != nil {
+		return "", fmt.Errorf("observation window interrupted, no changes made: %w", err)
+	}
+	again, found, err := deps.store.GetOp(ctx, row.GetOpId())
+	if err != nil {
+		return "", fmt.Errorf("re-read the row after the observation window, no changes made: %w", err)
+	}
+	if !found || again.GetStatus() != tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_PENDING || !witness.Matches(manualRowOf(again, assetop.Op{})) {
+		return "the row was claimed, rescheduled or finalized during the observation window", nil
+	}
+	snapshot, err := deps.ledger.ReadStoreLedger(ctx, again.GetPlayerId())
+	if err != nil {
+		return "", fmt.Errorf("re-read the committed asset ledger of player_id=%d after the observation window, no changes made: %w", again.GetPlayerId(), err)
+	}
+	if v, detail := judge(snapshot, again, uint64(time.Now().UnixMilli()), deps.quietGap); v != assetop.ManualVerdictNeverApplied {
+		return "the evidence is no longer never_applied after the observation window: " + assetop.DescribeManualEvidence(v, detail), nil
+	}
+	return "", nil
 }
 
 // checkResolvable 是 resolve 的行级前置条件。force 只跳过"反复 UNKNOWN"这一条;证据另由 judge 判。

@@ -214,9 +214,10 @@ spec:
               是否就绪、全局 TiDB 是否可用;login 日志搜 "role list keeps creation-time zone_id"。没人登录时这条不会响。
             runbook_url: docs/design/player-route-mapping-durability-proposal.md
 
-    # 官方通行证刷新前的核对(2026-11-26 起,go/login/internal/logic/clientplayerlogin/refreshtokenlogic.go,go-zero metric,
-    # Namespace "login"、Subsystem "passport"):login_passport_session_check_total{result=valid|user_gone|user_forbidden|
-    # password_changed|revoke_failed|error}。error = 通行证核对不了、照常续期(失败放行,AGENTS §11.3 要看得见)。
+    # 官方通行证核对(2026-11-26 起,go/login/internal/logic/pkg/passportsession/passportsession.go,go-zero metric,
+    # Namespace "login"、Subsystem "passport"):login_passport_session_check_total{phase=login|refresh|event,
+    # result=valid|user_gone|user_forbidden|password_changed|revoke_failed|kick_failed|ignored|error}。
+    # error = 通行证核对不了、登录与刷新照常放行(失败放行,AGENTS §11.3 要看得见);三个入口合起来按 namespace 算占比。
     # 按占比判,不看单次:偶发超时不报;通行证或管理凭据出问题时几乎每次都是 error。没人刷新时分母为 0,这条不响。
     - name: login.passport-session
       interval: 30s
@@ -231,7 +232,7 @@ spec:
           annotations:
             summary: "{{ $labels.namespace }} 的 login 核对不了官方通行证,改密 / 封禁踢不掉游戏登录"
             description: >-
-              连续 10 分钟,一半以上的通行证令牌刷新都没能问到通行证,只能照常续期。玩家登录不受影响,但在通行证里改密、
+              连续 10 分钟,一半以上的通行证核对(登录、刷新、通行证回调)都没能问到通行证,登录与刷新只能照常放行。玩家登录不受影响,但在通行证里改密、
               被封、被删的账号,游戏令牌还在续期(盗号者踢不掉)。查 login 的 AuthProviders.Passport.Endpoint 是否指向
               通行证的内网入口、管理凭据(AdminClientId 与 login-passport-admin 密钥)是否与通行证后台一致、通行证是否在线;
               login 日志搜 "passport] session check failed"。

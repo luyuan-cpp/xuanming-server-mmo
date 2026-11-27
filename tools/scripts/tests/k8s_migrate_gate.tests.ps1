@@ -582,7 +582,7 @@ Test-Case 'mail 的迁移门禁与 trade 同链路,只引用现役预置生产�
     Assert-NotMatch -Text $content -Pattern 'gate-identity-auth' -Because '验签方不引用 gate 签名私钥 Secret'
     Assert-NotMatch -Text $content -Pattern 'PLACEHOLDER_' -Because '镜像、拉取策略与令牌指纹占位都必须被替换'
     Assert-NotMatch -Text $content -Pattern 'MMORPG_MAIL_ADMIN_TOKEN|mail-admin-token-hash|mail-admin-auth' -Because '历史M1口令不得恢复成第二条授权路径'
-    foreach ($producer in @('ADMIN', 'RANK', 'GUILD', 'BATTLE')) {
+    foreach ($producer in @('ADMIN', 'RANK', 'GUILD', 'BATTLE', 'MATCH')) {
         $key = $producer.ToLowerInvariant()
         Assert-Match -Text $content -Pattern ("- name: MAIL_PRODUCER_SECRET_$producer\s+valueFrom:\s+secretKeyRef: \{name: domain-service-secrets, key: mail-producer-$key, optional: false\}") -Because '每个生产者只引用自己的必需密钥，缺失时拒启'
     }
@@ -728,7 +728,7 @@ Test-Case '托管内部密钥的门禁:DryRun 只打一行、不连集群;真跑
     $allKeys = @($script:ManagedDomainServiceSecrets | ForEach-Object { $_.Key })
     $sceneKeys = @($script:ManagedDomainServiceSecrets | Where-Object { $_.ZoneConsumers -contains 'scene' } | ForEach-Object { $_.Key })
     $infraKeys = @($script:ManagedDomainServiceSecrets | Where-Object { @($_.InfraConsumers).Count -gt 0 } | ForEach-Object { $_.Key })
-    Assert-Equal -Expected 16 -Actual $allKeys.Count -Because 'zone 工作负载引用的 16 把'
+    Assert-Equal -Expected 17 -Actual $allKeys.Count -Because 'zone 工作负载引用的 17 把'
     Assert-Equal -Expected 'mail-producer-battle,account-directory-trade,account-directory-scene,player-store-scene' -Actual ($sceneKeys -join ',') -Because 'scene 读的四把:只发 C++ 节点时也要维护'
 
     # 线上状态:namespace → 这个 Secret 的 data(键 → base64)。Read-DomainServiceSecretEntries 先列 namespace,再逐个按 namespace 读
@@ -1415,7 +1415,7 @@ Test-Case '全球match即使dev不带WaitReady也须先完成独立迁移Job' {
     Assert-Match -Text $script:MigrationContent -Pattern 'args:.*"-migrate"' -Because '运行正式迁移CLI'
     Assert-Match -Text $script:MigrationContent -Pattern 'MATCH_MIGRATION_USER' -Because '独立迁移账号'
     Assert-Match -Text $script:MigrationContent -Pattern 'key: match-migration-password' -Because '独立迁移口令'
-    Assert-NotMatch -Text $script:MigrationContent -Pattern 'MATCH_PROBE_SECRET|RANK_PRODUCER_SECRET_MATCH|MMORPG_LOGIN_REDIS_PASSWORD' -Because '迁移不取得业务密钥'
+    Assert-NotMatch -Text $script:MigrationContent -Pattern 'MATCH_PROBE_SECRET|RANK_PRODUCER_SECRET_MATCH|MAIL_PRODUCER_SECRET_MATCH|MMORPG_LOGIN_REDIS_PASSWORD' -Because '迁移不取得业务密钥'
     Assert-NotMatch -Text $script:DeploymentContent -Pattern 'MATCH_MIGRATION_USER|MATCH_MIGRATION_PASSWORD' -Because '常驻进程不得取得DDL凭据'
     # match 查 battle Pod 的身份与权限(battle-instance-loss-early-abort.md §4.2):Pod 用专用 ServiceAccount,RBAC 先于 StatefulSet 落地,
     # 权限只有本命名空间的 pods list;迁移 Job 不带这个身份。

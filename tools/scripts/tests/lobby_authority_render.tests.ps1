@@ -151,10 +151,18 @@ foreach ($key in @('GlobalMatch.CrossRegionWaitSeconds','GlobalMatch.HardLatency
     $source = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath $key
     Assert-Render ($match[$key] -eq $source.Value) "匹配策略${key}未镜像"
 }
+# 群仙问道赛领奖邮件(docs/planning/season-team-tournament-v1.md 第七节,数据覆写审计 r2 第 4 轮):直连 infra 的 mail Service,
+# 超时镜像服务 yaml;发件密钥只写变量名,值经 domain-service-secrets 的 mail-producer-match 注入同名变量。
+Assert-Render ($match['MailRpc.Endpoints'] -eq '[mail.fixture-infra:50900]') '匹配发领奖邮件要连 infra 里的 mail Service，不是本机地址'
+$sourceMailTimeout = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath 'MailRpc.Timeout'
+Assert-Render ($sourceMailTimeout.Found -and $match['MailRpc.Timeout'] -eq $sourceMailTimeout.Value) '匹配 MailRpc.Timeout 未镜像'
+$sourceMailEnv = Get-YamlScalar -Path (Join-Path $RepoRoot 'go/match/etc/match_service.yaml') -KeyPath 'MailSecretEnv'
+Assert-Render ($sourceMailEnv.Found -and $sourceMailEnv.Value -eq 'MAIL_PRODUCER_SECRET_MATCH' -and $match['MailSecretEnv'] -eq $sourceMailEnv.Value) '匹配 MailSecretEnv 只写变量名，且与 mail 的 Producers.match 同名'
 $matchManifest = Add-MatchAuthoritySecretEnv -ManifestContent (Get-Content (Join-Path $RepoRoot 'deploy/k8s/manifests/go-svc/match.yaml') -Raw)
-foreach ($envName in @('MATCH_PROBE_SECRET','RANK_PRODUCER_SECRET_MATCH')) {
+foreach ($envName in @('MATCH_PROBE_SECRET','RANK_PRODUCER_SECRET_MATCH','MAIL_PRODUCER_SECRET_MATCH')) {
     Assert-Render ($matchManifest.Contains("name: $envName")) "匹配缺${envName}环境引用"
 }
+Assert-Render ($matchManifest.Contains('key: mail-producer-match')) '匹配的发件密钥取 domain-service-secrets 的 mail-producer-match'
 # 数据库口令同帮会的 DSN:来自本 boot 选中的环境文件,不经 Secret 进主容器,否则绕过写者闸门。
 Assert-Render ($matchManifest.Contains('MATCH_MYSQL_PASSWORD="$(cat /app/etc/private/env/MATCH_MYSQL_PASSWORD)"'.Replace('"', '\"'))) '匹配的数据库口令必须来自本boot选中的环境文件'
 Assert-Render (-not $matchManifest.Contains('name: MATCH_MYSQL_PASSWORD')) '匹配的数据库口令不能再经Secret直接进主容器'

@@ -8,6 +8,7 @@ import (
 	"data_service/internal/svc"
 	dspb "proto/data_service"
 	"shared/accountdirectory"
+	"shared/serviceauth"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -53,13 +54,67 @@ func (f *fakeChannelIdentities) read() (*dspb.GetPlayerChannelIdentityResponse, 
 	return &dspb.GetPlayerChannelIdentityResponse{Found: false}, nil
 }
 
+const (
+	channelIdentityChatSecret  = "chat-secret-0123456789abcdef0123456789"
+	channelIdentityGuardSecret = "guard-secret-0123456789abcdef012345678"
+)
+
 func channelIdentityServer(t *testing.T, ci *fakeChannelIdentities) *DataServiceServer {
 	t.Helper()
+	verifier, err := serviceauth.New(map[string]string{
+		accountdirectory.ChatCaller:         channelIdentityChatSecret,
+		accountdirectory.ContentGuardCaller: channelIdentityGuardSecret,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return NewDataServiceServer(&svc.ServiceContext{
 		AccountDirectory:     &serverDirectoryFake{},
 		AccountDirectoryAuth: directoryVerifier(t),
 		ChannelIdentities:    ci,
+		ChannelIdentityAuth:  verifier,
 	})
+}
+
+// guardLookup 是 content_guard 签好名的一次查询。
+func guardLookup(t *testing.T, in *dspb.GetPlayerChannelIdentityRequest) *dspb.GetPlayerChannelIdentityRequest {
+	t.Helper()
+	if err := accountdirectory.SignChannelIdentityRequest(in, accountdirectory.ContentGuardCaller, channelIdentityGuardSecret); err != nil {
+		t.Fatal(err)
+	}
+	return in
+}
+
+// 应答里有账号与平台 openid:没有证明、证明是别的调用方的、用错密钥的一律拒绝,只有 content_guard 与 chat 能读。
+func TestGetPlayerChannelIdentityRequiresContentGuardOrChatProof(t *testing.T) {
+	ci := &fakeChannelIdentities{reply: &dspb.GetPlayerChannelIdentityResponse{Found: true, Account: "wx_u1", OpenId: "oid_1"}}
+	srv := channelIdentityServer(t, ci)
+	unsigned := &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42}
+	byLogin := &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42}
+	signDirectoryRequest(t, "GetPlayerChannelIdentity", byLogin, "login", uint64(time.Now().UnixMilli()))
+	wrongKey := &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42}
+	if err := accountdirectory.SignChannelIdentityRequest(wrongKey, accountdirectory.ChatCaller, channelIdentityGuardSecret); err != nil {
+		t.Fatal(err)
+	}
+	for name, in := range map[string]*dspb.GetPlayerChannelIdentityRequest{"unsigned": unsigned, "login": byLogin, "wrong key": wrongKey} {
+		if _, err := srv.GetPlayerChannelIdentity(context.Background(), in); status.Code(err) != codes.PermissionDenied {
+			t.Fatalf("%s: want PermissionDenied, got %v", name, err)
+		}
+	}
+	byChat := &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42}
+	if err := accountdirectory.SignChannelIdentityRequest(byChat, accountdirectory.ChatCaller, channelIdentityChatSecret); err != nil {
+		t.Fatal(err)
+	}
+	for name, in := range map[string]*dspb.GetPlayerChannelIdentityRequest{"chat": byChat, "content_guard": guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42})} {
+		if out, err := srv.GetPlayerChannelIdentity(context.Background(), in); err != nil || out.GetOpenId() != "oid_1" {
+			t.Fatalf("%s: want the identity, got out=%v err=%v", name, out, err)
+		}
+	}
+	// 两把密钥都没配:接口停用,不是免验签。
+	closed := NewDataServiceServer(&svc.ServiceContext{ChannelIdentities: ci})
+	if _, err := closed.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42})); status.Code(err) != codes.Unavailable {
+		t.Fatalf("without a verifier the RPC must be unavailable, got %v", err)
+	}
 }
 
 func TestUpsertAccountChannelIdentityRequiresLoginProof(t *testing.T) {
@@ -97,11 +152,11 @@ func TestGetPlayerChannelIdentityLooksUpByAccountWhenThereIsNoPlayer(t *testing.
 	}
 	srv := channelIdentityServer(t, ci)
 
-	out, err := srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{Account: "wx_u1"})
+	out, err := srv.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{Account: "wx_u1"}))
 	if err != nil || out.GetOpenId() != "oid_1" || ci.byAccount != "wx_u1" || ci.byPlayer != 0 {
 		t.Fatalf("lookup by account: out=%v err=%v byPlayer=%d byAccount=%q", out, err, ci.byPlayer, ci.byAccount)
 	}
-	_, err = srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42, Account: "wx_other"})
+	_, err = srv.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42, Account: "wx_other"}))
 	if err != nil || ci.byPlayer != 42 || ci.byAccount != "" {
 		t.Fatalf("player_id must win over account: err=%v byPlayer=%d byAccount=%q", err, ci.byPlayer, ci.byAccount)
 	}
@@ -120,18 +175,18 @@ func TestGetPlayerChannelIdentityReturnsProfileAndRetryOnTransientError(t *testi
 	}
 	srv := channelIdentityServer(t, ci)
 
-	out, err := srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42})
+	out, err := srv.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42}))
 	if err != nil || !out.GetFound() || out.GetChannel() != "douyin_minigame" || out.GetPlayerLevel() != 25 {
 		t.Fatalf("unexpected response: out=%v err=%v", out, err)
 	}
 
-	_, err = srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{PlayerId: 0})
+	_, err = srv.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 0}))
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument for zero player_id, got %v", err)
 	}
 
 	ci.err = accountdirectory.ErrUnavailable
-	out, err = srv.GetPlayerChannelIdentity(context.Background(), &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42})
+	out, err = srv.GetPlayerChannelIdentity(context.Background(), guardLookup(t, &dspb.GetPlayerChannelIdentityRequest{PlayerId: 42}))
 	if err != nil || !out.GetRetry() {
 		t.Fatalf("expected retry=true on transient error, got out=%v err=%v", out, err)
 	}

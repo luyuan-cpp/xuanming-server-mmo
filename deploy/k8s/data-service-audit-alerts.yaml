@@ -59,6 +59,8 @@ spec:
               {{ $labels.instance }} 上 {{ $labels.consumer }} 过去 10 分钟 up 均值 {{ $value | printf "%.2f" }}。
               查 data_service 日志的 `STOPPED:` 行(点名了哪个 guid / 哪批、哪个 offset 没提交)与 `consumers not started`;
               DB 故障先修库,消费者会在冷却后从断点自动续消费(宁可积压不丢)。积压期间盯住 DataServiceAuditRetentionGap。
+              `STOPPED:` 行写的是「could not be written to the dead-letter topic」时,是坏消息的原件写不进死信 topic(消费组名-dlq):
+              查 Kafka 与那个 topic(启动时 EnsureTopics 建),修好之后同样自动续。
 
         # 保留期已经删掉了还没消费的审计消息:**数据已丢**。所有实例报同一个组的值,按 consumer 取 max(与本文件其它规则一致;
         # 单个实例探针失明留下的陈值由按实例触发的 DataServiceAuditLagProbeBlind 点名)。
@@ -226,6 +228,8 @@ spec:
               这条坏消息可能并没有被提交,消费者每次重建(约 60s)重放都会再记一次、再打一条 skipped 日志 ——
               DataServiceAuditConsumerStopped 同时在响时,条数以日志里去重后的 partition / offset 为准。
               data_service 日志里有逐条的 `undecodable` / `invalid snapshot` / `oversize snapshot` 行(带 partition / offset)。
+              2026-11-26 起原件在提交之前写进本消费组的死信 topic(消费组名-dlq,保留 90 天),日志另有 `written to the dead-letter topic` 一行;
+              修好生产端或解码之后,按 docs/ops/kafka-bound-consumer-runbook.md 用死信工具(带 -allow-unprocessable)重放。
               持续出现 = 生产端(C++ scene)的消息格式或大小出了问题。
 
         # 批量失败、逐条兜底成功:批本身有问题(多半是包 / 事务大小),趋势信号。

@@ -123,4 +123,10 @@ enum login_error {
 
   kRoleRenameExpired = 2056;
 
+  kLoginRoleTradeFrozen = 2057;
+
+  kLoginEnterGameBusy = 2058;
+
+  kLoginPassportCredentialChanged = 2059;
+
 };

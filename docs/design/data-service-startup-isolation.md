@@ -1,6 +1,6 @@
 # data_service 启动期故障隔离:一个 SQL 集群连不上时照样启动
 
-> **状态(2026-11-27,Claude Code)**:设计定稿。**批 1(常驻进程)已落码,未编译、未运行、未提交**,验证命令见 `docs/PROGRESS.md` 2026-11-27「data_service 启动期故障隔离批 1」条目。**批 2(写者注册)只有方案,等负责人对范围和两个选项的同意**(§7)。
+> **状态(2026-11-27,Claude Code)**:设计定稿,两批都已落码,**未编译、未运行**。大部分改动已随别的会话的批量提交入库(`3eb57a09a`、`76e2b59bb`),清单探针、告警、手册等在工作区未提交,见 PROGRESS 同日的「提交情况更正」。批 1(常驻进程)的验证命令见 `docs/PROGRESS.md` 2026-11-27「data_service 启动期故障隔离批 1」;批 2(写者注册,负责人 11-27 同意 §7.3 两个推荐选项)见同日「data_service 启动期故障隔离批 2」。
 > **来源**:[data_service 按逻辑库熔断](data-service-breaker-per-logical-db.md) §8「启动期不在隔离范围内」,负责人 11-26 要求现在做。
 > **证据口径**:静态阅读本仓代码(`go/data_service`、`go/shared/authoritysql`、`go/shared/dbplacement`、`cmd/writer_authority`、K8s 清单),没有运行证据。
 > **Java 版(AGENTS §12)**:不涉及(Java 版没有 data_service),不加 PARITY 行。
@@ -11,12 +11,12 @@
    - **常驻进程**:`NewServiceContextWithAdmission` 把目录 K 片(每片三个池)和流水库(三个池)一次开齐、逐个核对,任何一个逻辑库连不上,store 为 nil,`Store.Required` 拒启。
    - **写者注册**(init 容器 `writer_authority register`):一代写者要在进程配置的**每个**逻辑库各注册一份,注册器先逐库预检,有一个库连不上就一份都不注册、init 原地重试(`cmd/writer_authority/main.go` 的 `slotRegistration.register`)。主容器根本起不来。
    - 新 Pod(发布、扩容、写过之后崩溃被回收重建)都要重新注册,所以**只改常驻进程,新 Pod 在集群失联期间照样卡在 init**。只改这一层能救的只有两种:init 注册完之后集群才失联;主容器还没写过任何库就崩了、原地重启(同一代)。
-2. **两层都要改,分两批。** 批 1 是常驻进程(本稿 §2~§6,已落码,未编译);批 2 是注册层(§7),它动所有写者服务共用的注册器和部署清单,还有两个要负责人定的选项,没有同意不动。**批 2 落地之前,「单集群故障期间不要滚动重启 data_service」这条运维口径不变。**
+2. **两层都要改,分两批。** 批 1 是常驻进程(本稿 §2~§6);批 2 是注册层(§7):注册器跳过连不上的库,data_service、go/db 接受写资格的子集,缺的库这一代关着、Pod 不就绪,集群恢复之后重建 Pod 补齐。两批都已落码,未编译。运维口径从「故障期间不要滚动重启」改成:故障期间被回收重建、扩出来的 Pod 照样起得来(缺那几个库、不就绪);发布仍然别在故障期间做(会停在第一个不就绪的 Pod);恢复之后逐个重建不就绪的 Pod(开服手册 §9)。
 3. **批 1 的做法**:每个池从一开始就有 `*sql.DB` 句柄,原来开池时的那一串核对整体挪到「这个池第一条物理连接建立之前」,挂在建连钩子上(和逻辑库熔断同一个接缝)。九十多处选池代码一行不改;核对一项不删,只换时刻(§3)。
 4. **启动时仍然每个池都试一次。** 结局分三种:核对通过 → 打开;**连不上** → 这个池保持关闭,进程照常启动,以后用到时再核对(失败冷却 10 秒);**连上了但核对不过**(片号对不上、表形状不对、会话不符)→ 照旧拒启。
 5. **仍然是启动硬依赖的**:配置、写资格、映射(etcd)、目录第 0 片(合服映射只在这一片)、路由的空环境判据。原因和逐项判定在 §4、§5。所以批 1 之后的准确说法是:**第 0 片以外的目录片、流水库所在的集群失联,不再挡 data_service 启动。**
 6. **数据一致性不受影响。** 一个池在核对通过之前拿不到任何连接,对这个库一条语句都发不出去;调用方看到的是「拿不到连接」,和今天建连失败走同一条路(事务按没开始算,确定没写)。
-7. **文件**:批 1 共 26 个(§8.1,不到 30);批 2 预计 20~25 个(§8.2)。
+7. **文件**:批 1 共 26 个(§8.1),批 2 共 28 个(§8.2,其中 6 个批 1 也改过),各自不到 30。
 
 ## 1. 现状
 
@@ -152,13 +152,26 @@ C 成立靠一条性质:**池在核对通过之前一条连接都没有**。`dat
 - **等核对时不看调用方的 ctx**(和 `PlayerStorePools.DB` 原来的规则相同):核对的结果被并发请求共享,不能随第一个调用方的取消一起失败。代价是触发核对的那几个请求要等它做完:集群失联时是拨号超时(1 秒),连得上时是几条只读查询;每个池每个冷却期最多一次,冷却期内的请求直接拿上次的错误,不等。不另起协程去「先回错误、核对接着做」:多一个异步结局,换来的只是这一秒。
 - **启动多花的时间**:每个连不上的库每个池多等一次拨号超时。分片按 8 路并行开,三个分片 store 依次开:64 片里有 32 片连不上时约多 12 秒,流水库三个池再多 3 秒,在存活探针的宽限(15 秒起、20 秒一次、失败 3 次)之内。
 
-## 7. 批 2:写者注册层(方案,未落码,等同意)
+## 7. 批 2:写者注册层(负责人 11-27 同意按 §7.3 两个推荐选项做,已落码,未编译)
 
-### 7.1 要改什么
+### 7.1 改了什么
 
-1. **注册器容忍连不上的库**(`cmd/writer_authority`):定 `boot_seq`、预检、注册三步都只对连得上的库做;连不上的库在本次运行的预算内重试几次,仍连不上就跳过。grant 集合只含注册成功的库。「连不上」用同一个哨兵 `authoritysql.ErrUnreachable`;连上之后的冻结、资格不符照旧整体失败、原地重试。只写一个库的服务不受影响:它唯一的库连不上就没有 grant,照旧起不来。
-2. **常驻进程容忍 grant 是子集**(data_service、go/db):grant 不许多(多出来仍拒启),可以少;没有 grant 的库在这一代的整个生命期关闭,调用回不可用。第 0 片没有 grant 时 data_service 仍拒启(§4)。
-3. **恢复**:集群恢复后,带着不完整 grant 的 Pod 要重建才能拿到完整的一代。
+1. **注册器容忍连不上的库**(`cmd/writer_authority`):
+   - 先并发探测各库连不连得上(`slotRegistration.splitReachable`,同时 16 个),连不上的停 2 秒再试一轮。两轮都连不上的库这一代跳过,每个打一行 `writer_authority command=register skipped=<库> reason=unreachable`。
+   - 「连不上」只认 `authoritysql.ErrUnreachable`。别的打开错误(映射读不到、配置非法)和连上之后的冻结、资格不符,照旧整体失败、原地重试。
+   - 现场生成一代时,跳过的库不算进 `boot_seq`、不进启动记录;启动记录因此可以是模板的有序子集(`recordMatchesTemplate`)。init 重跑时这一代仍只有原来那些库,刚恢复的库不在这一代里注册。
+   - 预检时才连不上的库(生成时连得上)同样跳过。它还在启动记录里,init 重跑时连得上就接着注册,号是生成时算好的。
+   - 一个库都连不上时什么都不写:不留启动记录,不问工作负载身份,回 `errNothingReachable`,init 原地重试。只写一个库的服务只有这一种结局,行为不变。
+   - 目录连接的缓存(`catalogOpener`)加了锁,供并发探测用。探测本来就要逐库打开连接,所有库都连得上时只是并行了,不比原来慢。
+2. **常驻进程接受写资格的子集**:
+   - data_service:`checkWriterSchemas` 多出来的照旧拒启,少的列出来。缺写资格的库 `PermissionFor` 回 `store.ErrNoWriterGrant`,`MySQLConfig.ForSchema` 在常驻进程里把它装配成一直关着的池(`MySQLConfig.Closed` → `store.closedPool`),存档库连接池对它同样打不开。第 0 片缺写资格时合服映射读不到,照旧拒启(§4)。
+   - go/db:原来就接受任意存档库的写资格、按需打开时查不到写资格就打不开,行为不用改;只按白名单(`MMORPG_DB_ALLOWED_DATABASES`)算出缺哪几个库(`StoreRegistry.MissingWriterGrants`)。
+   - 两边共用 `authoritysql.MissingWriterGrants`,并上报 `writer_grants_missing`。
+3. **就绪**:data_service、go/db 的指标端口加 `/readyz`,两个清单的就绪探针改指它。
+   - 缺写资格,或者 RPC 还没对外服务(节点注册回调之前),都回 503,正文写明原因。
+   - 存活探针仍是 gRPC:不就绪的副本照常服务落在健康库上的请求,不能被当成坏了重启。
+4. **告警**:`SqlWriterGrantsIncomplete`(`writer_grants_missing > 0` 持续 5 分钟,warning),说明里写明怎么查缺哪几个库、恢复之后怎么重建。
+5. **恢复**:集群恢复后,带着不完整写资格的 Pod 要重建才能拿到完整的一代(开服手册 §9「某个 SQL 集群失联」)。
 
 ### 7.2 安全性
 
@@ -167,9 +180,9 @@ C 成立靠一条性质:**池在核对通过之前一条连接都没有**。`dat
 - `boot_seq` 只要求在每个库内递增。取连得上的各库最大号加一;被跳过的库以后由更晚的一代注册,那时取的是全部库的最大号。
 - 排空 run 在被跳过的库上会把没有进程的上一代算进 ACTIVE 全集,要人工退休或等 Pod 重建(开服手册「没有进程的写者」,和缩容留下的末代同一处理)。
 
-### 7.3 两个要负责人定的选项
+### 7.3 两个选项(负责人 11-27 定:都选 A)
 
-**选项一:集群恢复之后怎么补上。**
+**选项一:集群恢复之后怎么补上。** 定 A。手册里写的做法是逐个删不就绪的 Pod;`rollout restart` 也行,只是会把本来完整的 Pod 一起换掉。
 
 | | 做法 | 代价 |
 |---|---|---|
@@ -178,7 +191,7 @@ C 成立靠一条性质:**池在核对通过之前一条连接都没有**。`dat
 
 推荐 A:不多出常驻的高权限容器,不引入平台版本依赖;集群级故障的恢复本来就有人在场。
 
-**选项二:降级启动的副本怎么不让滚动发布一路换下去。**
+**选项二:降级启动的副本怎么不让滚动发布一路换下去。** 定 A。
 
 注册器放宽之后,「注册账号在某个集群上连不上」既可能是集群失联,也可能是这次发布把地址、口令、网络策略配错了。后一种在现在是 Pod 卡在 init、发布停在第一个副本;放宽之后新 Pod 会带着缺口启动,发布继续,直到所有副本都缺这个集群。必须补一道:
 
@@ -192,7 +205,7 @@ C 成立靠一条性质:**池在核对通过之前一条连接都没有**。`dat
 
 ### 7.4 范围
 
-预计 20~25 个文件(§8.2),动所有写者服务共用的注册器、两个服务的清单与探针、告警、手册。和正在改 `k8s_deploy.ps1` 的会话要先分工。
+28 个文件(§8.2):所有写者服务共用的注册器、两个服务的装配与清单探针、共享库的缺口计算与指标、告警及其契约用例、手册。没有动 `k8s_deploy.ps1`:两个服务的指标端口(9260、9160)在它渲染的 ConfigMap 里原本就开着,探针在清单里改。
 
 ## 8. 文件清单
 
@@ -237,9 +250,55 @@ data_service 装配(3):
 
 不涉及:proto、生成产物、C++、Java、表结构、部署清单、其余 Go 服务(工具、迁移、测试不开 `Lazy`,行为和原来相同)。
 
-### 8.2 批 2(预计 20~25 个,未动)
+### 8.2 批 2(28 个,已落码,未编译;其中 6 个批 1 也改过)
 
-`cmd/writer_authority` 的 `main.go` 与用例;data_service 的 `servicecontext.go`、关闭池的句柄、用例;go/db 的启动装配与用例;两个服务的 `/readyz` 与清单探针;`deploy/k8s/logical-db-alerts.yaml`;部署契约用例;[写者名册换代](writer-roster-exhaustion-20261106.md) §5.6、[水平扩展](horizontal-scale-logical-db.md) §2、开服手册、搬库手册。
+注册器(2):
+
+1. `go/data_service/cmd/writer_authority/main.go` —— `splitReachable`、`boot` 与 `register` 跳过连不上的库、`recordMatchesTemplate` 接受有序子集、`catalogOpener` 加锁、跳过的库打一行
+2. `go/data_service/cmd/writer_authority/main_test.go`
+
+共享(3):
+
+3. `go/shared/authoritysql/config.go` —— `MissingWriterGrants`
+4. `go/shared/authoritysql/metrics.go` —— `writer_grants_missing`
+5. `go/shared/authoritysql/config_consume_test.go`
+
+data_service(8):
+
+6. `go/data_service/internal/store/mysql.go` —— `ErrNoWriterGrant`、`MySQLConfig.Closed`
+7. `go/data_service/internal/store/lazy_open.go` —— `closedPool`
+8. `go/data_service/internal/store/lazy_open_test.go`
+9. `go/data_service/internal/store/player_store_pools.go` —— 没有写资格的存档库打不开
+10. `go/data_service/internal/svc/servicecontext.go` —— `checkWriterSchemas` 接受子集、`Ready`、`MarkServing`
+11. `go/data_service/internal/svc/global_caller_secrets_test.go`
+12. `go/data_service/internal/metrics/metrics.go` —— `/readyz`
+13. `go/data_service/data_service.go` —— 接 `/readyz`,节点注册之后 `MarkServing`
+
+go/db(4):
+
+14. `go/db/db.go` —— 缺口、`/readyz` 判定、节点注册之后才算对外服务;顺带 gofmt 了一处 HEAD 里就没排好的 import
+15. `go/db/internal/metrics/metrics.go` —— `/readyz`
+16. `go/db/internal/logic/pkg/proto_sql/store_registry.go` —— `MissingWriterGrants`
+17. `go/db/internal/logic/pkg/proto_sql/store_registry_test.go`
+
+部署(4):
+
+18. `deploy/k8s/manifests/go-svc/data-service.yaml` —— 就绪探针改 `/readyz`(9260)
+19. `deploy/k8s/manifests/go-svc/db.yaml` —— 就绪探针改 `/readyz`(9160)
+20. `deploy/k8s/logical-db-alerts.yaml` —— `SqlWriterGrantsIncomplete`
+21. `tools/scripts/tests/logical_db_deploy_contract.tests.ps1` —— 规则名单与指标核对
+
+文档(7):
+
+22. `docs/design/data-service-startup-isolation.md`(本稿)
+23. `docs/design/data-service-breaker-per-logical-db.md` —— §8
+24. `docs/design/horizontal-scale-logical-db.md` —— §2「启动形状」、§11
+25. `docs/design/writer-roster-exhaustion-20261106.md` —— §5.6
+26. `docs/ops/k8s-open-server-runbook.md` —— §9「某个 SQL 集群失联」
+27. `docs/ops/db-move-runbook.md` —— §1「什么时候能用」
+28. `docs/PROGRESS.md`
+
+不涉及:proto、生成产物、C++、Java、表结构、`k8s_deploy.ps1`。只写一个库的服务(chat、guild、login 等)只经过注册器那一处改动,行为不变。
 
 ## 9. 单测(批 1,交 Gemini 跑)
 
@@ -257,11 +316,32 @@ data_service 装配(3):
 - 存档库连接池原有用例(冷却、冻结不进冷却、开失败的落点跳过)改用新字段后语义不变。
 - 可选冒烟(目录 `LogicalShards` > 1,片库分在两个 SQL 实例上):停掉不含第 0 片的那个实例再启动 data_service,进程起来,落在另一个实例上的账号照常登录、建角;日志里只有被停实例上的库 `stays closed`;把实例启回来,十来秒后那些库上的调用恢复,不用重启。单实例的调试栈做不了,如实报未运行。
 
+### 9.1 批 2 的用例
+
+- `shared/authoritysql`:`TestMissingWriterGrantsListsDatabasesWithoutAGrant`。
+- `cmd/writer_authority`:
+  - `TestRegisterSkipsUnreachableDatabases`:跳过的库不写、不算号、不进启动记录,试了两轮;init 重跑仍不注册它;重建 Pod 之后按全部库取号,在它上面退休上一代。
+  - `TestRegisterRetriesAnUnreachableDatabaseOnce`:第二轮连上就照常注册。
+  - `TestRegisterWithNothingReachableRegistersNothing`:什么都不写,不问工作负载身份。
+  - `TestRegisterFailsWholeOnOtherOpenErrors`:连不上以外的打开错误整体失败。
+  - `TestBootRecordMayHoldOnlyPartOfTheTemplateInOrder`:有序子集认,换序、重复、空的不认。
+  - `TestSplitReachableProbesConcurrentlyAndKeepsOrder`:并发、不超过上限、保持顺序,要在 `-race` 下跑。
+  - 原有的注册用例只改了返回值个数。
+- `internal/store`:`TestDatabaseWithoutAWriterGrantStaysClosed`(目录片与存档库;工具照旧当场回错误)。
+- `internal/svc`:`TestCheckWriterSchemas`(改写:少的列出来,多的拒绝)、`TestReadyNeedsEveryWriterGrantAndServing`。
+- go/db:`TestStoreRegistryListsPlayerStoresWithoutAWriterGrant`。
+- 部署契约:`logical_db_deploy_contract.tests.ps1` 的规则名单与指标核对。
+- 可选冒烟(kind,两个 SQL 实例,目录 K > 1):停掉不含第 0 片的实例,删一个 data-service Pod;新 Pod 起来、`READY 0/1`、`/readyz` 503 点名缺的库,init 日志有 `skipped=`;落在另一个实例上的账号照常登录。把实例启回来,删这个 Pod,新 Pod 就绪、告警消失。单实例的调试栈做不了。
+
 ## 10. 残余与后续
 
-- **批 2 没做之前,新 Pod 在集群失联期间仍起不来**(§0 第 1 条)。运维口径不变:单集群故障期间不要滚动重启、不要扩容 data_service 与 go/db。
+- **故障期间的发布**:新 Pod 一样缺那些库,发布会停在第一个不就绪的 Pod 上(有意的保护)。故障期间被回收重建、扩出来的 Pod 起得来,不就绪;恢复之后逐个重建(开服手册 §9)。
 - **第 0 片所在集群是硬依赖**(§4)。去掉它要把 `zone_merged_into` 放到不依赖单一片的地方。没有第二个集群之前没有收益;要做时另开设计。
 - **第 0 片失联期间,新起的 guild / trade / match 副本读不到合服映射**:它们启动时经 `GetMergedZones` 取映射,已经在跑的 data_service 副本靠缓存照答。不变。
-- **不加指标**。关闭的池每次核对失败记一条 ERROR(带逻辑库名,10 秒一条),启动时逐个记;连接池指标里它的打开连接数是 0。批 2 做就绪判定时再加「缺口数」这一个指标。
-- **运行账号口令类的配置错误在非主集群上不再挡启动**(§5 末)。批 2 的就绪判定(§7.3 选项二 A)可以顺带把「还有池没核对过」算成不 Ready,一并补上;批 1 不改探针。
-- **缩容收尾任务**在集群失联期间整轮失败(它要读每个逻辑库),健康库上被缩掉的末代要等恢复之后才结束。只是推迟,不写坏数据;批 2 一并看要不要按库容忍。
+- **指标只加了一个**:批 2 的 `writer_grants_missing`。批 1 关着的池不单独出指标:每次核对失败记一条 ERROR(带逻辑库名,10 秒一条),连接池指标里它的打开连接数是 0。
+- **运行账号在非主集群上配错、注册账号是好的**:写资格齐全,运行池却连不上、一直关着。`/readyz` 不看池关没关,这种副本照样就绪,滚动发布不会停下,只能靠那几个库的 ERROR 日志和 RPC 失败率发现。
+  - 不放进就绪判定的原因:关着的池要用到才重新核对,探针本身不能同步去核(K8s 探针缺省 1 秒超时,上百个库每个要等 1 秒拨号)。改成异步核对又多一套状态。
+  - 部署上运行账号和注册账号来自同一套目录,单独配错一个的机会小。
+  - 要补的话,另起一个后台循环定期重核关着的池,`/readyz` 只读它的结果。
+- **缩容收尾任务看过了,不改**:集群失联期间它整轮失败(要读每个逻辑库),健康库上被缩掉的末代要等恢复之后才结束。只是推迟,不写坏数据;改成按库容忍要逐库记账,换来的只是早几分钟。
+- **go/db 的缺口按白名单算**:名册和 `MMORPG_DB_ALLOWED_DATABASES` 按设计是同一份清单。两者对不上本身就是缺陷(落在没有写资格的存档库上的玩家存不了盘),现在会表现成不就绪。

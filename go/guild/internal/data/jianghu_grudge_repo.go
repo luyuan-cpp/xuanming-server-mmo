@@ -26,6 +26,8 @@ var _ JianghuGrudgeStore = (*GuildRepo)(nil)
 // RecordJianghuDuelResult 在单 RC 事务内幂等写入两帮的生死状恩怨汇总与近期 20 场恩怨战绩。
 // 仅当双方均为纯同帮小队（side_a_guild_id != 0 && side_b_guild_id != 0 && side_a_guild_id != side_b_guild_id）
 // 且对局正常完赛（total_rounds > 0 && outcome != VOID）时入账。
+// 幂等只认 guild_jianghu_grudge_applied(一局一行、不裁剪):战绩行每帮只留 20 场,被裁掉之后重投的旧结果查不到它,
+// 当不了去重键(数据覆写审计 r2 第 4 轮 r2-jh#3)。
 func (r *GuildRepo) RecordJianghuDuelResult(ctx context.Context, ev *kafkapb.BattleResultEvent) (bool, error) {
 	if r == nil || r.db == nil || ev == nil || ev.GetBattleId() == 0 {
 		return false, nil
@@ -98,18 +100,16 @@ func (r *GuildRepo) RecordJianghuDuelResult(ctx context.Context, ev *kafkapb.Bat
 	}
 	defer tx.Rollback()
 
-	// 非加锁幂等预检：任意一侧已有 (guild_id, battle_id) 记录则整笔直接幂等返回。
-	for _, s := range sides {
-		var exists uint64
-		err = tx.QueryRowContext(ctx,
-			"SELECT battle_id FROM guild_jianghu_grudge_record WHERE guild_id=? AND battle_id=?",
-			s.guildID, ev.GetBattleId()).Scan(&exists)
-		if err == nil {
-			return false, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return false, err
-		}
+	// 非加锁幂等预检：入账闸门已有这一局就整笔直接幂等返回,重复的事件不必先把两帮的行锁一遍。
+	// 普通读不取锁、不占全序位置;权威判定在事务末尾插闸门那一步。
+	var applied uint64
+	err = tx.QueryRowContext(ctx,
+		"SELECT battle_id FROM guild_jianghu_grudge_applied WHERE battle_id=?", ev.GetBattleId()).Scan(&applied)
+	if err == nil {
+		return false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return false, err
 	}
 
 	// Pass 1：按 guild_id 升序全部写完位置 20 (guild_jianghu_rival_summary)，严格遵守全局表锁序 20 -> 21。
@@ -157,6 +157,19 @@ func (r *GuildRepo) RecordJianghuDuelResult(ctx context.Context, ev *kafkapb.Bat
 		if err = trimGuildJianghuRecords(ctx, tx, s.guildID); err != nil {
 			return false, err
 		}
+	}
+
+	// Pass 3：写位置 23 (guild_jianghu_grudge_applied) 入账闸门,本局唯一的去重键。预检之后到这里之间同一局的另一笔先提交了,
+	// 或这局的战绩行早已被裁掉(Pass 2 撞不上主键),都在这一步撞 1062,整笔回滚,汇总不会多算。
+	if _, err = tx.ExecContext(ctx,
+		"INSERT INTO guild_jianghu_grudge_applied(battle_id,applied_ms) VALUES(?,CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3))*1000 AS UNSIGNED))",
+		ev.GetBattleId(),
+	); err != nil {
+		var dup *mysqlDriver.MySQLError
+		if errors.As(err, &dup) && dup.Number == 1062 {
+			return false, nil
+		}
+		return false, err
 	}
 
 	if err = tx.Commit(); err != nil {

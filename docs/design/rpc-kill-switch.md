@@ -162,12 +162,20 @@ etcdctl del /mmorpg/killswitch/type/SceneNodeService/SceneSkillClientPlayer/Rele
 | 会话收尾 | `ScenePlayer/ExitGame`、`scene_node.SceneNodeGrpc/ReleasePlayer`、`ClientPlayerLogin/LeaveGame`、`BattleClientPlayer/StopWatchBattle`、`GateClientSpectate/UnsubscribeSpectate`、`BattleNode/RemoveObserver` | 玩家卡在旧节点上、下线存不了盘、重登被拒；观战推送停不下来 |
 | 资源收尾 | `Scene/DestroyScene`、`scene_node.SceneNodeGrpc/DestroyScene`、`BattleNode/DestroyBattle` | 已结束的场景 / 房间一直占着节点 |
 | 补偿与回执 | `Scene/CancelBattlePrepare`、`scene_node.SceneNodeGrpc/CancelBattlePrepare`、`scene_node.SceneNodeGrpc/AssetAbortDebit`、`scene_node.SceneNodeGrpc/AssetAckReceipt` | 参战冻结解不开、资产预留退不回、场景收据一直悬着 |
-| Go：会话收尾 | `ClientPlayerLogin/Disconnect`、`ClientPlayerLogin/LeaveGame`（login 与路由服都按它保护）、`SceneManager/LeaveScene` | 登录会话不释放、重登被拒；gate 合成的断线通知（58 号）经路由服 Forward 到 login.Disconnect，路由服设计早已定为不受热关停约束（[client-access-band-routing.md](./client-access-band-routing.md) §13.3） |
+| Go：会话收尾 | `ClientPlayerLogin/Disconnect`、`ClientPlayerLogin/LeaveGame`（login 与路由服都按它保护）、`SceneManager/LeaveScene`、go/db 的 `playerstore.PlayerStore/SavePlayer` | 登录会话不释放、重登被拒；gate 合成的断线通知（58 号）经路由服 Forward 到 login.Disconnect，路由服设计早已定为不受热关停约束（[client-access-band-routing.md](./client-access-band-routing.md) §13.3）；存盘被挡时玩家下线存不了盘、实体一直留在节点上，停机存盘等到看门狗截止就丢掉自上次提交以来的进度（§8.1） |
 | Go：补偿与回执 | `DataService/ReleasePlayerName`（建角回滚）、`DataService/AckRoleTradeDrain`、`PlayerInbox/AckItems`、match 的 `MatchInternal/{CancelActivityBattle, CommitBattleOutcome, ReleaseTrialOccupancy, GetBattleCompletion, GetBattleTerminalDecision}` | 建角失败后名字一直被占、交易排空证明提交不了、收件箱条目重复投递、参战冻结解不开、帮会历练占用放不掉（match 这五个与它排空时放行的收尾方法同一份） |
 
 名单只有两处：C++ 在 `kill_switch.cpp` 的 `kProtectedMessageIds`（用消息号常量，方法改名或删除时编译失败），Go 在各服务装配的 `killswitch.Config.Protected`（用生成的 `*_FullMethodName` 常量）。新增一项必须写明它挡的是哪种收不了尾的情形。业务上的「取消」（撤单、退出帮会等）是玩家发起的新工作，不在名单里；需要时用 `deny=false` 的精确规则单独放行。
 
 不受保护的方法照常关停：它们的调用方本来就必须处理「对端不可用」（节点随时可能崩溃或失联），关停只是让这种情况按运维的意图发生，不引入新的失败模式。
+
+### 8.1 go/db 存盘补进名单（2026-11-26，数据覆写审计 r2 第 4 轮 r2-ops#2）
+
+- **问题**：go/db 装配热关停时只填了节点类型，没有 `Protected`。运维按 §10 之外的方式写了全局 `*`、`type/PlayerStoreNodeService/*` 或 `PlayerStore/*` 止血时，`SavePlayer` 与 `LoadAndClaim` 一起被挡，回规则里的状态码（缺省 UNAVAILABLE）。scene 的 `ExitGame` 受保护、照常走退出流程，存盘却进不去：C++ 存盘客户端对非 OK 应答只会带着快照重试，玩家实体留在节点上；规则还在时停机或滚动 scene，停机存盘受 drain 看门狗限时，到点退出，自上次提交以来的进度丢失。与 §0「关停期间玩家照样能下线并存盘」不符。
+- **方案**：go/db 的热关停改由 `newPlayerStoreKillSwitch`（`go/db/db.go`）装配，`Protected` 放 `PlayerStore_SavePlayer_FullMethodName`：通配规则关不掉存盘，精确规则（`playerstore.PlayerStore/SavePlayer`，或带类型、实例范围的同名规则）仍能关。`LoadAndClaim` 不进名单。单测 `TestPlayerStoreKillSwitchKeepsSaveOpenUnderWildcards`（`go/db/player_store_killswitch_test.go`）钉住：四种通配都不挡存盘、都挡认领，精确规则能关存盘。
+- **为什么这样选**：`SavePlayer` 一个方法承载了周期存盘、下线与停机的最后一笔、实体已没时的空行释放，它正是「在途工作的收尾」，和 login 的 `Disconnect` / `LeaveGame` 同一类，放进与其他服务同一份名单机制，不另开特例。`LoadAndClaim` 是进场认领写权，属于新工作：正好是「库被打爆时想先停下来」的那一类，而且被挡时源节点已经存过盘，玩家重登前数据不丢。
+- **被否决的做法**：只在设计里写「全局通配会停存盘、规则生效期间不得停 scene」——靠运维记住一条反直觉的禁令，出事时最容易忘；把 `LoadAndClaim` 也保护起来——那样通配规则在 go/db 上就什么都挡不住，失去止血意义；在 scene 侧对被关停的存盘降级成「不存直接退出」——把一次可恢复的止血升级成回档。
+- **代价与边界**：存盘本身就是打爆存档库的那个方法时，运维要写精确规则才关得掉，`*` 不够（与其他受保护方法同一口径）；精确规则关掉存盘期间，同样不能停 scene。`LoadAndClaim` 被通配挡住时跨节点交接与重登会失败，玩家要等规则撤掉再进，这是有意的。
 
 ## 9. 失效模式与新鲜度（fail-open）
 

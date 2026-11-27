@@ -322,6 +322,13 @@ pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
   - dev:`100m` / `128Mi`(scene `256Mi`),只为让主容器有自己的 request,kind 这类单节点集群放得下。
   - 都不配 limits:cpu limit 的 CFS 限流会打出单线程 loop 的毛刺;memory limit 要先实测「连接上限 × 每连接输出缓冲高水位」。节点池按 requests 规划,
     请求放不下时 Pod 停在 Pending,不会挤占已在跑的节点。
+- gate、battle 的 Pod 级 safe sysctl(2026-11-26,未运行;gate 准入设计 P1-5,取值只在 `tools/scripts/lib/k8s_client_entry.ps1` 的 `Get-ClientFacingPodSysctlsYaml`,四套模板都写,scene 不写):
+  - `net.ipv4.tcp_keepalive_time` / `_intvl` / `_probes` = `120` / `10` / `6`:真死的对端约 3 分钟回收(内核缺省约 2 小时 11 分)。
+  - `net.ipv4.tcp_rmem` = `4096 131072 524288`、`net.ipv4.tcp_wmem` = `4096 16384 524288`:只把单连接收发缓冲上限压到 512KB(内核缺省 6MB / 4MB)。
+  - **集群要求**:Kubernetes ≥ 1.32(keepalive 三项 1.29 起、收发缓冲两项 1.32 起才算 safe sysctl),节点内核 ≥ 4.15。本仓钉的 Agones 1.58 只支持 1.33~1.35,装得上 Agones 的集群都满足。
+    不满足时 kubelet 以 `SysctlForbidden` 拒收 Pod(Pod 停在 Failed,gate / battle 起不来);namespace 若开了 Pod Security `baseline` 且把 `enforce-version` 钉在 1.32 以前,同样拒收。
+    核对:`kubectl version` 的 Server Version;`kubectl get nodes -o wide` 的 KERNEL-VERSION。上线后的集群不用改节点或 kubelet 参数。
+  - `-ClientEntryMode external` 下 gate 是 OnDelete 的 StatefulSet:已在跑的 gate Pod 要按 `k8s_gate_drain.ps1` 逐台排空删 Pod 才换上新值;Deployment 形态的 gate 与 battle 随下次发布滚动。
 - 日志采集的常驻开销(默认开着 sidecar 时要算进容量):
   - 每个 C++ Pod 多一个 sidecar 容器,`requests` `20m` / `64Mi`、`limits` `256Mi`。按上面那条基线,一个 zone 是 `gate=2` + `scene=4` 共 6 份,再加不分 zone 的 battle 池。
     - "6 份"只对**默认编排 + legacy 单 scene 池**成立(`-SceneOrchestrator deployment` + `-SceneReplicas`)。`-SceneOrchestrator agones` 下 scene 那部分按 **Fleet 当前副本数**算(开了 `-AgonesAutoscale` 还会随房间容量上下浮动,不是一个固定数);scene 角色拆分档(`-SceneWorldReplicas` / `-SceneInstanceReplicas`,见 `docs/ops/scene-node-role-split.md`)会把 scene 拆成 `scene-world` + `scene-instance` 两个池,份数按两池之和算。
@@ -515,6 +522,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     部署另把 AppId / BizId 明文注入 login(`MMORPG_LOGIN_NPPA_EXPECTED_APP_ID` / `_BIZ_ID`),漏抄或抄错时 login 拒启;开、关、换应用都是先改那份 Secret、不单独滚动,紧接着部署。
     data-service 与 payment 另从 `domain-service-secrets` 的 `account-directory-payment` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_PAYMENT`(查实名的调用密钥,
     `optional: false`,由部署补齐、全集群同值,见 `-ResyncDomainServiceSecrets`),见 `docs/ops/k8s-open-server-runbook.md` §1 与 `docs/design/real-name-anti-addiction.md` §8。
+    data-service 与 content-guard 同样从 `account-directory-content-guard` 注入 `MMORPG_ACCOUNT_DIRECTORY_SECRET_CONTENT_GUARD`(查渠道身份的调用密钥,
+    `docs/design/rename-and-content-safety.md` §6.5)。
   - `-ConfirmLoginAuthProviderChange`(switch):确认本次部署可关闭或改动已开启的第三方登录。未确认时,部署在任何写操作之前核对线上现状;
     漏传 AppId / Endpoint / AllowOpenId、改 AppId 或现状判不出时拒绝,并提示照传参数。`-DryRun` 不读集群;确认开关的边界见
     [微信 / QQ 沙盒手册](../../docs/ops/wechat-qq-sandbox-runbook.md) §B。
@@ -524,7 +533,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
     (redis-0 重启,登录中断并重放 AOF;核心只在 dev 没开控制集群时部署)。
     `redis.yaml` 的 Pod 模板有变化(或线上 `sts/redis` 还没有模板摘要注解)而不给时,在 `Apply-Infra` 的任何写操作之前拒绝。`dev_tools.ps1` / `k8s_image.ps1`
     只在被指定时透传。**本项合入后第一次 `infra-up` 必须带它**,见「Redis 连接上限与总账」。
-  - `-ResyncDomainServiceSecrets`(switch,2026-11-20):`domain-service-secrets` 里 zone 工作负载引用的 16 把内部调用密钥由部署维护
+  - `-ResyncDomainServiceSecrets`(switch,2026-11-20):`domain-service-secrets` 里 zone 工作负载引用的 17 把内部调用密钥由部署维护
     (托管键表 `$script:ManagedDomainServiceSecrets`):缺的自动补齐,全集群每把一个值。不给时,任何 namespace 的值与 infra 不同、不足 32 字节、
     两把同值,都在任何写操作之前拒绝;给了就统一成一个值(不可用的重新生成),并对读这些键的 StatefulSet / Deployment 触发滚动重启
     (`kubectl rollout restart`,Agones `scene` Fleet 不直接删 Pod、告警提示 `k8s_scene_roll.ps1 -Restart`;选低峰)。`dev_tools.ps1` 只在被指定时透传,

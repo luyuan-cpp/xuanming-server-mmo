@@ -226,12 +226,14 @@ private:
 	bool lastTickLate{false};
 };
 
-// 检查点堆(gate 用):按到期时刻排序的 (到期时刻, session_id, 会话代次, 种类)。一条连接至多同时有三个检查点:
-//   - 握手检查点:建连时登记,在建连 + handshakeTimeout 到期;到期时已验签就作废;
+// 检查点堆(gate 用):按到期时刻排序的 (到期时刻, session_id, 会话代次, 种类)。只管已验签的会话,一条至多同时有两个检查点:
 //   - 空闲检查点:开始跟踪时登记,之后每条跟踪中的连接恰好一个。到期时距上一帧不足 idleTimeout 就按
 //     「上一帧 + idleTimeout」重新登记,已满就判死且不再登记,所以同一条连接只会被判死一次;
 //   - 登录检查点:验签成功时登记(ExpectLoginBy,期限由调用方给),到期时已登录成功就作废。按「距验签的时长 + 仍未登录成功」判,
 //     不看期间发没发心跳:否则验签之后不登录、只发心跳的连接能一直占着位置。
+// 握手期限不进堆:验签之前 gate 没有会话,只有一条按建连先后有序的未验签记录,扫描时从表头起关掉建连满 handshakeTimeout 的
+// (gate client_heartbeat.cpp,准入设计 P2-4「票据先行」);battle 直连同样扫它自己的未认证池。所以未验签连接在堆里不占任何条目。
+// 本类的节拍(LoopStallWatch)照样给握手期限那一侧判「本轮迟到」用:Sweep 的返回值带 late。
 // 收包路径只刷新 ClientLiveness::lastInboundAt,不碰堆;每条连接大约每 idleTimeout 被检查一次,不按节拍全量遍历会话表。
 // 会话关闭时不用摘检查点:到期时按 (session_id, 会话代次) 找不到就丢弃,session_id 被新连接复用也挡得住。
 class LivenessSweeper
@@ -241,40 +243,29 @@ public:
 
 	enum class CheckKind : uint8_t
 	{
-		kHandshake,
 		kIdle,
 		kLogin,
 	};
 
-	// lookup 返回的会话视图。verified 取自会话的验签状态,loggedIn 取自「至少登录成功过一次」(gate 的
-	// SessionInfo::loginSucceeded;只有登录检查点读它),liveness 借用会话上的存活状态,
-	// 仅在本次同步扫描中有效。找不到会话由外层 optional 表示,存在的会话一定有存活状态。
+	// lookup 返回的会话视图。loggedIn 取自「至少登录成功过一次」(gate 的 SessionInfo::loginSucceeded;只有登录检查点读它),
+	// liveness 借用会话上的存活状态,仅在本次同步扫描中有效。找不到会话由外层 optional 表示,存在的会话一定有存活状态。
 	struct SessionView
 	{
-		bool verified{false};
 		bool loggedIn{false};
 		const ClientLiveness &liveness;
 	};
 
 	struct SweepResult
 	{
-		Duration checkGap{};           // 距上一次扫描的时长;首轮为 0
-		bool late{false};              // 本次扫描迟到(checkGap > 2 × checkPeriod):这一轮只推迟,不关
-		uint64_t stale{0};             // 丢弃的检查点:会话已关闭 / 代次不符 / 握手期限到时已验签 / 空闲检查点的会话没在跟踪 /
-		                               // 登录期限到时已登录成功
-		uint64_t deferred{0};          // 期限已到但本次扫描迟到,改在约一个节拍后再判
-		uint64_t handshakeTimeouts{0}; // 建连满 handshakeTimeout 仍未验签,已回调 onHandshakeTimeout
-		uint64_t idleClosed{0};        // 跟踪中、静默满 idleTimeout,已回调 onIdle
-		uint64_t loginTimeouts{0};     // 验签之后到了登录期限仍未登录成功,已回调 onLoginTimeout
+		Duration checkGap{};       // 距上一次扫描的时长;首轮为 0
+		bool late{false};          // 本次扫描迟到(checkGap > 2 × checkPeriod):这一轮只推迟,不关
+		uint64_t stale{0};         // 丢弃的检查点:会话已关闭 / 代次不符 / 空闲检查点的会话没在跟踪 / 登录期限到时已登录成功
+		uint64_t deferred{0};      // 期限已到但本次扫描迟到,改在约一个节拍后再判
+		uint64_t idleClosed{0};    // 跟踪中、静默满 idleTimeout,已回调 onIdle
+		uint64_t loginTimeouts{0}; // 验签之后到了登录期限仍未登录成功,已回调 onLoginTimeout
 	};
 
 	explicit LivenessSweeper(const ClientLivenessPolicy &policy) : policy(policy), stall(policy.checkPeriod) {}
-
-	// 建连时调用(会话还没验签时):建连 + handshakeTimeout 到期仍未验签就关。
-	void ExpectHandshake(const uint32_t sessionId, const uint64_t incarnation, const SteadyTime connectedAt)
-	{
-		Schedule(connectedAt + policy.handshakeTimeout, sessionId, incarnation, CheckKind::kHandshake);
-	}
 
 	// 开始跟踪一条连接,第一个空闲检查点在 lastInboundAt + idleTimeout。每条连接只调一次:
 	// ClientLiveness::StartTracking 返回 true 的时候。
@@ -291,11 +282,10 @@ public:
 
 	// 取出全部到期(due <= now)的检查点逐个判定。
 	// lookup(sessionId, incarnation) 返回 std::optional<SessionView>:会话已关闭或代次不符时为空。
-	// onHandshakeTimeout(sessionId, incarnation)、onIdle(sessionId, incarnation, silentFor)、onLoginTimeout(sessionId, incarnation)
-	// 由调用方关连接。它们不能同步删会话(forceClose 是排队关闭,满足这一条)。
-	template <typename Lookup, typename OnHandshakeTimeout, typename OnIdle, typename OnLoginTimeout>
-	SweepResult Sweep(const SteadyTime now, Lookup &&lookup, OnHandshakeTimeout &&onHandshakeTimeout, OnIdle &&onIdle,
-					  OnLoginTimeout &&onLoginTimeout)
+	// onIdle(sessionId, incarnation, silentFor)、onLoginTimeout(sessionId, incarnation) 由调用方关连接。
+	// 它们不能同步删会话(forceClose 是排队关闭,满足这一条)。
+	template <typename Lookup, typename OnIdle, typename OnLoginTimeout>
+	SweepResult Sweep(const SteadyTime now, Lookup &&lookup, OnIdle &&onIdle, OnLoginTimeout &&onLoginTimeout)
 	{
 		SweepResult result;
 		// 距上一次扫描超过两个节拍,说明本端 loop 卡过:客户端的帧可能还在接收缓冲里没读
@@ -315,23 +305,6 @@ public:
 			if (!view)
 			{
 				++result.stale;
-				continue;
-			}
-			if (checkpoint.kind == CheckKind::kHandshake)
-			{
-				if (view->verified)
-				{
-					++result.stale; // 握手已完成,期限作废;验签成功时已另登记空闲检查点
-					continue;
-				}
-				if (result.late)
-				{
-					++result.deferred;
-					Schedule(now + policy.checkPeriod, checkpoint.sessionId, checkpoint.incarnation, CheckKind::kHandshake);
-					continue;
-				}
-				++result.handshakeTimeouts;
-				onHandshakeTimeout(checkpoint.sessionId, checkpoint.incarnation);
 				continue;
 			}
 			if (checkpoint.kind == CheckKind::kLogin)

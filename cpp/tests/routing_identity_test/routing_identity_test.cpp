@@ -2394,6 +2394,16 @@ TEST(KickFence, LegacySessionGenerationZeroKicks)
               gate_session_fence::ClassifyKick(kPlayerA, 0, kPlayerA, kKickerGeneration));
 }
 
+// 断线租约到期按会话代次认会话:同一玩家落回同号的新连接(代次不同)不被旧到期踢掉;任一边为 0 按会话号认。
+// 修复前红:处理函数只比玩家，同号新连接被踢、玩家要重登。
+TEST(LeaseExpiryFence, EarlierConnectionOnTheSameSessionIdIsNotTheTarget)
+{
+    EXPECT_FALSE(gate_session_fence::LeaseExpiryTargetsThisSession(/*session=*/8, /*event=*/7));
+    EXPECT_TRUE(gate_session_fence::LeaseExpiryTargetsThisSession(7, 7));
+    EXPECT_TRUE(gate_session_fence::LeaseExpiryTargetsThisSession(7, 0)) << "旧版 player_locator 不带代次";
+    EXPECT_TRUE(gate_session_fence::LeaseExpiryTargetsThisSession(0, 7)) << "没有代次的会话";
+}
+
 // 不变量 4:loginGeneration 只经 ApplyLoginBinding / ApplyRouteIdentity 写入。ClassifyKick 按值读会话字段,
 // 判完之后会话的代次与玩家都不变,也不会被「抬高到踢线者的代次」。
 TEST(KickFence, ClassifyDoesNotTouchSessionGeneration)

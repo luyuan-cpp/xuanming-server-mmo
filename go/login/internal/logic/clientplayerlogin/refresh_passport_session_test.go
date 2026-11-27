@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"login/internal/logic/pkg/auth"
+	"login/internal/logic/pkg/passportsession"
 	"login/internal/logic/pkg/token"
 	"login/internal/svc"
 	login_proto "proto/login"
@@ -19,8 +20,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// 刷新前核对官方通行证(refreshtokenlogic.go passportSessionRevoked,official-passport-registration.md §3.6):
-// 登录之后改过密码就吊销整个账号、拒绝续期;改密在登录之前照常续期;通行证故障照常续期;不是通行证登录不去问通行证。
+// 刷新前核对官方通行证(refreshtokenlogic.go → passportsession.CheckRefresh,official-passport-registration.md §3.6):
+// 登录早于改密就拒绝续期,并吊销这个账号改密之前的全部登录(改密之后登录的照常);改密在登录之前照常续期;
+// 通行证故障照常续期;不是通行证登录不去问通行证。
 
 const testRefreshPassportSub = "550e8400-e29b-41d4-a716-446655440000"
 
@@ -59,7 +61,7 @@ func newPassportRefreshFixture(t *testing.T, stub *passportGetUserStub) *svc.Ser
 		if err != nil {
 			t.Fatalf("NewPassportAdmin: %v", err)
 		}
-		svcCtx.PassportAdmin = admin
+		svcCtx.PassportSessions = passportsession.New(admin, svcCtx.TokenManager, nil)
 	}
 	return svcCtx
 }
@@ -92,22 +94,30 @@ func requireRenewed(t *testing.T, name string, resp *login_proto.RefreshTokenRes
 func TestRefreshRevokesPassportSessionsLoggedInBeforePasswordChange(t *testing.T) {
 	loginAt := time.Now().Add(-time.Hour).Truncate(time.Second)
 	stub := &passportGetUserStub{body: passportUserChangedPasswordAt(loginAt.Add(10 * time.Minute))}
+	// changedAt 与 stub 里的改密时刻相同(loginAt + 10 分钟)。
 	svcCtx := newPassportRefreshFixture(t, stub)
 	account := "passport_" + testRefreshPassportSub
+	changedAt := loginAt.Add(10 * time.Minute)
 	thief := issueForRefreshTest(t, svcCtx, account, auth.PassportAuthType, loginAt.Unix())
 	otherDevice := issueForRefreshTest(t, svcCtx, account, auth.PassportAuthType, loginAt.Unix())
+	reloggedIn := issueForRefreshTest(t, svcCtx, account, auth.PassportAuthType, changedAt.Add(time.Minute).Unix())
 
 	resp := refreshForTest(t, svcCtx, thief.RefreshToken)
 	if resp.GetErrorMessage().GetId() != uint32(table.LoginError_kLoginAccountNotFound) || resp.GetRefreshToken() != "" {
 		t.Fatalf("a login from before the password change must not be renewed: error=%v refresh=%q", resp.GetErrorMessage(), resp.GetRefreshToken())
 	}
-	// 整个账号都吊销:另一台设备的 access 立即失效,它的 refresh 也续不了。
+	// 改密之前的登录一起吊销:另一台设备的 access 立即失效,它的 refresh 也续不了。
 	if _, err := svcCtx.TokenManager.ValidateAccess(context.Background(), otherDevice.AccessToken); !errors.Is(err, token.ErrAccessRejected) {
 		t.Fatalf("other device access token after revocation: %v, want ErrAccessRejected", err)
 	}
 	if got := refreshForTest(t, svcCtx, otherDevice.RefreshToken); got.GetRefreshToken() != "" {
 		t.Fatal("other device refresh token must be revoked too")
 	}
+	// 改密之后重新登录的设备不受影响。
+	if _, err := svcCtx.TokenManager.ValidateAccess(context.Background(), reloggedIn.AccessToken); err != nil {
+		t.Fatalf("a login after the password change must survive: %v", err)
+	}
+	requireRenewed(t, "relogged-in device", refreshForTest(t, svcCtx, reloggedIn.RefreshToken))
 }
 
 func TestRefreshRenewsPassportSessionsLoggedInAfterPasswordChange(t *testing.T) {

@@ -39,7 +39,7 @@ import (
 // 派发不碰批次行:一批上万行时批次行不是派发的瓶颈,计数只在终局时动。
 //
 // 人工终结只有一条写路径 ResolveManuallyIfQuiet:和重投循环的 Finalize 走同一个 settle(批次计数、来源放回、结束审计),
-// 另带读证据时的 lease_until_ms、last_send_ms,settle 持行锁比对,读完之后有人领过、发过就不终结。证据由调用方
+// 另带读证据时的 lease_until_ms、last_send_ms、attempts,settle 持行锁比对,读完之后有人领过、排过就不终结。证据由调用方
 // (logic.ResolveRecallOp)读已提交账本判定,这里不判。
 //
 // needs_review 指令交人工处置的登记(RegisterReviewHandled)也写 gm_recall_source:op_id = 0(没有回收指令),request_id 是
@@ -686,7 +686,7 @@ type recallSettlement struct {
 	answer     *recallAnswer
 	resolvedBy string
 	resolution string
-	// witness 只有人工终结带:读证据那一刻行上的 lease_until_ms、last_send_ms。持行锁时对不上就不终结。
+	// witness 只有人工终结带:读证据那一刻行上的 lease_until_ms、last_send_ms、attempts。持行锁时对不上就不终结。
 	witness *assetop.QuietWitness
 }
 
@@ -720,20 +720,22 @@ func (s *RecallStore) settle(ctx context.Context, tx *sql.Tx, st recallSettlemen
 	if err != nil {
 		return false, err
 	}
-	var status uint32
+	var status, attempts uint32
 	var requested, leaseUntilMs, lastSendMs uint64
-	if err := tx.QueryRowContext(ctx, "SELECT status,requested,lease_until_ms,last_send_ms FROM gm_recall_op WHERE op_id=? FOR UPDATE", st.opID).
-		Scan(&status, &requested, &leaseUntilMs, &lastSendMs); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT status,requested,lease_until_ms,last_send_ms,attempts FROM gm_recall_op WHERE op_id=? FOR UPDATE", st.opID).
+		Scan(&status, &requested, &leaseUntilMs, &lastSendMs, &attempts); err != nil {
 		return false, err
 	}
 	if status != st.from {
 		return false, nil
 	}
-	// 人工终结的证据是按读行那一刻下的。读完之后有人领过这一行(领取必改 lease_until_ms)或发出过请求(重排推进
-	// last_send_ms),那一次投递可能已经让 scene 扣了,证据作废,不终结,调用方重新读证据。和 status 在同一把行锁下比,
-	// 与领取、重排、终结串行。只领没发(玩家不在线,本地 NOT_HERE 重排)会把租约清回 0、不动 last_send_ms,
-	// 读证据时租约就是 0 的话比对照样通过:那一次没有请求发出去,证据不受影响(last_send_ms 契约见 assetop/abandon.go 文件头)。
-	if st.witness != nil && (leaseUntilMs != st.witness.LeaseUntilMs || lastSendMs != st.witness.LastSendMs) {
+	// 人工终结的证据是按读行那一刻下的。读完之后有人领过这一行(领取必改 lease_until_ms)、发出过请求(重排推进
+	// last_send_ms)或排过一次(重排必给 attempts 加一),那一次投递可能已经让 scene 扣了,证据作废,不终结,调用方重新读证据。
+	// 和 status 在同一把行锁下比,与领取、重排、终结串行;比对口径同两个 assetopfix(assetop.QuietWitness.Matches)。
+	// attempts 防的是发了请求却推不动 last_send_ms 的重排(副本的钟慢),它又把租约清回 0,只比前两列看不出来。
+	// 代价:只领没发(玩家不在线,本地 NOT_HERE 重排)也加 attempts,读证据之后碰上一次就落空,调用方重新调用即可;
+	// 宁可多读一次证据,也不放过一次发送(assetop.QuietWitness 的注释)。
+	if st.witness != nil && !st.witness.Matches(assetop.ManualRow{LeaseUntilMs: leaseUntilMs, LastSendMs: lastSendMs, Attempts: attempts}) {
 		return false, nil
 	}
 
@@ -995,8 +997,8 @@ func (s *RecallStore) deferPoison(ctx context.Context, opID, token, poisonUntilM
 	return err
 }
 
-// ReadOpState 读人工终结要核的一行:状态、与 Claim 下发同一套还原出的请求、判「安静」与终结见证要的租约和发送时刻。
-// 普通读,不加锁:证据按这一刻的行下,终结时 ResolveManuallyIfQuiet 在结算事务里持行锁再比一次租约与发送时刻。
+// ReadOpState 读人工终结要核的一行:状态、与 Claim 下发同一套还原出的请求、判「安静」与终结见证要的租约、发送时刻和 attempts。
+// 普通读,不加锁:证据按这一刻的行下,终结时 ResolveManuallyIfQuiet 在结算事务里持行锁再比一次这三列。
 // 没有这一行回 ErrRecallOpNotFound。
 func (s *RecallStore) ReadOpState(ctx context.Context, opID uint64) (RecallOpState, error) {
 	state, err := scanRecallOp(s.db.QueryRowContext(ctx, "SELECT "+recallOpColumns+" FROM gm_recall_op WHERE op_id=?", opID), opID)
@@ -1097,7 +1099,7 @@ func (s *RecallStore) ListPendingByPlayer(ctx context.Context, playerID uint64, 
 
 // ResolveManuallyIfQuiet 是人工终结唯一的写路径(调用方 logic.ResolveRecallOp 先按已提交账本判过证据)。
 // 只收拒绝、中止、部分:全额结果只能来自 scene 的明细。和 Finalize 走同一个 settle,另要求行上的 lease_until_ms、
-// last_send_ms 仍是 witness(读证据时的值)。回 false、什么都不改:行已不是 PENDING,或读证据之后有人领过、发过它。
+// last_send_ms、attempts 仍是 witness(读证据时的值)。回 false、什么都不改:行已不是 PENDING,或读证据之后有人领过、排过它。
 // 人工终结不是 scene 的答复:durable、last_outcome、last_reason 保留最后一次投递时的值(见 settleRecallOpSQL 上方的说明)。
 //
 // 没有不带见证的人工终结:回收不给 assetop.Loop 挂 Manual,不核证据的口子不留。

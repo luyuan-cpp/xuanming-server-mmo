@@ -79,10 +79,13 @@ func TestSnapshotConsumer_DuplicateGuidStillCommits(t *testing.T) {
 	assert.NoError(t, waitDone(t, done))
 }
 
-func TestSnapshotConsumer_SkipsBadMessagesAndCommitsThem(t *testing.T) {
+// 坏消息(解不出 / 主键为 0 / 超列宽)不落库;提交之前先把原件写进本组的死信(2026-11-26),写成功才逐条提交。
+func TestSnapshotConsumer_DeadLettersBadMessagesThenCommitsThem(t *testing.T) {
 	reader := newFakeReader(nil)
 	sink := &fakeSnapSink{}
 	c := NewSnapshotConsumer(SnapshotConsumerConfig{MaxBlobBytes: 64}, reader, sink)
+	dlq := &fakeDeadLetterSink{}
+	c.deadLetter = deadLetterTarget{sink: dlq, group: "snapshot-group"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -106,6 +109,13 @@ func TestSnapshotConsumer_SkipsBadMessagesAndCommitsThem(t *testing.T) {
 	assert.Equal(t, 1, sink.callCount(), "only the valid message reaches the sink")
 	assert.Equal(t, uint64(10), sink.row(0).SnapshotGuid)
 	assert.Len(t, reader.commitCalls(), 5, "every message, good or bad, is committed individually")
+	records := dlq.written()
+	require.Len(t, records, 4, "the four bad messages are dead-lettered before their commits")
+	for i, want := range []string{"decode_error", "invalid", "invalid", "oversize"} {
+		assert.Equal(t, int64(i+1), records[i].Original.Offset)
+		assert.Contains(t, records[i].Reason, want)
+	}
+	assert.Greater(t, len(records[3].Original.Value), 64, "the oversize original is kept whole")
 
 	cancel()
 	assert.NoError(t, waitDone(t, done))

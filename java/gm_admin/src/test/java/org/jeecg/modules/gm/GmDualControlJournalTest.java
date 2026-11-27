@@ -229,6 +229,54 @@ class GmDualControlJournalTest {
         http(400, () -> journal.prepareTradeManual("alice", "t-shape", "工单", mapper.createObjectNode().put("action", "refund")));
     }
 
+    ObjectNode opsInput() {
+        ObjectNode input = mapper.createObjectNode().put("target", "mall").put("command", "manual/orders/resolve");
+        input.putObject("body").put("orderId", "MO-1").put("action", "MARK_DELIVERED").put("reason", "工单 88");
+        return input;
+    }
+
+    @Test void opsCommandsFreezeTheRequestIdAndReuseTheApprovalRecordOnRetry() {
+        String id = journal.prepareOps("alice", "o1", "工单 88", opsInput()).path("id").asText();
+        ObjectNode frozen = journal.get(id, "OPS");
+        // 请求号就是流水号,也就是批准号:下游按它判重。
+        assertEquals(id, frozen.path("request").path("requestId").asText());
+        assertEquals("0", frozen.path("playerId").asText());
+        http(403, () -> journal.sendOps(id, "alice", (request, approval) -> fail("self-approved")));
+
+        List<ObjectNode> approvals = new ArrayList<>();
+        ObjectNode unknown = journal.sendOps(id, "bob", (request, approval) -> {
+            approvals.add(approval);
+            throw new GameServices.CallFailure("UNAVAILABLE", "unknown", true, 0);
+        });
+        assertEquals("UNKNOWN", unknown.path("status").asText());
+        now.addAndGet(120_000L);
+        ObjectNode done = journal.sendOps(id, "carol", (request, approval) -> {
+            approvals.add(approval);
+            assertEquals(id, request.path("requestId").asText());
+            return mapper.createObjectNode().put("resultingState", "DELIVERED");
+        });
+        assertEquals("EXECUTED", done.path("status").asText());
+        assertEquals("bob", done.path("approver").asText());
+        assertEquals(approvals.get(0), approvals.get(1));
+        assertEquals(id, approvals.get(0).path("approvalId").asText());
+        assertEquals("alice", approvals.get(0).path("proposer").asText());
+        // 同一个幂等号重放拿回原申请,换了内容就拒绝。
+        assertEquals(id, journal.prepareOps("alice", "o1", "工单 88", opsInput()).path("id").asText());
+        ObjectNode changed = opsInput();
+        ((ObjectNode) changed.get("body")).put("action", "CREATE_REFUND");
+        http(409, () -> journal.prepareOps("alice", "o1", "工单 88", changed));
+    }
+
+    @Test void opsDraftsRejectServerFrozenFieldsAndOtherShapes() {
+        for (String frozen : List.of("requestId", "approval", "auth")) {
+            ObjectNode input = opsInput();
+            ((ObjectNode) input.get("body")).put(frozen, "x");
+            http(400, () -> journal.prepareOps("alice", "o-" + frozen, "工单", input));
+        }
+        http(400, () -> journal.prepareOps("alice", "o-extra", "工单", opsInput().put("requestId", "1")));
+        http(400, () -> journal.prepareOps("alice", "o-shape", "工单", mapper.createObjectNode().put("target", "mall")));
+    }
+
     @Test void theSwitchIsAlwaysOnInOidcModeAndOffByDefaultInNativeMode() {
         assertTrue(GmCommandJournal.dualControlEnforced("oidc", ""));
         assertTrue(GmCommandJournal.dualControlEnforced("oidc", "true"));

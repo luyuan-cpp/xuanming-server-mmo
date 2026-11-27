@@ -13,7 +13,8 @@ import (
 )
 
 // 官方通行证(Casdoor)的管理接口:账号注销时删用户(docs/design/official-passport-registration.md §3.5、docs/design/account-deletion.md §6.2),
-// 刷新游戏令牌前核对玩家有没有在通行证里改密、被封或被删(§3.6)。
+// 登录、刷新游戏令牌与通行证回调时查玩家有没有在通行证里改密、被封或被删(§3.6、§3.7,判定在 PassportUserStatus.SessionVerdict,
+// 落到游戏令牌上在 pkg/passportsession)。
 //
 // 通行证账号的邮箱、手机号、口令哈希存在 Casdoor 自己的库里,游戏这边只有 passport_<sub>。账号注销删掉游戏账号之前,
 // login 用一个机密应用的凭据调 Casdoor 的管理接口把这名用户删掉:只删游戏账号的话,个人信息还留在通行证里,不算注销。
@@ -38,7 +39,7 @@ const (
 	passportUserRemoved = "Affected"
 )
 
-// CheckSession 的结论:空串 = 照常续期;其余是不再续期的原因,也是指标 label 的取值,上线后不改名。
+// SessionVerdict 的结论:空串 = 照常;其余是不再认这次登录的原因,也是指标 label 的取值,上线后不改名。
 const (
 	PassportSessionUserGone        = "user_gone"        // 通行证里查不到这名用户,或已被标记删除
 	PassportSessionUserForbidden   = "user_forbidden"   // 被封禁
@@ -62,7 +63,7 @@ func NewPassportAdmin(issuer, endpoint, clientID, clientSecret string, client *h
 	return &PassportAdmin{baseURL: idTokenBaseURL(endpoint, issuer), clientID: clientID, clientSecret: clientSecret, http: client}, nil
 }
 
-// passportUser 是 get-user 应答里用到的几项:id 是令牌的 sub,owner / name 是 delete-user 认的主键,其余给 CheckSession。
+// passportUser 是 get-user 应答里用到的几项:id 是令牌的 sub,owner / name 是 delete-user 认的主键,其余给 PassportUserStatus。
 // 应用凭据在本组织算管理员,封禁、删除标记这些只给管理员看的字段也会回来(Casdoor controllers/user.go GetUser)。
 type passportUser struct {
 	Owner       string `json:"owner"`
@@ -82,33 +83,72 @@ type passportReply struct {
 	Data   json.RawMessage `json:"data"`
 }
 
-// CheckSession 核对一次通行证登录还能不能续期。issuedAt 是那次登录用的身份令牌的签发时刻(令牌的 iat,通行证的时钟)。
-// 回空串 = 照常续期;回 PassportSession* 之一 = 不再续期;回错误 = 核对不了(通行证或网络故障,由调用方决定怎么办)。
+// PassportUserStatus 是通行证里一名用户此刻的状态(LookupUser / LookupUserByName)。
+type PassportUserStatus struct {
+	Sub       string // 用户 id(令牌的 sub);按名字查且查不到时为空
+	Gone      bool   // 查不到,或已被标记删除
+	Forbidden bool   // 被封禁
+	// PasswordChangedAt 是最近一次改密的时刻(unix 秒,通行证的时钟);0 = 从没改过。改密、找回密码、管理员重设都会更新它。
+	PasswordChangedAt int64
+}
+
+// SessionVerdict 判断一次身份令牌签发于 issuedAt(令牌的 iat,通行证的时钟)的登录还认不认:回空串 = 认;
+// 回 PassportSession* 之一 = 不认(登录拒绝、刷新不续期)。
 //
 // 改密时刻与 iat 都取自通行证自己的时钟,不受 login 与通行证之间的时钟偏差影响。两者都只到秒:同一秒里分不出先后,
 // 按改密在后处理(注册不写改密时刻,改完密码再回游戏登录不会落在同一秒,误判的只能是改密那一秒签出的令牌)。
-// issuedAt 为 0(这个字段加上之前签的令牌)当成最早,只要改过密码就不再续期。
-func (a *PassportAdmin) CheckSession(ctx context.Context, sub string, issuedAt int64) (string, error) {
+// issuedAt 为 0(这个字段加上之前签的令牌)当成最早,只要改过密码就不认。
+func (s PassportUserStatus) SessionVerdict(issuedAt int64) string {
+	switch {
+	case s.Gone:
+		return PassportSessionUserGone
+	case s.Forbidden:
+		return PassportSessionUserForbidden
+	case s.PasswordChangedAt > 0 && s.PasswordChangedAt >= issuedAt:
+		return PassportSessionPasswordChanged
+	}
+	return ""
+}
+
+// LookupUser 按用户 id(令牌的 sub)查这名用户的状态。查不到回 Gone,不是错误;核对不了(通行证或网络故障、应答认不出)回错误。
+func (a *PassportAdmin) LookupUser(ctx context.Context, sub string) (PassportUserStatus, error) {
 	user, err := a.findUser(ctx, sub)
 	if err != nil {
-		return "", err
+		return PassportUserStatus{}, err
 	}
-	switch {
-	case user == nil || user.IsDeleted:
-		return PassportSessionUserGone, nil
-	case user.IsForbidden:
-		return PassportSessionUserForbidden, nil
-	case user.LastChangePasswordTime == "":
-		return "", nil
+	if user == nil {
+		return PassportUserStatus{Sub: sub, Gone: true}, nil
 	}
-	changedAt, err := time.Parse(time.RFC3339, user.LastChangePasswordTime)
+	return passportStatusOf(user)
+}
+
+// LookupUserByName 按「组织/用户名」查(通行证回调只点了名字时用,§3.7):查到时 Sub 取应答里的用户 id;查不到回 Gone、Sub 为空。
+// 应答里的组织、用户名与问的对不上、或缺用户 id 时回错误,不拿别人的状态当这名用户的。
+func (a *PassportAdmin) LookupUserByName(ctx context.Context, owner, name string) (PassportUserStatus, error) {
+	user, err := a.getUser(ctx, url.Values{"id": {owner + "/" + name}})
 	if err != nil {
-		return "", fmt.Errorf("%s: get-user lastChangePasswordTime is not RFC 3339: %w", PassportAuthType, ErrProviderUnavailable)
+		return PassportUserStatus{}, err
 	}
-	if changedAt.Unix() >= issuedAt {
-		return PassportSessionPasswordChanged, nil
+	if user == nil {
+		return PassportUserStatus{Gone: true}, nil
 	}
-	return "", nil
+	if user.Owner != owner || user.Name != name || user.Id == "" {
+		return PassportUserStatus{}, fmt.Errorf("%s: get-user returned an unexpected user: %w", PassportAuthType, ErrProviderUnavailable)
+	}
+	return passportStatusOf(user)
+}
+
+// passportStatusOf 把查到的用户换成状态。改密时刻认不出按核对不了回错误:不当成「没改过」(放过盗号者),也不当成「刚改过」(误踢)。
+func passportStatusOf(user *passportUser) (PassportUserStatus, error) {
+	status := PassportUserStatus{Sub: user.Id, Gone: user.IsDeleted, Forbidden: user.IsForbidden}
+	if user.LastChangePasswordTime != "" {
+		changedAt, err := time.Parse(time.RFC3339, user.LastChangePasswordTime)
+		if err != nil {
+			return PassportUserStatus{}, fmt.Errorf("%s: get-user lastChangePasswordTime is not RFC 3339: %w", PassportAuthType, ErrProviderUnavailable)
+		}
+		status.PasswordChangedAt = changedAt.Unix()
+	}
+	return status, nil
 }
 
 // DeleteUser 删掉 sub 对应的通行证用户;用户已经不在回 nil。可以重复调。
@@ -145,7 +185,19 @@ func (a *PassportAdmin) DeleteUser(ctx context.Context, sub string) error {
 
 // findUser 按 sub 取用户;不在回 (nil, nil)。应答里的 id 与 sub 对不上、或缺组织 / 用户名时回错误:宁可删不掉,不删错人。
 func (a *PassportAdmin) findUser(ctx context.Context, sub string) (*passportUser, error) {
-	reply, err := a.call(ctx, http.MethodGet, passportGetUserPath, url.Values{"userId": {sub}}, nil)
+	user, err := a.getUser(ctx, url.Values{"userId": {sub}})
+	if err != nil || user == nil {
+		return nil, err
+	}
+	if user.Id != sub || user.Owner == "" || user.Name == "" {
+		return nil, fmt.Errorf("%s: get-user returned an unexpected user: %w", PassportAuthType, ErrProviderUnavailable)
+	}
+	return user, nil
+}
+
+// getUser 调一次 get-user;data 为 null 回 (nil, nil)。
+func (a *PassportAdmin) getUser(ctx context.Context, query url.Values) (*passportUser, error) {
+	reply, err := a.call(ctx, http.MethodGet, passportGetUserPath, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +205,7 @@ func (a *PassportAdmin) findUser(ctx context.Context, sub string) (*passportUser
 		return nil, nil
 	}
 	var user passportUser
-	if err := json.Unmarshal(reply.Data, &user); err != nil || user.Id != sub || user.Owner == "" || user.Name == "" {
+	if err := json.Unmarshal(reply.Data, &user); err != nil {
 		return nil, fmt.Errorf("%s: get-user returned an unexpected user: %w", PassportAuthType, ErrProviderUnavailable)
 	}
 	return &user, nil

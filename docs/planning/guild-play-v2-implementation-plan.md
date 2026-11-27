@@ -275,3 +275,129 @@
 - [ ] **Step 3: 执行受影响模块与 `game-robot` 门禁测试并登记 `PARITY.md`**
   Run: `./mvnw -B -pl game-battle-engine,game-battle,game-scene,game-match,game-guild,game-robot -am test`
   Expected: 全模块 0 错误、全部测试 PASS。
+
+---
+
+## 帮战追杀令与灵脉结算的数据一致性定案（2026-11-26，数据覆写审计 r2 第 4 轮）
+
+> 状态：代码已落（proto 未生成、未编译、未运行），验证交 Gemini，命令见 §6。审计条目 r2-gw#1～#4，来源 [第 4 轮交接单](../handoff/data-overwrite-audit-r2-round4-handoff-20261126.md)。
+> 涉及：`go/guild/internal/{war/rules.go, data/war_repo.go, data/asset_store.go, logic/war_logic.go, logic/trial_background.go}`、`proto/guild/{guild.proto, guild_db.proto}`。
+
+### 0. 两条事务的完整步骤（读代码前先看这里）
+
+**结算事务 `WarRepo.SettleWarBattle`**（锁序严格单调：G → M → Q → O → C → 灵脉 → 周进度 → 个人态 → 追杀令 → 对局 → 宿敌）：
+
+| 步 | 做什么 | 关键点 |
+|---|---|---|
+| 0 | 幂等预查；**普通读**追杀令行与领赏人当日领赏次数，用 `war.ResolveBounty` 定出本局计划（销单 / 反杀计数 / 撕单 / 不动） | 领赏人当日已满 → 计划改成「不动」，输出 `BountyHeldRecipientID` |
+| 1 | 按 guild_id 升序锁帮会、加资金（含公费档撕单退给发单帮的一半） | 发单帮已解散 → 这一半不退，输出 `BountyIssuerGuildGone` |
+| 2 | 按 (guild, player) 升序锁成员行、加帮贡；撕单退银两时一并锁发布者成员行 | 只作 seq 建行守卫，不要求领赏 / 退款人此刻仍在帮内 |
+| 3 | 战后奖励指令与追杀令转账指令（领赏、撕单退发布者）并成**一个按 player_id 升序的序列**插入 | 指令号事务前预发，用不上就丢弃 |
+| 3b | 占领赏人当日领赏次数（`upsertCounterWithLimit`，此时已持他的 GUILD_CREDIT seq 行） | 第 0 步之后被并发占满 → `ErrWarSettleStale` |
+| 4 | 按 leyline_id 升序**逐行点锁本区全部灵脉**，与算 `BannerDelta` 用的快照逐项比对后写新旗势 | 不符 → `ErrWarSettleStale` |
+| 6 | 个人态；追杀成功时给目标 30 分钟免再挂保护 | 目标必在守方名单里，行已在本步锁住 |
+| 7 | **点锁追杀令**，按锁内的行再调一次 `ResolveBounty`，与第 0 步计划逐字段相同才写 | 不同 → `ErrWarSettleStale`，前面按旧计划做的转账一并回滚 |
+
+`SettleGuildWarResult` 遇 `ErrWarSettleStale` 从头重读重算（含发号、读灵脉快照、算奖励），进程内最多 3 次，仍冲突就返回错误交 Kafka 退避重投。
+
+**到期收尾事务 `WarRepo.ExpireBounty`**（每张一个事务）：G（公费档退资金）→ M（发布者成员行，seq 建行守卫）→ Q → O（银两档退款指令，不持租约、立刻可被重投循环领走）→ 点锁追杀令，复核仍是到期的 ACTIVE 且本金不变 → 置 EXPIRED；复核不过就整笔回滚。候选由 `ListDueBounties` 按 `(expires_at_ms, bounty_id)` 游标翻页普通读（新索引 `status,expires_at_ms`），挂在待入队物品循环上约每分钟一轮、每轮至多 100 张，只收过期超过 15 分钟的单。
+
+### 1. r2-gw#1 开战与结算不核对被击败方（high，成立）
+
+**问题（含触发时序）**
+1. 甲帮发一张全区江湖榜追杀令（银两档 4,500 入托管，状态 2）。任意别帮成员 H 在帮战总览里读到它的 `bounty_id`。
+2. H 调 `StartGuildWarBattle`，`target_kind` 填 LEYLINE_GARRISON（打 AI 守旗阵）或 LIVE_PLAYER / FIELD_PLAYER（打任意别的异帮玩家），请求里带上这个 `bounty_id`。旧代码只有 BOUNTY 分支按追杀令查目标，其余分支把客户端的值原样冻结进 `GuildWarBattleContext.bounty_id`；直打活人只在 `bounty_id == 0` 时才自动挂钩。
+3. H 赢下这一局。结算第 7 步只判「status=2 且未过期」，不比对本局防守方是不是追杀令目标、不比区服与接单资格，直接销单并把托管发给 H。反向同理：两名不同攻方带着这张单故意输两局，追杀令被判「反杀撕单」。
+4. 同一缺口在灵脉上：LIVE_PLAYER 不改写客户端的 `leyline_id`，FIELD_PLAYER 在非灵脉图上也不清零；结算只要 `leyline_id > 0` 就对那座灵脉算旗势，`ApplyBannerImpact` 不核灵脉主人是不是本局防守帮 —— 打赢任意异帮玩家即可削第三方帮会的旗、拿破旗赏金 5,000 银两 + 1,500 帮会资金。连「两个外帮在别人灵脉所在的地图上打架」也会改第三方的旗。
+
+**方案**
+- 开战入口只信服务端推出来的目标信息，判据收在纯函数 `clientWarTargetHints` 一处：`leyline_id` 只在打守旗阵（含一键开战回落到守旗阵）时采信，照常校验、以灵脉主人为防守帮；野外直打按目标所在场景推；直打活人与一键开战选到活人时一律为 0。`bounty_id` 只在追杀榜直打（BOUNTY）时采信；直打活人一律丢弃客户端值，只由服务端按目标自动挂钩；守旗阵与一键开战一律为 0。
+- 「这张单此刻能不能由这个帮接」收在 `war.BountyHuntable` 一处：同区、ACTIVE 未过期、全区江湖榜或本帮发的单。追杀榜直打、自动挂钩、追踪行踪与结算第 7 步共用。追杀榜直打的防守帮按目标**此刻**所在的帮记，不按单上的旧帮。
+- 结算第 7 步在追杀令行锁内再核（`war.ResolveBounty`）：本局是追杀局、区服一致、攻方帮有接单资格、status=2 且按对局结束时刻未过期、**本局守方真人首人就是 `TargetPlayerId`**（追杀局的守方就是目标本人）；任一不满足就不动追杀令，这一局的其余结算照常。
+- 灵脉旗势只在「本局防守帮就是灵脉此刻的主人」时才变（无主灵脉 = 打灵脉守卫，防守帮为 0）。
+
+**为什么这样选**：开战上下文由 guild 自己签名发给 match、原样随结算消息回来，它可信的前提是写进去的值本身是服务端推出来的。所以修在两头：入口只放行服务端推出的号，结算在锁内按本局事实再判一次。判定写成纯函数，入口、追踪与结算三处同源，单测不连库就能穷举。
+
+**被否决的做法**
+- **只在开战入口校验**：追杀令在开战与结算之间会变（被别人结单、到期、撕单、扣款作废），入口那一刻成立不代表结算时成立；结算必须在追杀令行锁内再核。
+- **结算时信任上下文里的 bounty_id、只补状态校验**：上下文里的号正是要防的输入，不比对被击败方就等于没校验。
+- **旗势按「攻方是否赢」无条件结算**：两个外帮在第三方灵脉上的私斗会改写第三方的旗，与策划「攻方真人击败占领帮在线守军才扣旗」不符。
+
+**代价与边界**：客户端发来的 `leyline_id` / `bounty_id` 在非对应分支被静默丢弃（不报错），客户端不必改。合服后旧区的追杀令按区服不符不可接单，到期原路退回。野外直打挂钩时若目标正好在灵脉图上，本局既结追杀令也按灵脉规则动旗（前提仍是目标帮就是灵脉主人）。
+
+### 2. r2-gw#2 追杀令托管只进不出（high，成立）
+
+**问题（含触发时序）**
+- A（确定性）：全仓对 `guild_war_bounty` 的写只有建单 INSERT、结算第 7 步 UPDATE、扣款终结（1→2）三处，没有到期处理；24 小时没人结单，托管永远留在表里，策划要求的「到期原路退回」没有实现。
+- B（确定性）：撕单只给目标发一半，另一半没有退给发布者。
+- C（要故障）：结算事务先把追杀令置 COMPLETED / TORN、写下对局幂等行并提交，赏金指令在事务外另起一笔；这时发号失败、建指令出错、进程在两步之间崩溃都被吞掉，Kafka 重投走「已幂等结算」直接返回，赏金再也不发。
+- D（确定性）：事务外那一笔在领赏人已离帮时静默不发；当日满 5 次时 `AllocateSeq` 已推进 seq 却不插指令就提交。追杀令已销单，托管既不给猎手也不退发布者。
+
+**方案**
+- 赏金与退款指令并进 `SettleWarBattle` 同一事务（第 3 步与战后奖励指令合成一个按 player_id 升序的序列），删掉事务外的 `EnqueueBountyPayout`。有挂钩追杀令时事务前预发两枚指令号（领赏 / 撕单退发布者），用不上的丢弃；发号失败整笔返回错误交 Kafka 重投。领赏与退款都不要求领赏人此刻仍在帮内（与战后奖励一致，钱是他本人的）。
+- 撕单：同事务置 TORN，托管的一半（向下取整）给目标，其余退发布者 —— 银两档退扣税后托管的另一半银两给发布者本人；公费档的赏金池是系统配给的、不是谁出的，退的是**发单帮实付帮会资金的一半**，直接在 SQL 里加 `funds`，帮会已解散就跳过并打日志。
+- 公费档实付资金写进单上的新列 `escrow_guild_funds`（`GuildWarBountyRecord` 字段 18），到期与撕单都按它退，不按退款那一刻的配表。
+- 每日领赏上限在改追杀令之前判：领赏人当日已满就**整笔不转移** —— 追杀令保持 ACTIVE、反杀数不加、托管不动，本局其余结算照常，打一条英文日志（含 bounty_id；player_id 只进日志，不进指标 label）。
+- 到期收尾：status=2 且过期超过 15 分钟的追杀令置 EXPIRED 并原路退回（银两档给发布者插 GUILD_CREDIT，交易类型复用 `TX_GUILD_BOUNTY_PAYOUT` —— 它本来就登记了「过期本金退还」，scene 资产通道白名单已放行；公费档退帮会资金）。每张一个事务，行锁 + 状态复核，多副本并发也只退一次。status=1（扣款尚未终结）的不动，扣款终结成 ACTIVE 之后的下一轮再处理。
+- 扣款失败（预扣被拒 / 中止 / 放弃）改置新终态 `GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED = 6`；`EXPIRED = 5` 只表示「到期且托管已原路退回」。
+- 到期收尾挂在待入队物品循环上（与合服榜折叠同理，借它的节拍与排空接入），按轮数折成约每分钟一轮，每轮至多 100 张，按游标翻页。
+
+**为什么这样选**
+- 同事务插指令是战后奖励、里程碑、分红已经在用的标准做法：状态变更与转账一起提交、一起回滚，没有中间态，Kafka 重投由对局幂等闸门兜住。
+- 锁序上追杀令排在 seq / 指令 / 计数行之后，转账指令却要先插。做法是「普通读定计划 → 按锁序加锁做转账 → 到追杀令的位置点锁、按锁内的行重算一遍、与计划逐字段比对」，与 `ClaimDividend`「先按估算预留指令、锁内实算不同即回滚」同一模式，不需要任何锁序例外。
+- 满上限时整笔不转移，是唯一既不让发布者白拿回本金、也不销毁玩家钱的处理；追杀令继续挂着，留给其他猎手或次日再领，最终没人结单就到期原路退回。
+- 公费档按实付资金的一半退：撕单时目标拿系统赏金池的一半，发单帮退回实付的一半，「资金换赏金」的比例与销单时相同，撕单不会让发单帮倒赚。
+- 到期收尾的 15 分钟宽限：结算按对局结束时刻判到期，结束在到期之前、结算消息晚到（消费者退避重投到转死信约 7.5 分钟）的那一局要先落定，否则猎手赢了却被退款抢先；多等一刻钟只推迟退款，不改金额。
+- 游标翻页而不是每轮只取最老一页：某张单的退款一时进不了队（发布者未决指令已满）会留在原处，不能挡住排在后面的单。
+
+**被否决的做法**
+- **赏金在事务外入账、另加补偿扫描**：多一条要维护的链路，还要能区分「已发 / 没发 / 发了一半」；同事务插指令是战后奖励已经在用的标准做法。
+- **满上限照样结单并把托管退给发布者**：发布者白拿回本金，猎手白打，等于给了发布者一条「找满次的人来结单」的免费撤单通道。
+- **满上限照样结单并没收托管**：销毁玩家的钱。
+- **读路径惰性过期退款**（像约战战书那样在总览里顺手收口）：没人打开总览就永远不退；读路径也不该带资产副作用。
+- **另起一个到期收尾循环**：要新增循环活性点位与告警；待入队物品循环本来就每个 stable 副本无条件跑、带排空接入，挂上去零新增基础设施。
+- **公费档撕单把赏金池另一半银两折成帮会资金退回**：赏金池是系统配给的，退它等于凭空造资金（发单花 2,000 资金、撕单退回 3,000），可被双开刷。
+- **退款时按当时的配表重算公费档金额**：配表热更会让退款多退或少退；实付额必须记在单上。
+- **扣款失败与到期退回共用 EXPIRED**：同一个状态既表示「退过了」又表示「根本没扣成」，审计时会去找一笔不存在的退款。
+
+**代价与边界**：新增一列一个索引（schemamigrate 不给已存在的表补索引，本地库要重建 `guild_war_bounty`；项目未上线，可清表）。`guild.proto` 枚举追加一个值，客户端要重新生成（客户端 `BountyStatusLabel` 可补「扣款未成已作废」，列表本来只显示状态 1/2）。到期退款最晚在到期后约 16 分钟发出。发布者 GUILD_CREDIT 未决指令已满（16 条）时这张单的退款顺延到游标转回来再试。领赏 / 退款指令被 scene 拒收（REJECTED / ABANDONED）时与其它纯入账指令一样只留审计、不回滚追杀令（既有口径）。
+
+### 3. r2-gw#3 灵脉旗势事务外读、事务内按绝对值盲写（medium，成立）
+
+**问题（含触发时序）**：结果 topic `match-results` 的 key 是 `battle_id`（`go/match/internal/svc/servicecontext.go` 的 `publishResult`），同一座灵脉上的几局落在不同分区；guild 默认 2 副本（`deploy/k8s/manifests/go-svc/guild.yaml`）同在消费组 `guild-trial`，各自消费分到的分区（单进程内经 `serial` 串行，跨副本并发）。两场同一灵脉的结算几乎同时到达两个副本：两边都在事务外 `ListLeylines` 读到同一份旗势、各自算出结果（旗势够低时两边都算出破旗），两个事务的幂等键各不相同，都执行 `UPDATE … SET owner_guild_id=?, banner_hp=?, shield_until_ms=?` 写算好的绝对值。结果：先提交的扣减被覆盖；两场的首位胜者各拿一次破旗银两 5,000、攻方帮各拿一次 1,500 资金；「每帮限占 1 座」的判定也来自事务外读，两场不同灵脉的破旗并发时一帮能同时占两座。解散帮会释放灵脉（owner 置 0）与结算并发时，结算还可能把已解散的帮写回主人。
+
+**方案**：事务外读照旧（奖励依赖旗势结果，规则计算留在 logic）。`BannerDelta` 记下算它时的快照（`OwnerBefore` / `HPBefore` / `ShieldUntilBefore` / `AttackerOwnsOther`）；结算事务第 4 步按 leyline_id 升序**逐行主键点锁本区全部灵脉**（锁序位置不变），用 `war.FindLeylineBasis` 在锁内重新取出目标灵脉与「攻方是否已占别的灵脉」，经 `BannerDelta.BasisHolds` 逐项比对；任一项不同就回 `ErrWarSettleStale`，整笔回滚。`SettleGuildWarResult` 遇它整笔重读重算，进程内最多 3 次，仍冲突就返回错误交 Kafka 重投。不改 Kafka key。
+
+**为什么这样选**：标准的乐观并发 —— 读快照、带着快照去提交、提交点在锁内比对。锁本区全部三行而不只是目标灵脉，是为了把「攻方是否已占别的灵脉」也纳入同一把锁：两场分别拿下两座灵脉的结算会在锁上串行，后到者看到攻方已占一座 → 冲突重算 → 只破旗不兼并。点锁按固定升序，所有结算者同序取锁，只排队不成环；主键等值点锁符合本库「锁定语句只做完整主键点操作」的纪律（TiDB 走 Point_Get）。
+
+**被否决的做法**
+- **灵脉按区串行消费 / 把 Kafka key 改成 zone**：违反 AGENTS §7「topic key = 业务实体 ID」；`match-results` 还被 match 评分等别的消费组读，改 key 牵连全部消费者；还会把全区结算压到一个分区上。
+- **在锁内重算全部奖励**：旗势结果决定破旗赏金、帮会资金与结算页展示，锁内重算等于把规则计算搬进数据层，两处各有一份规则。
+- **把 UPDATE 改成带旧值条件的 CAS**（`WHERE banner_hp = ?`）：只能护住目标灵脉一行，护不住「每帮限占 1 座」那条跨行不变量；带复核谓词的写在 TiDB 上还要先补主键点锁。
+- **用 `ErrWriteConflict` 表示快照过时**：它同时表示锁等待超时，那种情况进程内立刻重算只会再撞一次，交给 Kafka 退避更合适；专用的 `ErrWarSettleStale` 只在「重读就能成功」时触发进程内重试。
+
+**代价与边界**：同一区的灵脉结算在三行锁上串行，冲突时多一次重读重算（同时收官的局数有限，3 次之内基本都能落定）。护盾期内（旗势不变）的局也要锁三行、比快照。
+
+### 4. r2-gw#4 发号失败用墙钟自造持久 ID（low，成立）
+
+**问题（含触发时序）**：发号器暂时取不到号时，`PostGuildWarBounty` 保留 `UnixNano` 当 `bounty_id`，`IssueGuildWarFeud` 用毫秒时间戳当 `feud_id`，`StartGuildWarBattle` 客户端不带 `client_request_id` 时开战请求号也是 `UnixNano`。它们与发号器打散后的 63 位号同处一个值域，违反 AGENTS §7 第 1 条。后果有界（INSERT 撞键只会让这一次失败），所以评 low。
+
+**方案**：三处发号失败一律回 `ErrIDGenUnavailable`（复用现有 tip，不新增）。客户端没带 `client_request_id` 时用帮战发号器（与 op_id 同一个）现发一个。
+
+**为什么这样选 / 被否决的做法**：同文件里 op_id 早已是「发不出号就整体失败」；墙钟回退被否决，理由就是不变量本身（值域重叠、多副本同一纳秒相撞、排障时分不清来源）。
+
+**代价与边界**：发号器不可用期间发追杀令、下约战书、不带请求号的开战都会失败并提示稍后再试。
+
+### 5. 顺带收口
+
+- `GuildWarBountyRecord` 的全部读路径改用同一份列清单 `guildWarBountyColumns` 与 `scanBountyRow`（与约战的 `scanFeudRow` 同形），加列只改两处；不连库的 `TestGuildWarBountyColumnsCoverEveryProtoField` 守列序。
+- 结算事务被 1213 整段重跑时，第 7 步改过的两列（`bounty_outcome_tag` / `jackpot_silver`）与输出都从原值重来，不再重复累加。
+- 结算时读灵脉快照失败改为返回错误交重投，不再静默跳过这一局的旗势变化。
+
+### 6. 给 Gemini 的验证
+
+1. 生成（仓库根目录）：`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。`guild.proto` 是客户端可见协议，按 AGENTS §4 在 `D:\luyuan\mmorpg-client` 跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`。
+2. 编译与静态检查：`cd go/guild; go build ./...; go vet ./...`；仓库根目录 `python tools/scripts/check_log_text_english.py`。
+3. 纯单测：`cd go/guild; go test ./internal/war/... ./internal/logic/... -count=1`（重点 `TestBountyHuntable*`、`TestResolveBounty*`、`TestBountyExpiryRefund*`、`TestBannerDeltaBasisHolds*`、`TestClientWarTargetHints*`、`TestWarBountyExpiryEveryRounds*`）。
+4. 真库：设 `GUILD_TEST_MYSQL_DSN`（库名 `guild_test`），`cd go/guild; go test ./internal/data -run "GuildWarBounty|SettleWarBattle_|ExpireBounty_" -count=1 -v`，全部 PASS、不得 SKIP；再跑 `go test ./internal/data -count=1` 全包。
+5. 已有本地库：schemamigrate 不给已存在的 `guild_war_bounty` 补新索引，重建这张表（未上线，可清）。

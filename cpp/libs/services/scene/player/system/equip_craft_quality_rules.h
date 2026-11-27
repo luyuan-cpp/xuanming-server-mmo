@@ -295,6 +295,10 @@ inline constexpr uint32_t kScrollMilestoneHalfRewardFragments = 20;
 inline constexpr uint32_t kScrollMilestoneFullRewardFragments = 40;
 inline constexpr uint32_t kMaxBatchDismantleCount = 20;
 
+// 未学书架(PlayerCraftComp.skill_books)同时至多存的本数(r2-craft#2):存档里的集合要有上界(每行 1 MiB、每次整行重写)。
+// 100 = 95 项永久技能各一本还有余量;满了先研习、拆页或封卷。加书的三处(制书、开卷、揭榜送书)都在副作用之前判。
+inline constexpr uint32_t kMaxBookshelfBooks = 100;
+
 inline constexpr uint32_t ScrollHalfThreshold(uint32_t totalSkills) {
     return totalSkills == 0 ? 0u : (totalSkills + 1u) / 2u;
 }

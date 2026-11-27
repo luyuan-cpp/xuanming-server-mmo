@@ -34,7 +34,7 @@ export function awaitsAnotherApprover(command: ApprovalView | null | undefined):
 export const APPROVAL_STATUS_LABELS: Record<string, string> = { DECLINED: '已驳回', APPROVED: '已批准' };
 export const APPROVAL_STATUS_COLORS: Record<string, string> = { DECLINED: 'default', APPROVED: 'success' };
 
-export type DeclinableKind = 'mail' | 'system-mail' | 'mail-campaigns' | 'player-commands' | 'trade-manual';
+export type DeclinableKind = 'mail' | 'system-mail' | 'mail-campaigns' | 'player-commands' | 'trade-manual' | 'ops';
 
 /** 驳回一条还没放行的申请；发起人用它撤回自己的申请。返回驳回后的命令视图。 */
 export function declineCommand<T extends ApprovalView>(kind: DeclinableKind, commandId: string, reason: string): Promise<T> {
@@ -45,5 +45,6 @@ export function declineCommand<T extends ApprovalView>(kind: DeclinableKind, com
       : kind === 'trade-manual'
         ? `/gm/trade/manual/commands/${id}`
         : `/gm/${kind}/commands/${id}`;
+  // 'ops' 落在最后一支:/gm/ops/commands/{id}/decline(GmOpsController)。
   return defHttp.post<T>({ url: `${base}/decline`, data: { reason } }, requestOptions);
 }

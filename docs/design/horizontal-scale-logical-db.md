@@ -57,7 +57,7 @@
 - 维护排空(`maintenance_drain.ps1`、`go/db/internal/maintenancephase`)逐逻辑库做:一个 run 只管一个库。进程持多份写资格时,run 绑 Plan 指的那一份;进程退出后,其余库各按非 run 的 RETIRE 退休(`Catalog.Retire` 在那些库没有 run 时允许)。
 - 闸门被冻结时返回可区分的错误 `authoritysql.ErrWriterFrozen`(包住 `ErrWriterDenied`),RPC 层映射成可重试的 `Unavailable`。资格不符仍是 `ErrWriterDenied`。
 
-**启动形状**:`MMORPG_SQL_WRITER_GRANT_FILE` 指向的文件是一个 boot 的写资格集合(`sql_writer_boot_grant_set`,每个逻辑库一份),环境变量和挂载路径不变。名册(`SQL_WRITER_BOOT_ROSTER_V2`,2026-11-10 起)的一条 entry 是一个槽位,下标就是 StatefulSet 序号:`requests` 里每个逻辑库一份 REGISTER 模板,账号固定、身份留空。每次启动是这个槽位的一代,`writer_authority` 现场生成 writer 身份,在每个库各注册一份,新一代在注册事务里原子退休上一代([写者名册换代](writer-roster-exhaustion-20261106.md) §5)。注册、维护账号的连接串按 Request / Plan 的逻辑库改库名(`DSNForSchema`),同集群的库共用一条;库放到别的集群时地址按映射给(环境变量 `MMORPG_DB_PLACEMENT`,§8.1),连接串里的账号在目标集群提前建好。物理身份摘要 `MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256` 按部署一份,不按集群,搬库不换。
+**启动形状**:`MMORPG_SQL_WRITER_GRANT_FILE` 指向的文件是一个 boot 的写资格集合(`sql_writer_boot_grant_set`,每个逻辑库一份),环境变量和挂载路径不变。名册(`SQL_WRITER_BOOT_ROSTER_V2`,2026-11-10 起)的一条 entry 是一个槽位,下标就是 StatefulSet 序号:`requests` 里每个逻辑库一份 REGISTER 模板,账号固定、身份留空。每次启动是这个槽位的一代,`writer_authority` 现场生成 writer 身份,在每个库各注册一份,新一代在注册事务里原子退休上一代([写者名册换代](writer-roster-exhaustion-20261106.md) §5)。注册、维护账号的连接串按 Request / Plan 的逻辑库改库名(`DSNForSchema`),同集群的库共用一条;库放到别的集群时地址按映射给(环境变量 `MMORPG_DB_PLACEMENT`,§8.1),连接串里的账号在目标集群提前建好。物理身份摘要 `MMORPG_SQL_PHYSICAL_AUTHORITY_SHA256` 按部署一份,不按集群,搬库不换。注册时连不上的库这一代跳过(2026-11-27,[启动期故障隔离](./data-service-startup-isolation.md) §7):grant 集合只覆盖注册成功的库,写多个库的 data_service、go/db 接受这样的子集(多出来的照旧拒启),缺的库这一代关着、Pod 不就绪,集群恢复之后重建 Pod 补齐。
 
 **冻结映射**:
 
@@ -486,6 +486,16 @@ func DirectoryDBName(base string, slot, k int) string // K=1 是 base,否则 <ba
   被否决的做法:首次数成才注册 gauge,没数成时序列不存在,`> 0` 的规则照样不响,还得另配一条「序列不存在」的规则,而数成过又失败的那种仍停在旧值;
   给数失败单独计数,循环整个停住时计数不涨,报不出来。一个时刻盖住「从没数成、数成过又失败、循环停了」三种。
   代价:后台清理走 RELAY 门禁,维护排空期间不跑,排空超过 20 分钟时保留 ref 那一支会响,告警文案写明属预期。
+- **判陈旧写墓碑之前的证据够不够(2026-11-26 复核两条早期残余)**:
+  - 「同一角色挂在别的账号上的 ref 只扫本账号片查不到」已由 2026-11-12 收掉:找证据时按 `idx_account_role_ref_player` 逐片点查这名角色在各账号片上的 ref,
+    任一片读失败整次报错,有 ACTIVE 就保留(`committedEvidenceRefActive`)。
+  - 「分不出建成了、从没进过场、绑定也没做完的角色」复核后不改代码。整体回档到 T(手册 §4.0 的缺省做法)时,玩家片里没有提交点就是
+    「在 T 之后才提交」,按回档到 T 的语义它本来就该丢,写墓碑、放名字是对的;多集群各自恢复时,时钟偏差只让贴着 T 的几毫秒内哪边算
+    「之前」不确定,任何一种都是一致的切面,而提交之后的激活一旦落在另一边,就成了 ACTIVE ref 证据、照样保留交人。
+    剩下的只有单库回档(手册 §4.1a,本来就要人工核账):回档点正好落在一次建角的路由行与提交点之间,提交之后的激活与绑定又都失败,
+    而且从没进过场,三件同时发生。为它要记一个回档窗口(新表、回档步骤、两条自动路径都读)不值:影响是一名刚建、没玩过的角色,
+    玩家可以重建;单库回档的手册步骤已要求起服之前人工核账。被否决的做法:按玩家片「最近一次写入的时刻」猜它有没有被回档,
+    安静的分片(测试环境、开服初期)会把正常放弃的建角都标成保留,告警成了噪音。
 - **标保留为什么看受影响行数**。连接不带 `clientFoundRows`(名字登记靠它判 no-op,有用例钉住),受影响行数就是实际改动的行数;
   `held_ms` 取毫秒时钟,标上了必然改动这一行。所以 0 行只可能是读完之后 ref 被改写,它已不是残留。
 
@@ -757,7 +767,7 @@ data_service 按 `storage_id` 持有存档库连接池(`Directory.StoragePools`,
 | FX3 | 一轮独立评审的修复:复制流身份、目标账号锁定、REGISTER 不绑 epoch、`IsWriterFrozen` 和后台循环不打 HOLD、账号授权和目标集群预检、`admission_recover` 守闸门、启动路径扛冻结、`writer_frozen_seconds`、audit 复用目标位置、翻转标记、默认集群持久化、admin 连接串核对 | 已写完,未编译,待 Gemini 验证。serverbase 的排空判定不在这批 |
 | R1 | 评审,文档,验证清单 | 已完成。三路评审 26 条全部修复,排空判定的最后一处(闸门冻结确定没写不 Hold、`ResourceExhausted`)在主会话改完。修复本身没有再评审 |
 | B1 | `data_service` 按逻辑库建连熔断(`shared/authoritysql.WithConnectGate`)、关服务端与 14 个调用方 zrpc 按方法熔断(`shared/dsclient.Conf`),防止单分片失联连坐健康库([设计稿](./data-service-breaker-per-logical-db.md)) | 已写完,未编译,待 Gemini 验证 |
-| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;写者注册层是批 2([设计稿](./data-service-startup-isolation.md)) | 批 1 已写完,未编译,待 Gemini 验证;批 2 待负责人同意 |
+| S1 | `data_service` 启动期故障隔离:目录各片与流水库按需核对,一个集群连不上时照样启动、服务健康库;批 2 写者注册跳过连不上的库,data_service、go/db 接受写资格子集,缺的库关着、Pod 不就绪([设计稿](./data-service-startup-isolation.md)) | 两批都已写完,未编译,待 Gemini 验证 |
 
 G1 落地后、F1~D1 落地前的过渡状态(D1 已写完,这段结束):闸门已按库拆开,但跨库 SQL 还在。data_service 的建角初始行和判死还在目录事务里写存档库,这些写只受目录库闸门保护,不受落点库闸门保护;go/db 选库还跨库读 `player_route`,库名来自配置 `Placement.RouteSchema`。这些都要求全部库还在一个集群,所以 F1~D1 落地之前不能真的搬库。
 

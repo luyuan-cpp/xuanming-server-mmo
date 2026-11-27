@@ -17,6 +17,8 @@
 
 ## 1. 客户端（`D:\luyuan\mmorpg-client`）
 
+> **状态（11-26 晚，会话「11-12 残余收口各批的独立评审」）**：本节三项都已落码，未编译。1.1 按含义拆开 2005（没有用 2007，原因见 `client-request-ordering.md` §6.2）；1.2 补了四条真 TCP 用例（`EnterGameRoleSwitchFlowTests`），选角页回选次数上限在完整登录管线里，没补；1.3 三项都改了。命令见 PROGRESS 2026-11-26「交接单第 1 节与第 4 节第 2~4 条」。
+
 ### 1.1 同一角色重发 EnterGame 收到 2005 一律按「前一次还在进行」处理
 
 - **现状**：`GameClient.RoleSwitch.cs` 的 `ClassifyEnterGameReply` 里，重发、目标角色就是本连接绑着的那个、码是 2005 时回 `InProgress`，接着等进场通知。
@@ -50,6 +52,11 @@
 
 ## 2. 修复身份
 
+> **2026-11-26 晚：代码已改完，Gemini 只验证**（会话「交接单里的代码改动清零与方案入档」，Opus 5.5，未编译）。设计记录在 `docs/design/data-consistency-guarantee-map-20261020.md` §6.8，列级定案在 `docs/design/tidb-phase1-and-launch-readiness.md` §2.6。
+> - dbmove：设了 `MMORPG_SQL_REPAIR_PRINCIPAL` 时 `plan` 核修复账号在目标上存在，`cutover` 冻结之前比它在这个库上的授权；**都只打 WARNING、不拦搬库**（`tools/dbmove/mover.go` 的 `reportRepairPrincipal`、`side.go` 的 `hasGrantsOn`、`main.go` 的环境变量）。验证：`cd tools/dbmove && gofmt -l . && go vet ./... && go test -count=1 ./...`，新用例 `TestPlanWarnsWhenRepairPrincipalIsMissingOnTargetButGoesOn`、`TestPlanSkipsRepairPrincipalWithoutGrantsOnThisDatabase`、`TestPlanNotesWhenRepairPrincipalIsUnset`、`TestCutoverWarnsOnMissingRepairGrantsButStillFlips`、`TestCutoverIsQuietWhenRepairGrantsMatch` 都要 PASS。
+> - 开片 / 开库后的提醒：go/db `cmd/migrate -command up` 在这次建了表时打一行 `Reminder: repair principal grants are table-level …`；data_service `-migrate` 每次都打（它不回报建了什么）。**不做成自动执行**：GRANT 要管理员账号，部署与迁移都不经手数据库管理口令。验证：`cd go/db && go build ./cmd/migrate && go vet ./cmd/migrate`，`cd go/data_service && go build . && go vet .`（`data_service.go` 顺带改正了 HEAD 里一处 import 顺序，`gofmt -l` 应无输出）。
+> - 列级权限：TiDB 文档写明 v8.5.6 起才支持，本项目钉 v8.5.5，**现在保持表级授权**；要收紧须先由负责人批准把 TiDB 升到 ≥ v8.5.6。Gemini 按 tidb-phase1 §2.6 的步骤在一次性 TiDB v8.5.5 上核一次现钉版本的真实表现，结果只写 PROGRESS，不改代码。
+
 - **dbmove 的 plan 不核修复账号**：搬目录片或存档库之后，目标集群要有修复账号和授权。现在只在手册里写了要自己建（`docs/ops/db-move-runbook.md` 第 3 条）。做法：`plan` 多核一项「目标集群上修复主体存在、授权与 `maintenance_drain.ps1 render-repair-role` 渲染的一致」，不一致只报告、不拦搬库（修复账号平时锁着，漏建只会让两个修复工具连不上）。
 - **新开目录片或存档库之后要重跑授权**：开服手册第 3 步是人工步骤。做法：开片 / 开库的脚本结束时打印一行提醒并给出 `render-repair-role` 的命令；要不要自动执行由负责人定（自动执行意味着部署脚本要经手 GRANT）。
 - **列级收紧**：TiDB 的列级权限行为没在真库核过，先核再定。核法：建一张表，`GRANT UPDATE(col_a) ON …`，用该账号改 `col_b` 应被 1143 拒绝。
@@ -68,6 +75,8 @@
 
 ## 4. 早期各批没人认领的 4 条（「数据覆写审计 R2 交接」会话 11-26 清点）
 
+> **状态（11-26 晚）**：第 2 条已落码（未编译），第 3 条复核后不改代码，第 4 条 11-12 已收，见 r2 审计文档 §6 各条后面的状态；第 1 条归另一会话。
+
 每条的出处、现象和已核过的代码位置，在 `docs/design/data-overwrite-rollback-audit-r2-20261019.md` §6「2026-11-26 清点」。先逐条复核，成立再改；修完在那一段每条后面标状态，在 §1「仍开着」里划掉，PROGRESS 写命令。
 
 1. **人工终结的见证不比 attempts**（`go/shared/assetop/manual_evidence.go`）：只比租约与发送时刻。副本间时钟偏差超过 30 分钟时，可能把仍在投的行判成已静默。设计记录写进 `exploit_loss_prevention_zh.md` 或资产人工终结所在的设计稿。
@@ -78,6 +87,8 @@
 第 3、4 条的现行判据在 `go/data_service/internal/store/account_role_ref.go`（`reapRef`、`committedEvidence`）与 `create_residual*.go`，设计记录写进 `guild-phase2/03-names.md` §3.4a 与 `horizontal-scale-logical-db.md`「标了保留的建角 ref」一段，手册同步 `docs/ops/mysql-backup-pitr-runbook.md` §4.1a。
 
 ## 5. 顺带看到、没动的
+
+> **2026-11-26 晚：第一条已改**（只改文档）：`kafka-topic-retention-strategy.md` 里 DBTask 与 `db_task_zone_*` 的行、表与段落按「2026-10-30 已退役」改正文。第二条是别的会话的文件，照旧不碰（`data_service.go` 的 import 顺序随本会话 §2 的改动一起改了）。
 
 - `docs/design/kafka-topic-retention-strategy.md` 第 2 节 `db_task_zone_<zone>` 一行和第 3 节的 DBTask 档位：代码里已不再声明这类 topic（只剩测试里的样例名），文档像是过时了，要对照「玩家存档直写 TiDB」那条线确认后改正文。
 - `gofmt -l go/data_service/internal` 列出 `svc/directory_events.go`、`svc/servicecontext.go`、`store/audit_retention_test.go`、`store/schema.go`：别的会话的文件，格式没对齐。

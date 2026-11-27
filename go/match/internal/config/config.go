@@ -145,7 +145,9 @@ type Config struct {
 	// svc.NewDataServiceClient 对 NonBlock=false 记错误日志并强制改为 true。
 	// optional:没配任何目标时不建客户端,号段装配(svc.NewBattleIDSegment)随之拒绝启动。
 	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
-	// FriendRpc / ChatRpc / GuildRpc / MailRpc 用于江湖恩怨与天墉生死状一期跨服务只读校验、系统播报、帮派归属查询与离线退费邮件（可选 NonBlock）。
+	// FriendRpc / ChatRpc / GuildRpc 用于江湖恩怨与天墉生死状一期跨服务只读校验、系统播报、帮派归属查询（可选 NonBlock）。
+	// MailRpc / MailSecretEnv 只用于群仙问道赛领奖邮件(sender_kind 6;生死状退费 2026-11-26 起只由 scene 退,不再发信);
+	// 非 dev / test 档开着锦标赛却没配这两项,svc 启动即拒。
 	FriendRpc     zrpc.RpcClientConf `json:",optional"`
 	ChatRpc       zrpc.RpcClientConf `json:",optional"`
 	GuildRpc      zrpc.RpcClientConf `json:",optional"`

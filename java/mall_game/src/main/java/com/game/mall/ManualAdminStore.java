@@ -44,7 +44,7 @@ public class ManualAdminStore {
     private static final String TXN_PATTERN = "[A-Za-z0-9_-]{1,128}";
     private static final Set<String> ORDER_ACTIONS = Set.of("RETRY_REVERSAL", "MARK_REVERSED", "MARK_DELIVERED", "CREATE_REFUND");
     private static final Set<String> REFUND_ACTIONS = Set.of("RETRY_REFUND", "MARK_REFUNDED", "MARK_REVOKED");
-    private static final Set<String> CONSIGNMENT_ACTIONS = Set.of("RETURN_TO_SELLER", "UNFREEZE_INCOME", "FORFEIT_INCOME");
+    private static final Set<String> CONSIGNMENT_ACTIONS = Set.of("RETRY_DELIVERY", "RETURN_TO_SELLER", "UNFREEZE_INCOME", "FORFEIT_INCOME");
     private static final Set<String> DISPUTE_ACTIONS = Set.of("FREEZE_DISPUTE", "RELEASE_DISPUTE");
     private static final String CASE_ID_PATTERN = "[A-Za-z0-9_-]{3,64}";
 
@@ -406,11 +406,46 @@ public class ManualAdminStore {
             long now = clock.millis();
             String resultingState;
             switch (in.action()) {
+                case "RETRY_DELIVERY" -> {
+                    // 付款仍 PAID、交付没有结局:商城不猜结局,把交付待办放回 PENDING,由 trade 按合同现状重新回执(jubaozhai-market.md §16.1)。
+                    // MANUAL 是 trade 报来的转人工(带一张 MANUAL 回执);REVOKED 是撤款时商城自己拦下的(没有回执),之后撤款又被撤回。
+                    if (currentOrderId == null || lockedOrderStatus == null || lockedOrderStatus != 7) {
+                        throw new CommerceException(409, "consignment order is not in MANUAL state");
+                    }
+                    if (!PaymentRevisionStore.PAID.equals(boundPaymentFact(currentOrderId))) {
+                        throw new CommerceException(409, "bound payment is revoked; use RETURN_TO_SELLER");
+                    }
+                    var intents = jdbc.queryForList("SELECT status FROM commerce_delivery_intent WHERE order_sn=? FOR UPDATE", currentOrderId);
+                    String intentStatus = intents.size() == 1 ? (String) intents.getFirst().get("status") : null;
+                    if (!"MANUAL".equals(intentStatus) && !"REVOKED".equals(intentStatus)) {
+                        throw new CommerceException(409, "consignment delivery intent is neither MANUAL nor REVOKED");
+                    }
+                    // 交付回执按订单只认一张:不清掉 MANUAL 回执,trade 之后的 DELIVERED / REFUND_PENDING 回执会 409。
+                    int clearedReceipts = jdbc.update("DELETE FROM commerce_delivery_receipt WHERE order_sn=? AND state='MANUAL'", currentOrderId);
+                    if (clearedReceipts != ("MANUAL".equals(intentStatus) ? 1 : 0)
+                        || !jdbc.queryForList("SELECT state FROM commerce_delivery_receipt WHERE order_sn=?", currentOrderId).isEmpty()) {
+                        throw new CommerceException(503, "consignment delivery receipt does not match its delivery intent");
+                    }
+                    if (jdbc.update("UPDATE commerce_delivery_intent SET status='PENDING' WHERE order_sn=? AND status=?", currentOrderId, intentStatus) != 1) {
+                        throw new CommerceException(409, "delivery intent state changed concurrently");
+                    }
+                    if (jdbc.update("UPDATE oms_order SET status=1 WHERE order_sn=? AND status=7", currentOrderId) != 1) {
+                        throw new CommerceException(409, "order state changed concurrently");
+                    }
+                    if (jdbc.update("UPDATE commerce_consignment SET state='SOLD' WHERE listing_id=? AND state='MANUAL'", in.listingId()) != 1) {
+                        throw new CommerceException(409, "consignment state changed concurrently");
+                    }
+                    resultingState = "SOLD";
+                }
                 case "RETURN_TO_SELLER" -> {
                     if (currentOrderId != null) {
                         var incomes = jdbc.queryForList("SELECT order_sn FROM commerce_seller_income WHERE order_sn=?", currentOrderId);
                         if (!incomes.isEmpty()) {
                             throw new CommerceException(409, "asset already delivered and seller income recorded; use UNFREEZE_INCOME or FORFEIT_INCOME");
+                        }
+                        // 付款仍 PAID 时退回托管就是收了买家的钱既不交付也不退款:只在渠道已撤销付款(钱已回到买家)时放行。
+                        if (!PaymentRevisionStore.REVOKED.equals(boundPaymentFact(currentOrderId))) {
+                            throw new CommerceException(409, "bound payment is still PAID; returning the asset would keep the buyer's money, use RETRY_DELIVERY");
                         }
                         var intents = jdbc.queryForList("SELECT status FROM commerce_delivery_intent WHERE order_sn=? FOR UPDATE", currentOrderId);
                         if (!intents.isEmpty()) {
@@ -707,6 +742,15 @@ public class ManualAdminStore {
         } catch (DuplicateKeyException conflict) {
             throw new CommerceException(409, "unique receipt or admin command conflict");
         }
+    }
+
+    /** 订单绑定的那笔付款现在的事实(PAID / REVOKED);一张订单至多绑定一笔(commerce_payment_receipt.order_sn 唯一)。调用方已持订单行锁。 */
+    private String boundPaymentFact(String orderId) {
+        var receipts = jdbc.queryForList("SELECT fact FROM commerce_payment_receipt WHERE order_sn=? FOR UPDATE", orderId);
+        if (receipts.size() != 1) {
+            throw new CommerceException(503, "bound payment receipt missing for consignment order");
+        }
+        return (String) receipts.getFirst().get("fact");
     }
 
     private void lockSeller(byte[] sellerAccount) {

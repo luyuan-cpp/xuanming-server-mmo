@@ -895,6 +895,8 @@ message GetPlayerChannelIdentityRequest {
   uint64 player_id = 1;
   // player_id 为 0 时按账号查(建角送检时角色还没发号),这时不回角色等级;两个都填以 player_id 为准。
   string account = 2;
+  // 调用方证明:只认 content_guard 与 chat(go/shared/accountdirectory/channel_identity.go)。应答里有账号与平台 openid。
+  common.base.ServiceCallAuth auth = 3;
 }
 
 message GetPlayerChannelIdentityResponse {

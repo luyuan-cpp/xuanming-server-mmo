@@ -406,7 +406,7 @@ bool BagService::CloneBagForTransaction(const Bag &source, Bag &candidate)
 uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
     const std::string& extra, const std::function<uint32_t()>& beforeCommit, const uint64_t consumeFromHoldId,
-    const GrantOverflowRoute* overflowRoute)
+    const GrantOverflowRoute* overflowRoute, const TransactionType consumeTxType)
 {
     if (!tlsEcs.actorRegistry.valid(playerEntity) || !PlayerLifecycleSystem::IsPlayerMutable(playerEntity)) return kInvalidParameter;
     const auto playerId = tlsEcs.GetPlayerId(playerEntity);
@@ -511,7 +511,7 @@ uint32_t BagService::ConsumeInventoryAndGrant(entt::entity playerEntity,
     // 改投的那一批与两包的发布在同一段:之后不再有失败分支(GrantOverflowRoute::commit 不得失败)。
     if (routed) overflowRoute->commit(gained);
     for (const auto& entry : drained)
-        TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
+        TransactionLogSystem::LogItemDestroy(playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra, consumeTxType);
     // 改投的那一批没有进包:不记获得流水与异常获得,在去处兑现时(邮件附件领取经资产通道入包)才记。
     if (!routed) {
         const auto ordered = SortedByConfigId(gained);

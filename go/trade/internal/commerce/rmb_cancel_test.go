@@ -289,6 +289,11 @@ func TestTiDBRmbCancelRefusesManualContractAfterPaidDeliveryWentPartial(t *testi
 	require.Len(t, probe.Receipts, 1)
 	require.Equal(t, "MANUAL", probe.Receipts[0]["state"])
 	requireRowUnchanged(t, s.Engine, before)
+
+	// 商城发来的退回请求(寄售 RETURNING)同样不认:部分发放过的托管不能整包退给卖家,人工合同的结局只由人工处置定。
+	// 所以商城只在付款已撤销时才发退回,付款仍 PAID 的用 RETRY_DELIVERY 等这里的结局(数据覆写审计 r2-mall#1)。
+	require.ErrorIs(t, s.returned(ctx, rmbReturn{Listing: in.Listing, Seller: "11", Account: "account-11", Reference: in.Reference, Proof: in.Proof}), ErrConflict)
+	requireRowUnchanged(t, s.Engine, before)
 }
 
 // 白名单里的阶段照常可撤:撤单只记请求(CancelRequested、CancelPending),阶段由引擎推进;托管退回之后按取消结案。

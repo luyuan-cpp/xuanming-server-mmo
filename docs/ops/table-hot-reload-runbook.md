@@ -71,6 +71,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command tables-reload-local
 - **到点前撤销**：`table-bundle cancel -track <track> -schema-digest <16hex>`（调用 `DELETE /admin/tables/next`）。
 - **到点后回滚**：`table-bundle rollback -track <track> -schema-digest <16hex> -target-digest <old64> -target-sha256 <oldsha> -target-version <oldver> -current-dir <cur> -target-dir <old>`。
   - 若新包曾新增 `(cfg_ids_permanent)` 表（如 `Item`、`Pet`）的行且已产出资产，回滚会让这些 ID 消失导致资产停在 RETRY。工具默认拦截并提示向前修；确需强制回滚才加 `-force`。
+  - `-current-dir` 与 `-target-dir` **必填**（不加 `-force` 时缺一个就拒绝，什么都不写）：`<cur>` 是这条线此刻生效那一包的表目录，`<old>` 是 `-target-digest` 那一包的表目录（从对应提交导表，或把对象存储里的包解开）。工具先用 `GET /admin/tables` 取生效包，核对 `<cur>` 的 `content_digest` 等于它、`<old>` 的等于 `-target-digest`、两边 `schema_digest` 等于 `-schema-digest`，对不上直接报错，`-force` 也不放过。
+  - `-force` 只放过两件事：不带两个目录（跳过检查，stderr 打 WARN）、比出了丢行（照样回滚，WARN 里列出丢的 id）。线上这条线没有生效指针（用的是镜像自带的表）时目录核不了，只能 `-force` 不带目录回滚。依据见设计 §9「回滚」。
 - **删掉废弃的 schema 线**：旧版本全部下线后，执行 `table-bundle delete-line -track <track> -schema-digest <old16>`。只要仍有在线 Pod 回报该线，管理接口返回 `409 Conflict` 拒绝删除。
 
 ## 5. 告警处置

@@ -131,9 +131,9 @@ def environment(values):
                 "GM_REDIS_PORT": "16391", "GM_HTTP_PORT": "18090", "GM_UPLOAD_PATH": str(RUNTIME / "uploads"),
                 "GM_GATEWAY_ADMIN_KEY": gateway_key(), "GM_GAME_PLAINTEXT": "true"})
     # 游戏写通道只认本任务部署后的真实就绪回执；外层进程遗留变量不能跳过验收。
-    # 交易管理通道本机还没有经过验收的转发,外层遗留变量同样不能打开它。
+    # 交易与商城管理通道本机还没有经过验收的转发,外层遗留变量同样不能打开它们。
     for key in ("GM_DATA_TARGET", "GM_LOCATOR_TARGET", "GM_SCENE_ADMIN_SECRET", "GM_SCENE_TARGETS_JSON", "GM_SCENE_ETCD_URL", "GM_MAIL_TARGET", "GM_MAIL_ADMIN_SECRET",
-                "GM_TRADE_TARGET", "GM_TRADE_ADMIN_SECRET"):
+                "GM_TRADE_TARGET", "GM_TRADE_ADMIN_SECRET", "GM_MALL_URL", "GM_MALL_ADMIN_SECRET"):
         env.pop(key, None)
     env.update(verified_read_runtime())
     env.update(verified_game_runtime())

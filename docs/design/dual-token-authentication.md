@@ -284,6 +284,28 @@ label 全是低基数,不带账号、不带 `player_id`。日志:检测到重用
 
 `go/login/internal/logic/pkg/token/`:单测覆盖宽限重放、并发、窗口内外的重用、只观测、类型位、规范编码、损坏拒绝、封顶与撤销;`TestTokenFamily_RealRedis` 在设置 `LOGIN_TOKEN_REQUIRE_REAL_REDIS=1`、`LOGIN_TOKEN_TEST_REDIS_ADDR`、`LOGIN_TOKEN_TEST_REDIS_DB` 时跑真 Redis,7.2 与 8.x 各一轮。
 
+## access token 校验：被拒与存储故障分开（2026-11-12）
+
+### 问题
+
+- `ValidateAccess` 以前所有失败都返回同一种错误。用 access token 登录（`auth_type=access_token`）的 provider 把它一律当作凭证无效，回 2000。
+- 结果是登录域 Redis 抖一下，已在游戏里的玩家断线重连就被踢回登录界面；这时客户端本该稍后重试。
+- 分配 gate 改成凭 access token 鉴权以后（[登录排队](./login-queue-2026-05.md) §5 末尾），同一个问题会把 Redis 故障变成 401。
+
+### 做法
+
+- `token.ErrAccessRejected` 只用于令牌本身不能用：格式不对、不是 access、未知、过期、记录损坏、所属家族已吊销。Redis 与脚本的错误不算。
+- 记录损坏算「被拒」：坏记录不会自己变好，重试没有意义。
+- 两个调用方都按它分流：
+
+| 调用方 | 被拒（`ErrAccessRejected`） | 存储故障 |
+|---|---|---|
+| `AccessTokenProvider`：gate 上的 `Login{auth_type:"access_token"}`，以及 `/api/login` 的静默登录 | 凭证无效 2000，客户端重新登录 | 渠道故障 2035（fault 码），网关回 500，客户端稍后重试 |
+| 分配 gate 的鉴权（`loginpregate/assigngate_auth.go`） | status=4，网关回 401，客户端重新登录 | status=2（ERROR），可重试 |
+
+- 单测：`go/login/internal/logic/pkg/token/access_rejected_test.go`、`go/login/internal/logic/loginpregate/assigngate_auth_test.go`。
+- refresh token 那条路径没有改，仍按上文「仍未解决」的第一条。
+
 ## Configuration
 
 ### Go Login (`go/login/etc/login.yaml`)

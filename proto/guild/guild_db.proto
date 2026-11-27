@@ -762,3 +762,18 @@ message GuildWarFeudRecord {
   uint64 winner_guild_id = 16;
   uint64 updated_ms = 17;
 }
+
+// 锁序位置 23:帮派恩怨墙的入账闸门,一局一行,记「这一局已经入过两帮的恩怨墙」(jianghu_grudge_repo.go)。
+// 去重键不能放在 guild_jianghu_grudge_record 里:那张表每帮只留最近 20 场,被裁掉之后重投的旧结果查不到行,
+// 两帮胜负会再算一遍(数据覆写审计 r2 第 4 轮 r2-jh#3)。本表不裁剪,帮会解散也不删:删了重放会给对手帮再算一次。
+// 入账事务在写完位置 20、21 之后最后插本表(单调追加在全序末尾,不回头取靠前的表)。
+message GuildJianghuGrudgeAppliedRecord {
+  option(OptionTableName) = "guild_jianghu_grudge_applied";
+  option(OptionPrimaryKey) = "battle_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 battle_id = 1;
+  uint64 applied_ms = 2;            // 入账时刻(库时钟),只供排查与日后按保留期清理
+}

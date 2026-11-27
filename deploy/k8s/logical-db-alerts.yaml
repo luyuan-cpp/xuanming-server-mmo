@@ -143,6 +143,23 @@ spec:
               「cannot register boot N of this slot yet」后面跟 denied:同序号另一个 Pod 先注册了,多半是强删之后旧节点上的 Pod 还在,处置见手册 §9「节点失联」。
               其余按日志查账号、generation 和闸门表。
 
+        # 写多个逻辑库的写者(data_service、go/db)注册时连不上的库,这一代不注册、一直关着(docs/design/data-service-startup-isolation.md §7)。
+        # 这种 Pod 照常服务健康库,只是不就绪;集群恢复之后不会自己补齐,要重建。没恢复之前它一直响,是在提醒恢复之后还有这一步。
+        - alert: SqlWriterGrantsIncomplete
+          expr: |
+            max by (namespace, pod) (writer_grants_missing) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 这一代缺 {{ $value | printf \"%.0f\" }} 个逻辑库的写资格,这些库在它上面一直关着"
+            description: >-
+              写者注册时这些库连不上,这一代没有在它们上面注册:落在这些库上的调用在这个 Pod 上都回不可用,别的库照常;Pod 不就绪,滚动发布停在它这里。
+              缺的是哪几个库看 `kubectl -n {{ $labels.namespace }} logs {{ $labels.pod }} -c sql-writer-registrar` 里的 skipped= 行,
+              或者主容器启动日志里的「no writer grant」。先修好那个集群;恢复之后它不会自己补齐,要重建这个 Pod:
+              `kubectl -n {{ $labels.namespace }} delete pod {{ $labels.pod }}`(一次一个,等新 Pod 就绪再删下一个),
+              新的一代在全部库注册。集群一直没恢复时不要滚动重启:新 Pod 一样缺这些库。处置见手册 docs/ops/k8s-open-server-runbook.md §9。
+
         # 缩容收尾 CronJob(sql-writer-slot-retirer-<StatefulSet>,manifests/go-svc/sql-writer-slot-retirer.yaml)每 5 分钟一轮。闸门冻结、排空 run 开着、
         # Pod 还在优雅退出、读完目录又扩回来都按成功收场,只有真失败(连不上库或 API server、权限不够、结局未知、试满还被拒)才失败。
         # 被缩掉槽位上有一代不是本 namespace 登记的(result=registered-elsewhere)也算失败:收尾不动它,但这说明另一个集群或环境

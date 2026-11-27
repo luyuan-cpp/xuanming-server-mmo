@@ -825,12 +825,13 @@ func manualRecallSvcCtx(recall *manualRecallStore, ledgers *fakeRecallLedgers) *
 	return &svc.ServiceContext{Recall: recall, PlayerStoreAssets: ledgers}
 }
 
-// manualRecallRow 是读到的一行卡死的回收:PENDING,收回 100 银两,此刻没人持租约,两小时前最后一次投递。
+// manualRecallRow 是读到的一行卡死的回收:PENDING,收回 100 银两,此刻没人持租约,两小时前最后一次投递,已投过 12 次。
 func manualRecallRow() store.RecallOpState {
 	op := assetop.Op{OpID: manualOpID, PlayerID: manualPlayerID, Stream: assetpb.AssetOpStream_ASSET_OP_STREAM_GM_RECALL,
 		Seq: 3, StreamEpoch: 1_700_000_000_000, CorrelationID: manualOpID, TxType: store.RecallTxType,
 		Bundle: &assetpb.AssetBundle{Currencies: []*assetpb.CurrencyAmount{{CurrencyType: 0, Amount: 100}}}}
 	op.LastSendMs = uint64(manualNow.Add(-2 * time.Hour).UnixMilli())
+	op.Attempts = 12
 	return store.RecallOpState{Status: manualStatusPending, Op: op}
 }
 
@@ -952,8 +953,8 @@ func TestResolveRecallOp_EvidenceDecidesWhichFinalIsAccepted(t *testing.T) {
 				wantFinal, _ := store.RecallManualFinal(final)
 				assert.Equal(t, wantFinal, recall.calls[0].Final)
 				assert.Equal(t, manualOpID, recall.calls[0].OpID)
-				assert.Equal(t, assetop.QuietWitness{LeaseUntilMs: r.LeaseUntilMs, LastSendMs: r.Op.LastSendMs}, recall.witness[0],
-					"终结带读行时的租约与发送时刻")
+				assert.Equal(t, assetop.QuietWitness{LeaseUntilMs: r.LeaseUntilMs, LastSendMs: r.Op.LastSendMs, Attempts: r.Op.Attempts}, recall.witness[0],
+					"终结带读行时的租约、发送时刻与 attempts")
 			})
 		}
 	}

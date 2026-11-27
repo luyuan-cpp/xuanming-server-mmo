@@ -103,7 +103,9 @@ class RmbGateG1G2HttpTest {
                 bytes(new DeliveryApi.Receipt(orderId, "8802", "DELIVERED", "f".repeat(64)))).statusCode());
 
             // 3) G-2：逐单争议冻结与提现共享账号锁：gross=200, fee=10, net=190；冻结 150 后仅可提现 40，释放后可提现剩余 150。
-            var freezeReq = new ManualAdminApi.ResolveIncomeDispute("dispute-freeze-1", orderId, "FREEZE_DISPUTE", 150, "CASE-HTTP-G2", "渠道拒付协查");
+            // 后台下发的人工处置带双人复核批准记录,请求号就是批准号。
+            var freezeReq = new ManualAdminApi.ResolveIncomeDispute("880000001", orderId, "FREEZE_DISPUTE", 150, "CASE-HTTP-G2", "渠道拒付协查",
+                new AdminApproval("880000001", "alice", "bob", 1_700_000_000_000L));
             assertEquals(401, call(http, "/internal/admin/manual/incomes/dispute", "delivery", "trade", bytes(freezeReq)).statusCode(),
                 "非管理员角色禁止操作逐单争议冻结");
             JsonNode frozenRes = ok(call(http, "/internal/admin/manual/incomes/dispute", "admin", "g1g2-admin", bytes(freezeReq)));
@@ -122,7 +124,8 @@ class RmbGateG1G2HttpTest {
                 bytes(new RmbConsignmentApi.Withdraw("材料卖家", "withdraw-unfrozen-40", 40))));
             assertEquals(40, partialWithdraw.path("amountFen").asLong());
 
-            var releaseReq = new ManualAdminApi.ResolveIncomeDispute("dispute-release-1", orderId, "RELEASE_DISPUTE", 150, "CASE-HTTP-G2", "申诉核实无误释放");
+            var releaseReq = new ManualAdminApi.ResolveIncomeDispute("880000002", orderId, "RELEASE_DISPUTE", 150, "CASE-HTTP-G2", "申诉核实无误释放",
+                new AdminApproval("880000002", "carol", "bob", 1_700_000_000_000L));
             ok(call(http, "/internal/admin/manual/incomes/dispute", "admin", "g1g2-admin", bytes(releaseReq)));
 
             JsonNode incomeReleased = ok(call(http, "/internal/consignments/incomes", "delivery", "trade",

@@ -607,7 +607,7 @@
 	# 模板没变时给了也不会重启(它是许可,不是指令);DryRun 不查集群。不粘滞;dev_tools.ps1 / k8s_image.ps1 只在被指定时透传。
 	# 名字沿用 docs/design/shared-redis-split-by-purpose.md(G4a)§4.2 的规划,语义按 P0-E 放宽为「模板有变化就要确认」。
 	[switch]$ConfirmRedisCoreRestart,
-	# 部署替运维维护 domain-service-secrets 里 16 把内部 HMAC 密钥($script:ManagedDomainServiceSecrets):缺的自动补齐(从 infra 的规范值复制,
+	# 部署替运维维护 domain-service-secrets 里 17 把内部 HMAC 密钥($script:ManagedDomainServiceSecrets):缺的自动补齐(从 infra 的规范值复制,
 	# 都没有就生成),已有的合格值沿用。各 namespace 值不同、过短或两把同值时默认在任何写操作之前拒绝;给了这个开关才改成统一值
 	# (infra 那份合格就以它为准,否则生成新值),并对读这些键的 StatefulSet / Deployment 触发滚动重启(kubectl rollout restart;
 	# Agones scene Fleet 不直接删 Pod,而是告警提示用 k8s_scene_roll.ps1 -Restart 逐台排空替换)。只在修复时显式加;不粘滞;
@@ -7903,7 +7903,7 @@ function Assert-TlsSecretProvisioned {
 
 <#
 .SYNOPSIS
-	部署替运维维护的内部 HMAC 密钥:Secret domain-service-secrets 里 zone 的工作负载引用的 16 把,同一个集群里每个 namespace 必须同值。
+	部署替运维维护的内部 HMAC 密钥:Secret domain-service-secrets 里 zone 的工作负载引用的 17 把,同一个集群里每个 namespace 必须同值。
 	单一来源:门禁 Initialize-ManagedDomainServiceSecrets、写入 Sync-ManagedDomainServiceSecrets、契约测试与开服手册 §1 的 Secret 表都对照它。
 
 .DESCRIPTION
@@ -7924,6 +7924,8 @@ $script:ManagedDomainServiceSecrets = @(
 	[pscustomobject]@{ Key = 'account-directory-trade'; ZoneConsumers = @('scene', 'data-service'); InfraConsumers = @('trade') }
 	[pscustomobject]@{ Key = 'account-directory-scene'; ZoneConsumers = @('scene', 'data-service'); InfraConsumers = @('match', 'player-inbox') }
 	[pscustomobject]@{ Key = 'account-directory-payment'; ZoneConsumers = @('data-service'); InfraConsumers = @('payment') }
+	# content-guard 按玩家 / 账号查渠道身份(GetPlayerChannelIdentity,平台审核要 openid),data-service 验。chat 查同一个接口用 role-fence-chat。
+	[pscustomobject]@{ Key = 'account-directory-content-guard'; ZoneConsumers = @('data-service'); InfraConsumers = @('content-guard') }
 	[pscustomobject]@{ Key = 'role-fence-coordinator'; ZoneConsumers = @('data-service'); InfraConsumers = @('friend', 'guild', 'mail', 'match', 'player-inbox', 'trade') }
 	[pscustomobject]@{ Key = 'role-fence-guild'; ZoneConsumers = @('data-service'); InfraConsumers = @('guild') }
 	[pscustomobject]@{ Key = 'role-fence-trade'; ZoneConsumers = @('data-service'); InfraConsumers = @('trade') }
@@ -8997,6 +8999,9 @@ function New-NodeDeploymentYaml {
 	# 制表符缩进同本模板,换算后落第 10 列。
 	$resourceRole = if ($SceneNodeType -ge 0) { 'scene' } else { $NodeName }
 	$cppResourcesBlock = Get-ClientEntryResourcesYaml -PodCommon @{ ResourceRequests = (Get-CppNodeResourceRequests -Role $resourceRole) } -KeyIndent "`t`t  "
+	# Pod 级 safe sysctl(准入设计 P1-5;取值与理由在 lib Get-ClientFacingPodSysctlsYaml):只给客户端面的 gate / battle,scene 不写。
+	# Pod spec 键在「1 制表符 + 2 空格」,换算后落第 6 列。
+	$podSysctlsBlock = if ($SceneNodeType -lt 0 -and ($NodeName -eq 'gate' -or $NodeName -eq 'battle')) { Get-ClientFacingPodSysctlsYaml -KeyIndent "`t  " } else { '' }
 	# Prometheus 出口(-CppMetricsPort):gate / scene / battle 都开,0 不写。
 	$extraEnvLines += @(New-CppMetricsEnvLines -ItemIndent "`t`t`t")
 	# 发布轨道(-ReleaseTrack canary,只在 zone-up):gate / scene 写;battle 只在 infra-up 渲染,那里只能是 stable,stable 不写。
@@ -9110,7 +9115,7 @@ spec:
 	  labels:
 		app: $NodeName$releaseTrackPodLabel
 	spec:
-	  terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$sidecarInitBlock
+	  terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$podSysctlsBlock$sidecarInitBlock
 	  containers:
 		- name: $NodeName
 		  image: $Image
@@ -14736,7 +14741,7 @@ function Rename-CanaryWorkload {
 #>
 function Add-MatchAuthoritySecretEnv {
 	param([string]$ManifestContent)
-	# domain-service-secrets 里只在 infra 用的键(如下面这几把)由运维预置,本脚本不生成其真实值;zone 工作负载引用的 16 把内部密钥由部署维护
+	# domain-service-secrets 里只在 infra 用的键(如下面这几把)由运维预置,本脚本不生成其真实值;zone 工作负载引用的 17 把内部密钥由部署维护
 	# ($script:ManagedDomainServiceSecrets,缺了补齐、全集群同值)。读取只限两处:Assert-TlsSecretProvisioned 只查键在不在,
 	# Initialize-ManagedDomainServiceSecrets 只在内存里比托管键的长度与摘要(不打印)。
 	# 新协议部署前须在Match/Battle所属namespace预置独立key match-outcome-battle，

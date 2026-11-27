@@ -56,7 +56,7 @@
 
 - 新建 TiDB 集群,地址作为这个地域的 `GlobalAuthorityTiDBHost`。不和别的地域共用集群。
 - **建库之前**打开 CHECK 约束:`SET GLOBAL tidb_enable_check_constraint = ON;`。`player_route` 的唯一性靠它,TiDB 默认不执行,建完表才打开不一定补上约束。`data_service -migrate` 建表之前查这个开关,没开就拒绝。
-- 按开服手册 §1 预置 `domain-service-secrets` 里运维管的那些键(数据库连接串、运维口令、生产者密钥等),**每个地域自己生成一套**,不从别的地域复制。内部调用密钥(托管键表的 16 把)不用预置:这个地域第一次部署时由部署生成,也不要从别的地域拷过来。
+- 按开服手册 §1 预置 `domain-service-secrets` 里运维管的那些键(数据库连接串、运维口令、生产者密钥等),**每个地域自己生成一套**,不从别的地域复制。内部调用密钥(托管键表的 17 把)不用预置:这个地域第一次部署时由部署生成,也不要从别的地域拷过来。
 - 用世界 CA 给这个地域签一张登记处客户端证书,在这个地域每个 zone 命名空间建 Secret `id-registry-client-tls`([发号器运维手册](id-issuer-runbook.md) §6)。CA 私钥离线保存,不进集群。
 - 建片库、流水库、业务库和存档库,给 schema 账号授权(开服手册 §1 的 `render-schema-role`)。boot 名册这时还写不了,它要迁移 Job 种下的 generation,见 §4.3。
 

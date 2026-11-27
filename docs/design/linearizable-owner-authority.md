@@ -2,7 +2,7 @@
 
 > 日期：2026-11-24  
 > 对标来源：`xuanming-server/services/runtime/owner` 与 `CLAUDE.md §9.22 / §9.23`  
-> 状态：核心事务引擎、DDL、重连状态决策机、`scene_manager` `ServiceContext` 强读装配，以及 `EnterScene` / `LeaveScene` 的 `shadow` 双写审计与 `enforce` fail-closed 入口闸门均已落地并通过单测。  
+> 状态：核心事务引擎、DDL、重连状态决策机、`scene_manager` `ServiceContext` 强读装配，以及 `EnterScene` / `LeaveScene` 的 `shadow` 双写审计与 `enforce` fail-closed 入口闸门均已落地并通过单测。**2026-11-26 起 `enforce` 启动即拒**：没有任何进程续实例租约、目标身份是会被复用的 `node_id` 加恒为 1 的纪元，§2.2 的准入屏障在生产上恒等于当前时刻；屏障做实之前只能开 `shadow`（§7，数据覆写审计 r2 第 4 轮 r2-oa#1，未编译）。  
 > Java 独立版（`xuanming-server-mmo`）状态：本阶段未变更任何客户端可见 proto、帧或配表契约，暂无需改动 `xuanming-server-mmo`；阶段 2 切换真实进场主链并引入客户端重连状态字段时须同步更新 `xuanming-server-mmo` 与 `PARITY.md`。
 
 ---
@@ -42,7 +42,7 @@
 - **`BeginTransition`**：
   - 校验 `player_id`、UUIDv4 `operation_id`（空则权威铸造）、完整 `OwnerTarget`；
   - 同事务 `FOR UPDATE` 锁 `owner_record`：若 `operation_id` 或 `(owner_type, exact target)` 已匹配则幂等 no-op 返回既有记录；否则校验 `expect_epoch`（不匹配返回 `ErrEpochConflict` 附最新记录）与 `source_revision` 单调性（回退或 legacy 0 回落返回 `ErrSourceRevisionStale`）；
-  - 同事务读旧实例 `owner_instance_lease` 计算屏障 `admit_not_before = max(now, old_lease_deadline + skew_margin)`（跨实例迁移必设屏障，确保 `旧节点最晚可玩 < 新节点最早准入`），推进 `owner_epoch+1` 与 `PENDING` 并写审计行。
+  - 同事务读旧实例 `owner_instance_lease` 计算屏障 `admit_not_before = max(now, old_lease_deadline + skew_margin)`（跨实例迁移必设屏障，确保 `旧节点最晚可玩 < 新节点最早准入`），推进 `owner_epoch+1` 与 `PENDING` 并写审计行。**这道屏障要成立有三个前提，现在一个都没有**：旧实例一直在续租（`RenewInstanceLease` 目前只有单测调用，表在生产上是空的，读不到租约就退回 `now`）；实例身份每次进程启动都不同（`scene_manager` 现在用 `node_id` 当 `InstanceUID`、纪元写死 1，同号节点重启算同一实例，`SameInstance` 为真就不设屏障）；旧实例在租约过期后自己停止可玩与存盘（否则 `old_lease_deadline` 不是「最晚可玩」）。所以 `enforce` 在补齐之前启动即拒，见 §7。
 - **`Admit`**：同事务校验 exact 五元组 + `owner_epoch` + `operation_id`；若 `now < admit_not_before_ms` 返回 `ErrBarrierNotOpen` 与 `retry_after_ms`；已 `ADMITTED` 幂等返回成功；否则推进到 `ADMITTED`。
 - **`RenewInstanceLease`**：按协议硬上限 `MaxLeaseSeconds=30s` 钳制防放大脑裂窗；同 `pod_name` 换新 `instance_uid` 时允许单调纪元接管，拒绝旧 `instance_epoch` 回写（`ErrLeaseRegressed`）。
 - **`Release`**：精确匹配 `(owner_epoch, operation_id)` 后释放为 `NONE`；迟到/失配调用幂等 no-op 返回当前权威记录，绝不伤新归属。
@@ -81,3 +81,24 @@
 - 运行 `go test -count=1 ./ownerauthority/...` 与 `go vet ./ownerauthority/...`（覆盖 CAS 冲突、屏障等待、准入幂等、旧 `source_revision` 拒绝、租约钳制与纪元回退、迟到 `Release` no-op 与 `ResolveResume` 全部五态）；
 - 运行 `go test -count=1 ./...` 与 `go vet ./...` 验证 `go/scene_manager` 零回归；
 - 运行 `python tools/scripts/check_log_text_english.py` 确认 0 中文运行日志。
+
+---
+
+## 7. `enforce` 准入屏障不生效与启动即拒（2026-11-26，数据覆写审计 r2 第 4 轮 r2-oa#1）
+
+**问题**：`enforce` 的价值在 §2.2 的准入屏障，可它在生产上恒等于当前时刻。
+- 没有任何进程调 `RenewInstanceLease`（全仓只有共享包与桥接层的单测调用），`owner_instance_lease` 在生产上永远是空的，`BeginTransition` 读不到旧实例租约，`admit_not_before` 退回 `now`，`Admit` 立即通过。
+- 桥接层（`go/scene_manager/internal/logic/owner_authority_bridge.go` 的 `ownerAuthorityTarget`）把 `InstanceUID` 设成 `node_id`、`InstanceEpoch` 写死 1。`node_id` 会被重启的进程或另一个健康进程复用（[rpc-kill-switch.md](rpc-kill-switch.md) §4 同一条理由），同号节点重启算「同一实例」，`SameInstance` 为真，即使以后有了租约也不设屏障。
+- 现状没有数据后果：两种模式下真源都是 Redis 交接资格加 `player_store` 写权行，SQL 记录没有任何读路径，`enforce` 只能否决，否决后走推路由失败的同一套回滚。风险在后面：按 §5 第 3 步切到 `enforce` 之后下线 Redis 围栏，就把保护换成了一道开着的门。本稿状态行原来写着 `enforce` 入口闸门已落地，没有说明屏障不生效。
+- 缺省不可达：`OwnerAuthority.DSN` / `DSNEnv` 为空时整套不装配（`go/scene_manager/internal/config/config.go`），仓内配置与部署脚本都没配。
+
+**方案**：`OwnerAuthorityConfig.ResolveDSN` 遇到 `Mode=enforce` 直接返回错误，`scene_manager` 启动即拒（`initOwnerAuthority` 在连库之前就调它）。`shadow` 不受影响，照旧双写、只记分歧。`EnterScene` / `LeaveScene` 里 `enforce` 的分支与桥接层单测原样保留，生产上走不到。单测：`go/scene_manager/internal/svc/ownerauthority_test.go` 的 `TestInitOwnerAuthority_ConfigValidation` 加了 `enforce` 被拒的一条。
+
+**为什么这样选**：把屏障做对要跨三种语言、好几批：C++ scene 节点按真实进程身份续租（scene 不直连 SQL，得经某个 RPC）；进场请求带上真实实例 uuid 与每次启动递增的纪元，从 `EnterScene`、托管落点一路带到桥接层；scene 在租约过期后自己停止可玩与存盘，否则租约截止时刻不是「最晚可玩」。这不是 low 一条能顺手做完的事。在它做完之前，开 `enforce` 只多一个 SQL 依赖和一个否决点，给不出承诺的时间保护，还会让人误以为可以下线 Redis 围栏。拒启是 fail-closed 的标准做法：开关缺省就关着，现在没有任何部署在用，拒掉没有代价，以后补齐了删一行就能放开。
+
+**被否决的做法**：
+- 只在本稿注明「`enforce` 目前不提供时间屏障」：配置注释仍写着 fail-closed 闸门，照着开的人看不到这句话，文档拦不住配置；
+- 让 `scene_manager` 按 etcd 注册替各 scene 节点续租：租约的意义是持有者自己知道过了截止就不能再写，第三方续的租约约束不了持有者，屏障会变成一个假的保证；
+- 删掉 `enforce` 代码：它是 §5 迁移计划的切换步骤，有单测守着语义，拒启可逆，删了以后还要重写。
+
+**代价与边界**：屏障补齐之前不能用 `enforce`，SQL 记录只能当影子对账。补齐之后放开要同时做：去掉 `ResolveDSN` 里的拒绝；scene 节点续租、真实实例 uuid 与纪元、租约过期自停；核对托管落点是否带 `OwnerRevision`（`enforce` 下 `SourceRevision` 为 0 的进场在已有非零版本时会被判 stale，见 `BeginTransition`）；本节改写成落地说明。

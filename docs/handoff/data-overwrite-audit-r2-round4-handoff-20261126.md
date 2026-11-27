@@ -71,7 +71,7 @@
 
 - r2-craft#1：没有小改法。两名玩家各存各的盘，原子交换只能靠托管方。**负责人 11-26 定：改走 go/trade 托管合同**，顺带解决悬赏榜只看得到同场景节点的玩家。
   - 做法：发榜时把悬赏银两托管进 trade，揭榜时托管技能书，两条发放腿由 trade 交付；沿用 go/trade 现有托管合同的写法，不另造一套。
-  - 顺序：由 Gemini 4 Neon Extra 先出技术设计，写进 `docs/design/` 下的设计稿（没有就新建；玩法口径有变时同步 `docs/planning/equipment-quality-and-skill-crafting-v2-v5.md`），再落码。
+  - 顺序：负责人 11-26 定由 Claude（Opus 5.5）写，第 4 轮会话在批 V/W/X 之后接着做。先出技术设计，写进 `docs/design/` 下的设计稿（没有就新建；玩法口径有变时同步 `docs/planning/equipment-quality-and-skill-crafting-v2-v5.md`），再落码。
   - 客户端可见的协议要改的话，两版共享的契约同批改，Java 版只登记待做。
 - r2-mall#1：RETURN_TO_SELLER 只在付款已撤销时放行；付款仍 PAID 时同事务建退款待办，或拒绝；补寄售「已交付」的收敛动作。Java 商城代码属本仓 `java/`，照改。
 
@@ -91,13 +91,101 @@
 - 新加 match 后台循环要同批登记 `loop_liveness_alerts_contract.tests.ps1` 的点位名单与节拍表。
 - Java 独立仓（`luyuan-java/xuanming-server-mmo`）不写代码，只在它的 `PARITY.md` 登记待做；不适用或已有等价时不加行。
 
-## 7. 批 V、W、X 的落码结果（Opus 5.5 Max 子代理，未编译；待 Neon Extra 复核）
+## 7. 批 V、W、X 的落码结果（2026-11-26 晚，Opus 5.5 Max 子代理；未生成、未编译、未测试）
 
-三批完成后在这里补：每条问题的结论（成立 / 推翻）、改动文件清单、给 Gemini 的验证命令、有意没做的与剩余风险。补齐之前不要动这三批涉及的文件：`go/guild/internal/{logic/war_logic.go,data/war_repo.go,data/asset_store.go}`、`go/match/internal/logic/{tournamentlogic.go,jianghu_duel_logic.go,gather.go,global_match.go}`、`go/match/internal/authority/tournament.go`、`go/mail/etc/mail.yaml`、`tools/scripts/k8s_deploy.ps1`、`cpp/libs/services/scene/player/system/player_jianghu.*`、`cpp/libs/services/scene/battle/system/player_battle.*`、`proto/common/component/player_jianghu_comp.proto`。
+三批都写完了。逐批复核由「交接单里的代码改动清零与方案入档」会话做（写的人与复核的人分开），复核通过后才交 Gemini 生成、编译、测试。
+
+**提交状态（重要）**：三批的大部分代码不是本会话提交的，是别的会话的快照提交在三批写到一半时一并带进了 main：`3eb57a09a`（22:13，只带进批 X 的一半，单独编不过）、`d77a458ee`（22:16）、`76e2b59bb`（22:30，带进批 V 与批 W 当时已改的文件，并顺带重新生成了 match_authority 的产物）。`git diff HEAD` 看不到这些改动，复核按批看：批 V、X 用 `git diff 8a6697af0 -- <文件>`，批 W 用 `git show 76e2b59bb -- <文件>` 加工作区未提交部分。三个代理都核过 HEAD 与自己的最终内容一致。**HEAD 现在必须先生成协议才编得过**。
+
+### 7.1 批 V：帮战追杀令与灵脉（r2-gw#1～#4 都成立）
+
+- **结论要点**：r2-gw#3 的并发模型核实成立——结果消息 key 是 battle_id（`go/match/internal/svc/servicecontext.go`），同一灵脉的几局落不同分区；guild 各副本同一消费组 `guild-trial`、默认 2 副本，只在单进程内串行。顺手修了同类：FIELD_PLAYER 在非灵脉图上不清零客户端灵脉号，两个外帮在别人灵脉图上打架会改第三方的旗。
+- **改法**（与 §3 批 V 一致，细节见设计稿）：
+  - 开战入口 `clientWarTargetHints`：灵脉号只在打守旗阵时采信，追杀令号只在追杀榜直打时采信；自动挂钩与追踪都过 `BountyHuntable`（区服、接单资格）。
+  - `SettleWarBattle` 改成「普通读定计划 → 按锁序转账 → 锁内复核」：第 4 步按升序点锁本区三座灵脉比对快照，第 7 步点锁追杀令重算，不符回 `ErrWarSettleStale`，逻辑层整笔重读重算最多 3 次；旗势只在防守帮就是灵脉主人时才变。
+  - 领赏与撕单退款指令进同一事务（撕单另一半：银两档退发布者，公费档按实扣资金退回帮会），领赏次数锁内占用，满上限不结单；删掉 `EnqueueBountyPayout`。
+  - 到期收尾 `ExpireBounty` / `ListDueBounties`，挂在待入队物品循环上（约每分钟一轮，15 分钟宽限给晚到的结算先落定），没新起循环。
+  - 扣款失败改置新状态 6（ESCROW_FAILED），状态 5 只表示「到期且已退回」。
+  - 三处发号失败回 `ErrIDGenUnavailable`，不用墙钟。
+  - 交易类型复用 `TX_GUILD_BOUNTY_PAYOUT`（C++ 白名单已放行），C++ 不用改；没新增 tip 码。
+- **改动文件**：`go/guild/internal/war/{rules.go,rules_test.go}`、`go/guild/internal/data/{war_repo.go,war_repo_test.go(新,真库),asset_store.go}`、`go/guild/internal/logic/{war_logic.go,war_logic_test.go,trial_background.go}`、`proto/guild/guild_db.proto`（`GuildWarBountyRecord.escrow_guild_funds = 18`、索引 `status,expires_at_ms`）、`proto/guild/guild.proto`（`GUILD_WAR_BOUNTY_STATUS_ESCROW_FAILED = 6`，**客户端可见**）。
+- **设计稿**：`docs/planning/guild-play-v2-implementation-plan.md` 末尾定案一节（四个问题各五项、两条事务的完整步骤）；`docs/planning/guild-play-v2.md` 正文同步。两份文档未提交。
+- **验证（Gemini，仓库根，串行，保留首错）**：
+  1. `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`（生成之前 Go 编不过）。
+  2. guild.proto 客户端可见：在 `D:\luyuan\mmorpg-client` 依次跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`，0 错误。
+  3. `cd go/guild; go build ./...; go vet ./...`；仓库根 `python tools/scripts/check_log_text_english.py`。
+  4. `cd go/guild; go test ./internal/war/... ./internal/logic/... -count=1` 全 PASS。
+  5. 真库：设 `GUILD_TEST_MYSQL_DSN`（库名 guild_test），`go test ./internal/data -run "GuildWarBounty|SettleWarBattle_|ExpireBounty_" -count=1 -v` 全 PASS、不得 SKIP；再跑 `go test ./internal/data -count=1` 与 `go test ./... -count=1`。
+  6. schemamigrate 不给已存在的表补新索引：本地已有的 `guild_war_bounty` 要重建（未上线，可清）。
+  7. 复核 diff 时排除两份别人的未提交改动：`go/guild/internal/kafka/trial_result_consumer.go`、`go/guild/cmd/assetopfix/main.go`。
+- **剩余与取舍**：开战入口没有完整请求路径的集成用例（只靠纯函数）；客户端 `BountyStatusLabel` 没有状态 6 的文案（列表只显示 1、2，影响小）；灵脉主人帮的成员主动点外帮，打赢打输都不动旗势（旧代码会削自己的旗）；到期退款最晚到期后约 16 分钟才发。
+
+### 7.2 批 W：锦标赛领奖与 match 发件接线（r2-tn#1、r2-tn#2、r2-jh#2 match 侧都成立）
+
+- **结论要点**：另核到两处缺口——K8s 的 match ConfigMap 模板根本没有 `MailRpc`；mail 的 gRPC 准入名单没有 match（只接密钥的话，开了 `-NetworkPolicies` 照样连不上）。`jianghu_duel_logic_test.go` 原来把「超时就让 scene 再退」写成了断言。
+- **改法**：
+  - 领奖拆成 `claimTournamentRewards` / `claimOneTournamentReward` / `tournamentRewardMailRequest`：带附件而发件没装配回 `kMatchInternal`、行不动；纯荣誉奖励直接落已领取；拿到 `mail_id` 才落已领取；一条失败不挡其余；请求只由奖励行构造，`ExpireMs=0`。
+  - 结算时把邮件标题正文冻结进奖励行（`match_authority.proto` 奖励行 `mail_title = 16`、`mail_body = 17`，三处 INSERT 与扫描加两列）；`tournament/catalog.go` 的 `Build` 拒绝超过 128 字的标题或 4096 字的正文。
+  - `svc/servicecontext.go` 新增 `requireTournamentMail`：dev / test 以外开着锦标赛却没装配发件，启动即拒。
+  - 生死状退费只留 scene 一条通道：删 `refundJianghuSilverOnce`、`maybeRefundJianghuSilverForFormation`、`cancelPreparedWithOptions` 与退费标记表（`MatchJianghuRefundRecord`、`authority/jianghu_duel.go` 三个读写方法、`schema.go` 表清单）；`globalAbortPrepared` 去掉 skip 参数；新增 AST 守卫测试：match 只有 tournamentlogic.go 发信，任何地方都不置 `SkipJianghuSilverRefund`。
+  - 发件接线：`go/mail/etc/mail.yaml` Producers 加 `match: MAIL_PRODUCER_SECRET_MATCH`；mail 指标加 `sender="match"`；`deploy/k8s/manifests/go-svc/mail.yaml` 注入该密钥（secretKeyRef，optional:false）；`k8s_deploy.ps1` 的 `Add-MatchAuthoritySecretEnv` 给 match 注入密钥，match ConfigMap 补 `MailRpc`（`mail.<infra>:50900`）与 `MailSecretEnv`（只写变量名），mail 准入名单加 match；本机开发 `tools/scripts/lib/producer_dev_secret.ps1`、`tools/scripts/go_services.ps1` 同步。
+- **改动文件**（已随 `76e2b59bb` 进 main）：`proto/match/match_authority.proto`、`go/match/internal/logic/{tournamentlogic.go,jianghu_duel_logic.go,gather.go,global_match.go}`、`go/match/internal/authority/{tournament.go,jianghu_duel.go,schema.go}`、`go/match/internal/tournament/catalog.go`、`go/match/internal/svc/servicecontext.go`、`go/mail/etc/mail.yaml`、`go/mail/internal/{metrics,server}`、`deploy/k8s/manifests/go-svc/mail.yaml`、`tools/scripts/k8s_deploy.ps1`。**未提交**：`go/match/etc/match_service.yaml` 与 `go/match/internal/config/config.go`（只改注释）、`go/match` 新测试 `logic/tournament_reward_claim_test.go`、`logic/jianghu_refund_single_channel_test.go` 及改动的 `jianghu_duel_logic_test.go`、`tournament/rules_test.go`、`svc/servicecontext_test.go`、`go/mail/internal/data/match_sender_identity_test.go`（新）、`tools/scripts/lib/producer_dev_secret.ps1`、`tools/scripts/go_services.ps1`、契约测试 `k8s_deploy_contract`、`k8s_migrate_gate`、`lobby_authority_render`、`logical_db_deploy_contract`、`go_services_local_mysql`。
+- **设计稿**：`docs/planning/season-team-tournament-v1.md` 新增第七节（每条五项）并改正第 75、92、93 行与漏洞表那一行；`docs/design/mail-system.md` 文末一节；`docs/design/workload-secrets-via-k8s-secret.md` 盘点表一行；`docs/design/gate-online-identity.md` 准入名单一行；`docs/ops/k8s-open-server-runbook.md`「运维仍要预置的键」加 `mail-producer-match`。
+- **验证（Gemini，仓库根）**：
+  1. `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。另一会话（r2-jh#3）在同一份 match_authority.proto 与 `schema.go` 里加 `MatchGrudgeAppliedRecord`，等它落完再生成一次。这份 proto 不进客户端；`robot/vendor` 的 match 副本没有自动同步钩子（robot 不用这两个消息）。
+  2. `go/match`：`gofmt -l internal/` 无输出；`go build ./...`；`go vet ./internal/logic/ ./internal/authority/ ./internal/tournament/ ./internal/svc/`；`go test ./internal/logic/ -count=1 -run 'TestClaimTournamentRewards|TestTournamentRewardMailRequest|TestJianghuSilverRefundHasOnlyTheSceneChannel|TestJianghuDuel_' -v`；`go test ./internal/logic/ ./internal/tournament/ ./internal/svc/ ./internal/authority/ ./internal/config/ -count=1`。新增与改名用例全 PASS，整包不新增失败。
+  3. `go/mail`：`go build ./...`；`go test ./internal/data/ -count=1 -run 'TestMatchSenderIdentityMatchesTournamentClaim|TestBattleSenderIdentityMatchesSceneOutbox' -v`；`go test ./internal/metrics/ ./internal/server/ -count=1`（预建序列数改成 3×8×5）。
+  4. 部署契约（PowerShell 7，先清掉 `MMORPG_*` 环境变量）：`pwsh -NoProfile -File tools/scripts/tests/<名字>.tests.ps1`，逐个跑 `k8s_deploy_contract`、`k8s_migrate_gate`、`lobby_authority_render`、`logical_db_deploy_contract`、`go_services_local_mysql`、`go_services_ports`，全部 `[PASS]`。
+  5. 已有的库先跑 match 迁移（奖励表 ADD COLUMN），否则 schema 核对不过、match 拒绝接流。
+- **剩余与取舍**：
+  - `mail-producer-match` 由运维预置，不由部署自动生成（照 rank → mail 的先例，理由在设计稿第七节）。**代价：infra 必须先建好这把键，否则 mail 与 match 都起不来，mail 停摆会影响全部邮件**；已按旧模板抄过 `runtimeConfigSecret` 的环境要重抄。
+  - 启动校验只看启动那一刻的锦标赛开关，运行期热更打开锦标赛只靠领取时 fail-closed 兜底。
+  - 邮箱满时玩家看到的是内部错误，mail 的满箱提示没透传；响应同时带错误与已领取部分，客户端怎么显示没核。
+  - mail 的 Sweep 开删除模式（缺省不删）后，「邮件已建、已领取没落定」而玩家 37 天以上没重领的，再领会补发第二封。
+  - 退费标记表在旧库里会留成孤表（未上线，可清库）。
+
+### 7.3 批 X：生死状普通战书银两（r2-jh#1、r2-jh#2 scene 侧都成立）
+
+- **改法**：
+  - `PlayerJianghuComp` 加 `pending_silver_fee_review_after_ms = 13`；备战时预留与银两写同一个复核时刻。
+  - 别的局有未结清待退时，`ValidateAndCollectPrepareFee` 与 `CommitPrepareSilverFee` 都拒绝（`kFeatureUnavailable`），不覆盖标记。
+  - `RefundPendingSilverFee` 取代 `OnBattlePrepareCancelled` / `OnBattleVoid`：先入账成功再清标记，玩家不可改时不动；`CountsAsGain` 豁免 `TX_JIANGHU_DUEL_REFUND`，获取封禁不挡退费。
+  - 复核改名 `ReviewBattleHoldsAndFees` / `ReviewBattleHoldAndFee` / `OnBattleHoldAndFeeTerminalAnswer`：同一 (玩家, 局) 的道具预留与待退银两合并成一项，只查一次 SQL 终局；ABORT / 没有可裁决原件才退；FIGHTING 冻结到期查到同样结论时一并退。
+  - scene 不再读 `skip_jianghu_silver_refund`（proto 注释改「已废弃，恒为 false」，字段号保留）。
+  - 两处偏离定案（已写进设计稿）：拒绝码用 `kFeatureUnavailable` 而不是 `kServiceUnavailable`（后者在 Tip 表是 fault，match 会误判成 scene 内部故障）；复核对待退银两不按「本地已应用」跳过（作废结算可能已应用而退款没入账），另加缺陷兜底 `ConsumePendingSilverFee`（COMPLETE 且结算已在本实体应用、标记却还在时清掉不退并打 ERROR，免得玩家永远开不了普通生死状）。
+- **改动文件**（代码已随 `3eb57a09a`、`d77a458ee` 进 main）：`proto/common/component/player_jianghu_comp.proto`、`proto/scene/scene.proto`（注释）、`cpp/libs/modules/gain_block/gain_block_service.h`、`cpp/libs/services/scene/player/system/player_jianghu.{h,cpp}`、`cpp/libs/services/scene/battle/system/player_battle.{h,cpp}`。**未提交**：`cpp/tests/bag_test/player_jianghu_test.cpp`（改 2、新增 3）、`cpp/tests/bag_test/battle_freeze_hold_test.cpp`（新夹具 `BattleSilverFeeReviewTest` 6 个）。
+- **设计稿**（未提交）：`docs/planning/battle-jianghu-grudge-duel-phase1-implementation-plan.md` 末尾定案一节（流程、三个问题五项、持久字段、日志、验证），正文 6 处「经 mail 退还」改正；`docs/planning/battle-jianghu-grudge-duel-bounty-v1.md` 5 处改正；`docs/design/battle-item-reservation.md` 补「与道具预留共用同一次终局复核」一段；`docs/design/turn-battle-gap-closure.md` 函数名更新。
+- **验证（Gemini，仓库根，串行，保留首错）**：
+  1. `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-build`，再 `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`（两个 proto 都不进客户端）。通过：`player_jianghu_comp.pb.h` 有新字段；`proto/persist_schema_gen.txt` 本批只多一行 `1=PlayerJianghuComp#13 optional uint64 pending_silver_fee_review_after_ms`；`state=bootstrap` 不变；`kPersistSchemaGen` 仍为 1（台账不手改，由生成器追加）。
+  2. `cd tools/proto_generator/protogen && go vet ./internal/persistschema/... && go test -count=1 ./internal/persistschema/...`。
+  3. 静态门禁：`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py`（代理已跑 13/13 OK）、`python tools/scripts/tests/test_cpp_thread_sources.py`、`python tools/scripts/check_log_text_english.py`。
+  4. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`，0 个 `error C` / `LNK`；局部编按 `cpp/generated/proto/proto.vcxproj` → `cpp/libs/modules/modules.vcxproj` → `cpp/libs/services/scene/scene.vcxproj` → `cpp/tests/bag_test/bag_test.vcxproj`（先编库，测试链接预编好的 lib）。
+  5. `build\cpp\tests\bag_test.exe --gtest_filter=PlayerJianghuTest.*:BattleSilverFeeReviewTest.*:BattleItemHoldTest.*:BattleItemHoldRules.*:BattleFreezeHold*:PlayerItemGainBlockTest.*:PersistRoundTripTest.*:PlayerFeaturePersistence*` 全绿（新增 `PlayerJianghuTest.SilverWritPendingForAnotherBattleRejectsTheNewPreparationWithoutTouchingTheMarker`、`PlayerJianghuTest.SilverRefundKeepsTheMarkerWhenTheCreditFailsOrThePlayerIsNotMutable`、`PlayerJianghuTest.GainBlockDoesNotStopTheSilverRefund`、`BattleSilverFeeReviewTest.*` 六个；改过 `PlayerJianghuTest.SilverWritDebitAndCancelRefund`、`PlayerJianghuTest.VoidAndZeroRoundRefundPendingSilverFeeOnce`）；再跑完整 `bag_test.exe`，`currency_test.exe` 与 `cross_zone_test.exe` 不回归。
+  6. 批 W 与本批都过之后跑 robot 冒烟：普通战书成局、成局失败取消、VOID 三种，核对每局 500 银两恰好扣一次，并恰好退一次或被结算消耗一次。
+- **剩余与取舍**：旧局取消丢失时，玩家要等旧局复核退款（约旧局截止 + 120 秒，match 不可用更久）才能再开普通生死状，金帖不受影响；超期每 10 分钟一行 ERROR `metric=jianghu_duel_fee_overdue`，没加告警规则；资格预检 `CheckJianghuDuelEligibility` 不判旧局未结清，要到备战时才拒；过户仍清待退标记、不退（沿用原策略）；合并复核今天不会真的合并（普通战书局没有道具预留），是防以后两条路互顶；`PrepareBattle` 把复核时刻传给 `CommitPrepareSilverFee` 这一处没有直接单测；`ConsumePendingSilverFee` 若判反方向会少退 500，只有 ERROR 日志。
+
+### 7.4 修复代理顺带发现、本批没改的（交「交接单里的代码改动清零与方案入档」会话，先复核成立再修）
+
+| 编号 | 问题 | 位置 |
+|---|---|---|
+| r2-gw#5 | 领赏人的 GUILD_CREDIT 未决指令满 16 条时，整局帮战结算失败、不断重投，最后进死信（追杀赏金现在随结算进同一事务，同样卡住） | `go/guild/internal/data/war_repo.go` SettleWarBattle 的 AllocateSeq；`go/shared/assetop` 的 DefaultLimits |
+| r2-gw#6 | 帮战结算与到期退款事务没接角色护栏 `withRoleTargets`，与历练结算不一致（换主或注销中的角色可能照样入账） | `war_repo.go` SettleWarBattle、ExpireBounty；对照历练结算的写法 |
+| r2-gw#7 | 扣款终结 `UPDATE … WHERE escrow_op_id = ?` 没有索引，会全表扫；追杀令旧行没有清理机制 | `go/guild/internal/data/asset_store.go`；`proto/guild/guild_db.proto` 索引 |
+| r2-gw#8 | `InspectFieldWarTargets` 把「仅本帮可见」追杀令的号和金额显示给任何帮（信息面） | `go/guild/internal/logic/war_logic.go` |
+| r2-tn#3 | K8s 的 match 配置没有 FriendRpc / ChatRpc / GuildRpc（生死状要用），本机配置有 | `tools/scripts/k8s_deploy.ps1` 的 match ConfigMap 模板 |
+
+### 7.5 Java 版
+
+三批都没改 Java（独立仓 `luyuan-java/xuanming-server-mmo`）。Java 版的生死状同样用 `match_jianghu_refund` 加邮件退费，帮战追杀令、锦标赛领奖是否有同类问题待核对；只在 Java 仓 `PARITY.md` 登记待做。
 
 ## 6. 负责人 11-26 已定
 
 - r2-craft#1 悬赏求书**改走 go/trade 托管**，做法见 §3「其余」。
+- **批 V/W/X 之外的 9 条由 Claude（Opus 5.5）写**，不交 Gemini：
+  - 包括 r2-mall#1、r2-craft#1 两条 medium，以及 r2-jh#3、r2-craft#2~#4、r2-ops#1、r2-ops#2、r2-oa#1 七条 low。
+  - 由第 4 轮会话在 V/W/X 落完之后接着做，先做两条 medium。
+  - 周额度（全部模型）超过 80% 就停在一批的边界上，把没做的写回本节交 Gemini。
+  - Gemini 照常只做生成、编译、测试，并按 §0 先复核 Opus 写的批次。
 - **跑第 5 轮**（`D_ROUNDS[4]` 自由视角三路）：第 4 轮还有新发现，按「连续两轮没有新发现才停」继续。
   - 时机与模型：等第 4 轮的修复（批 V、W、X 与其余各条）落完再开，用最高档模型（12-03 Fable 额度重置后用 Fable 5.2 Max，或现在用 Gemini 4 Neon Extra）。
   - 旧核心机制的网络分区推演并进这一轮一起跑：按「最标准的定」的口径定，负责人没有单独表态。

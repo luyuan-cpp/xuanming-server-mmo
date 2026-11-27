@@ -98,6 +98,15 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 	account, channel, openID := resolved.Account, resolved.Channel, resolved.OpenID
 
+	// 官方通行证登录:签发令牌之前核对通行证里有没有改密、被封、被删;身份令牌早于改密就拒绝,改密之前的旧登录一并吊销并踢线
+	// (pkg/passportsession,docs/design/official-passport-registration.md §3.6)。没配管理凭据时 PassportSessions 为 nil,直接放行。
+	if in.AuthType == auth.PassportAuthType {
+		if tip := l.svcCtx.PassportSessions.CheckLogin(l.ctx, account, resolved.IdentityIssuedAt); tip != 0 {
+			resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: tip}
+			return resp, nil
+		}
+	}
+
 	// 票据绑定的账号:这条连接用的 gate 票是 AssignGate 发给某个账号的(GateTokenPayload.account_digest,gate 原样带来),
 	// 认证出的账号与它不符就拒绝。排队按账号放人,已在游戏里的账号免排队;票能给别的账号用的话,一个在线账号就能不停地领票
 	// 给别人免排队(docs/design/login-queue-2026-05.md §5「票据绑定账号」)。同一条连接上每次 Login 都比对,换账号再登也拦得住。

@@ -38,6 +38,9 @@ const dlqPartition = 0
 // ioTimeout 是一次读写 broker 的上限。
 const ioTimeout = 15 * time.Second
 
+// maxDeadLetterBytes 是读死信与写回原件的单条上限,要不小于所有死信 topic 的上限(data_service 快照的死信是 16MiB 加头部余量)。
+const maxDeadLetterBytes = 32 << 20
+
 func main() {
 	if len(os.Args) < 2 || (os.Args[1] != "list" && os.Args[1] != "replay") {
 		fmt.Fprintln(os.Stderr, "usage: kafka_dlq list|replay -brokers <b1,b2> -group <group> [-from N] [-to N] [-execute] [-allow-unprocessable]")
@@ -123,7 +126,7 @@ func readDeadLetters(ctx context.Context, o options) ([]entry, error) {
 	if from > to {
 		return nil, nil
 	}
-	reader := kafkago.NewReader(kafkago.ReaderConfig{Brokers: o.brokers, Topic: topic, Partition: dlqPartition, MinBytes: 1, MaxBytes: 16 << 20, MaxWait: 500 * time.Millisecond})
+	reader := kafkago.NewReader(kafkago.ReaderConfig{Brokers: o.brokers, Topic: topic, Partition: dlqPartition, MinBytes: 1, MaxBytes: maxDeadLetterBytes, MaxWait: 500 * time.Millisecond})
 	defer reader.Close()
 	if err := reader.SetOffset(from); err != nil {
 		return nil, err
@@ -277,6 +280,7 @@ func replay(ctx context.Context, out io.Writer, o options, entries []entry, exec
 		Async:                  false,
 		MaxAttempts:            1,
 		BatchSize:              1,
+		BatchBytes:             maxDeadLetterBytes, // 缺省 1MiB 会在本地拒掉更大的原件(data_service 的快照可达 16MiB)
 		BatchTimeout:           10 * time.Millisecond,
 		WriteTimeout:           ioTimeout,
 		AllowAutoTopicCreation: false,

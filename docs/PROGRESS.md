@@ -6909,3 +6909,241 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **给 Gemini**:交接单 `docs/handoff/login-queue-verification-handoff-20261126.md` 第 1b 步(C++ 整解重编:`SessionInfo` 与 `SessionManager` 布局都变了,再跑 `routing_identity_test`)、第 5 步变异 S~U、第 3 节心跳冒烟判读(H3 仍由空闲超时关,`login_timeouts` 应为 0)。
 - **Java 版(AGENTS §12)**:待做,Java 仓 `PARITY.md` 同一节第 4 条补⑪⑫。
 - **提交情况**:main 工作区,未提交(负责人说不用管提交)。本会话没有编译,没有运行测试。
+
+## 2026-11-26 Claude:找回 11-08 一条没进 main 的验证记录——队伍邀请与入队申请的跨玩家预检(只补文档;代码早在 main)
+
+- **来源**:验证快照工作树 `build/verification/team-peer-preflight-src-20261108`(游离 HEAD,`8e4a58442`)里有一条 11-08 写的 PROGRESS 条目，从没合进 main。核对时发现这一条，按原文转录如下。修复代码本身已随 `c9ca12cff`(11-17,「fix: authorize team peer prechecks as caller」)进 main,之后函数改名为 `peerTeamID`(`go/match/internal/team/service.go`)。下面的验证是在 11-08 那份实现上做的，没在当前 main 上重跑。
+- **原文(2026-11-08)**:
+  - 正式联调中，邀请与申请使用发起者的会话读取目标角色的私有名册，原会话身份核验返回 4030。两条入口改为在 SQL 预检事务中复核发起者的账号与归属修订，向调用方只返回目标的队伍编号。原私有名册校验、操作回执和提交锁按既有路径执行。
+  - 独立 MySQL 中，同一回归用例在修复前复现 4030,修复后通过邀请、接受、离队、申请和批准。旧归属修订、伪造账号、错角色及缺失会话均被拒绝。Go 的 `match/internal/team` 和 `match/internal/authority` 测试通过。
+  - 开发栈替换 match 后，正式网关与双客户端协议连接分别通过邀请接受、申请批准。每条入口验收 6 对玩家,12 个外观在双方队伍视图中均与入场身份一致。实际 match 二进制 SHA-256 为 `6d36ecb93b007aba869b97317ff192c322b61856f899a767c131c19d90a8bd05`。本机证据在 `build/verification/appearance-e2e-20261108/`,包括 `match-redeploy-result.json`、`team-peer-fix-receipt.json`、`wire-team-invite-final.log`、`wire-team-apply-final.log`。
+  - Java `0.1.0-SNAPSHOT`(`d948e110`)的 SQL 预检已经复核原发起者身份，再读取目标角色的队伍。源码核对未见同一拒绝路径,Java 的真队伍联调待验。
+- **另一个快照**:`run/verification/muduo-progress-publish-20261108T094138Z-98a13def` 里的 4 处改动只是 11-25 文档目录拆分时把 `docs/design/turn-battle-presentation.md` 等路径改成 `docs/planning/…`,main 早已拆完，不需要合。两个快照工作树都没删(验证快照，不归本会话)。
+
+## 2026-11-27 Claude:data_service 启动期故障隔离批 2——写者注册跳过连不上的库,缺写资格的 Pod 照常服务健康库但不就绪(未编译、未运行、未提交,待 Gemini;Java 不涉及)
+
+- **范围**:设计稿 `docs/design/data-service-startup-isolation.md` §7,负责人 11-27 回「按推荐做批 2」(§7.3 两个选项都选 A)。在 Opus 5.5 上写,负责人明说用当前模型。
+- **做了什么**:
+  - 注册器(`cmd/writer_authority`):
+    - 并发探测各库连不连得上(16 路),连不上的停 2 秒再试一轮。两轮都连不上的库这一代不注册,init 日志每库一行 `skipped=<库> reason=unreachable`。
+    - 只认 `authoritysql.ErrUnreachable`;别的打开错误和冻结、资格不符照旧整体失败。
+    - 跳过的库不算进 `boot_seq`、不进启动记录,启动记录可以是模板的有序子集。
+    - 一个都连不上就什么都不写。只写一个库的服务行为不变。
+  - data_service:写资格多出来的照旧拒启,少的列出来;缺写资格的库这一代装配成一直关着的池,第 0 片缺时合服映射读不到,照旧拒启。
+  - go/db:原来就接受写资格子集,只按白名单算缺口。
+  - 共用部分:`authoritysql.MissingWriterGrants` 与指标 `writer_grants_missing`。
+  - 就绪:两个服务的指标端口加 `/readyz`,缺写资格或节点注册之前回 503;两个清单的就绪探针改指它,存活仍是 gRPC。
+  - 告警:`SqlWriterGrantsIncomplete`,告警规则的契约用例同步登记。
+  - 文档:设计稿 §7~§10、熔断设计稿 §8、水平扩展设计稿 §2 / §11、写者名册换代 §5.6、开服手册 §9「某个 SQL 集群失联」、搬库手册 §1。
+- **运维口径变了**:
+  - 集群失联期间,被回收重建、扩出来的 data-service / db Pod 起得来(缺那几个库、不就绪)。
+  - 发布别在故障期间做,会停在第一个不就绪的 Pod。
+  - 恢复之后逐个删不就绪的 Pod 重建。
+  - data-service 目录第 0 片所在集群仍是硬依赖。
+- **文件**:28 个,清单在设计稿 §8.2。
+  - `go/db/db.go` 顺带 gofmt 了一处 HEAD 里就没排好的 import。
+  - `data_service.go` 里另有别的会话的改动,没碰。
+- **给 Gemini 的验证**:
+  - 低档模型即可。环境 `$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'`。
+  - 失败时保留编译错误全文、失败用例名与断言原文,不改断言,不连续重试;需要改代码就停下,交回 Claude。
+  - 先跑同日批 1 那一条的命令(两批改的文件有重叠,批 1 的用例照旧要过),再跑:
+  ```
+  cd go/shared
+  gofmt -l authoritysql/config.go authoritysql/metrics.go authoritysql/config_consume_test.go
+  go vet ./authoritysql/...
+  go test -count=1 -run 'TestMissingWriterGrants' -v ./authoritysql/
+  cd ../data_service
+  gofmt -l cmd/writer_authority/main.go cmd/writer_authority/main_test.go internal/store/mysql.go internal/store/lazy_open.go internal/store/lazy_open_test.go internal/store/player_store_pools.go internal/svc/servicecontext.go internal/svc/global_caller_secrets_test.go internal/metrics/metrics.go data_service.go
+  go build ./...
+  go vet ./cmd/writer_authority/... ./internal/store/... ./internal/svc/... ./internal/metrics/...
+  go test -count=1 ./cmd/writer_authority/... ./internal/store/... ./internal/svc/... ./internal/metrics/...
+  go test -count=3 -race -run 'TestRegister|TestSplitReachable|TestBootRecord|TestSlot' ./cmd/writer_authority/
+  cd ../db
+  gofmt -l db.go internal/metrics/metrics.go internal/logic/pkg/proto_sql/store_registry.go internal/logic/pkg/proto_sql/store_registry_test.go
+  go build ./...
+  go vet ./internal/metrics/... ./internal/logic/pkg/proto_sql/...
+  go test -count=1 ./internal/metrics/... ./internal/logic/pkg/proto_sql/...
+  cd ../..
+  pwsh -NoProfile -File tools/scripts/tests/logical_db_deploy_contract.tests.ps1
+  ```
+- **通过标准**:
+  - 三处 `gofmt -l` 都没有输出;build、vet 没有错误;全部测试通过;部署契约用例全绿。
+  - 新用例逐个 PASS:
+    - shared:`TestMissingWriterGrantsListsDatabasesWithoutAGrant`;
+    - writer_authority:`TestRegisterSkipsUnreachableDatabases`、`TestRegisterRetriesAnUnreachableDatabaseOnce`、`TestRegisterWithNothingReachableRegistersNothing`、`TestRegisterFailsWholeOnOtherOpenErrors`、`TestBootRecordMayHoldOnlyPartOfTheTemplateInOrder`、`TestSplitReachableProbesConcurrentlyAndKeepsOrder`(`-race` 不报竞争);
+    - store:`TestDatabaseWithoutAWriterGrantStaysClosed`;
+    - svc:`TestCheckWriterSchemas`(改写)、`TestReadyNeedsEveryWriterGrantAndServing`;
+    - go/db:`TestStoreRegistryListsPlayerStoresWithoutAWriterGrant`。
+  - 原有的注册器用例照旧 PASS,它们只改了 `register` 的返回值个数。
+- **可选的反向确认**:
+  - 把 `main.go` 里 `boot` 生成子集那段的 `slices.Contains(skipped, ...)` 临时改成 `false`(不剔除连不上的库),`TestRegisterSkipsUnreachableDatabases` 应当变红。
+  - 把 `checkWriterSchemas` 的多出检查删掉,`TestCheckWriterSchemas` 应当变红。
+  - 改回后都恢复通过。
+- **可选冒烟**:做法见设计稿 §9.1 末条。kind,两个 SQL 实例。单实例的调试栈做不了,如实报未运行。
+- **Java 版(AGENTS §12)**:不涉及。Java 网关只写一个库,注册器的改动对它不改变结局。不加 PARITY 行。
+- **提交情况**:main 工作区,未提交。
+
+## 2026-11-26 Claude:核对本会话与已删会话的工作是否都在主仓 main(只核对,没改代码)
+
+- 本会话(配置表热更)的改动都直接在 `D:\luyuan\xuanming-server-mmo-cpp` 的 main 工作区里改,没开分支、没开 worktree。代码已随负责人的批量提交 `8a6697af0`、`3eb57a09a`、`d77a458ee` 进 main;之后改的文档在工作区。
+- 清点有没有没进 main 的工作:
+  - 本地分支只有 main,`origin/main` 与 main 同为 `d77a458ee`;没有 stash;`.claude/worktrees` 是空的。
+  - 桌面端的存储记录里没有任何会话 worktree:0 个在用,归档后因有未提交改动而保留的也是 0 个。已删会话没有留下 worktree。
+  - 三个分离 HEAD 的快照 worktree:HEAD 都在 main 里,本地改动不需要合并。这是同日上一条核对的结论;我抽查了组队快照,main 确实已有 `peerTeamID` 实现与集成用例,快照里只是同一修复的另一份实现。
+  - **HEAD 引用日志里有 5 个不在 main 的提交**(11-23~11-26),都不是丢失的工作:
+    - `f300812b2`、`67e4ec5d8`、`1857175e7`、`d97bb55c4` 是「变基到 origin/main」之前的旧版本,对应 main 里的 `5c0a518a6`、`816839456`、`5d96a4f79`、`853f3eaab`;
+    - `ef8355f3d` 被 `commit --amend` 成 main 里的 `95009ecd1`。
+  - 核对内容:
+    - 两对变基前后 patch-id 相同;
+    - 另两对只有一个文件不同:`docs/PROGRESS.md`(按 union 合并)和 `AGENTS.md`(上游已有同样的改动,变基时被当成已应用)。原提交给这两个文件新增的 55 行与 10 行,在当前 main 里一行不缺;
+    - amend 那一对,后者只多了重新导出的表。
+  - 结论:没有要合并的。
+- 已删会话如果在主仓工作区里直接改、没提交,改动仍在工作区(当前 85 个未提交文件),也在 main 上,等负责人的批量提交带进库。
+- 没查:Java 仓与客户端仓。它们是别的仓库,工作不该并进本仓。
+
+### 2026-11-27 Claude:上两条的提交情况更正(data_service 启动期故障隔离)
+
+- 写这两批时,工作区被别的会话批量提交了两次:
+  - 批 1 的代码与设计稿初稿进了 `3eb57a09a`;
+  - 批 2 的 Go 主体(注册器、共享库、data_service、go/db)与批 1 的 PROGRESS 条目进了 `76e2b59bb`。
+- 还在工作区、没有提交的:
+  - 两个清单的就绪探针(`data-service.yaml`、`db.yaml`);
+  - `logical-db-alerts.yaml` 与它的契约用例;
+  - go/db 的 `store_registry_test.go`;
+  - 文档:设计稿 §7~§10 的更新、写者名册换代 §5.6、开服手册 §9、搬库手册 §1;
+  - 批 2 的 PROGRESS 条目。
+- 只按 HEAD 跑时,`/readyz` 已经在代码里,但清单的就绪探针还是 gRPC,缺写资格的 Pod 会被算成就绪。验证请在主工作区跑(带上未提交的部分);下次提交把上面这些带上。
+
+## 2026-11-26 Claude:断线租约到期也按会话代次认会话——同号新连接不再被旧到期踢掉(先协议生成;未编译、未测试,待 Gemini 验证;Java 待核对)
+
+- **缺陷**(11-19「player_locator 按会话代次认断线」留下的最后一面):player_locator 的 LeaseMonitor 在断线租约到期后，发 `PlayerLeaseExpiredEvent` 给 gate 收掉残留连接。gate 的 `PlayerLeaseExpiredEventHandler` 只比玩家号。同一 gate 进程里会话号每 131072 条连接回绕一圈，同一玩家落回同号、旧连接的到期又迟到时，新连接会被踢掉，玩家要重登，不丢数据。
+- **修法**(照会话记录已有的代次规则):
+  - `proto/contracts/kafka/gate_event.proto`:`PlayerLeaseExpiredEvent` 加 `uint64 session_incarnation = 7`(服务端内部 Kafka 契约，客户端不可见);
+  - `go/player_locator/internal/logic/leasemonitor.go`:`sendLeaseExpiredToGate` 从会话记录照抄 `SessionIncarnation`;
+  - `cpp/libs/services/gate/session/system/session_identity_fence.h`:纯函数 `LeaseExpiryTargetsThisSession`,两边代次都非 0 且不等就不是这条会话，任一边为 0 按会话号认;
+  - `cpp/nodes/gate/handler/event/gate_event_handler.cpp`:在玩家核对之后调它，不符打 WARN、不踢;
+  - 用例 `LeaseExpiryFence.EarlierConnectionOnTheSameSessionIdIsNotTheTarget`(`routing_identity_test.cpp`)。
+- **文档**:
+  - `gate-online-identity.md` §10.4 代次一节补这一面;
+  - `infra-reconnect-overview.md` §1.2 补两条可复用的原则:挂起、排空 HOLD、补偿只按结局判，不列「正常拒绝」白名单;丢不起的通知做成「至少送达一次」,由发送方持有、接收方处理完才确认、只留一层重试、按代次认;
+  - 同文件 §2「服务间 gRPC」一行写明 Go 调 Go 走 Service 地址时 keepalive 的取值和为什么这样取。
+- **Gemini 验证**(仓库根目录，按顺序):
+  1. `pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath tools/proto_generator/protogen/etc/proto_gen.no-unity.yaml`:`go/proto` 与 `cpp/generated/proto` 里 `PlayerLeaseExpiredEvent` 都有 `session_incarnation`。
+  2. `cd go/player_locator && go build ./... && go vet ./internal/logic/ && go test ./internal/logic/ -count=1`。
+  3. `msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`:0 个错误。
+  4. `pwsh -File tools/scripts/run_cpp_tests.ps1 -Build -Filter routing_identity -LogDir build/verification/lease-expiry-incarnation-20261126/cpp-tests`:全绿，点名 `LeaseExpiryFence.EarlierConnectionOnTheSameSessionIdIsNotTheTarget` 与全部 `KickFence.*`。
+  5. `python tools/scripts/check_log_text_english.py`。
+  6. 失败时保留第一条编译错误(带文件与行号)与 gtest、`go test` 的失败输出。
+- **已跑**:`python tools/scripts/tests/test_cpp_no_raw_pointer_member.py` 通过(只读预检);`gofmt -l` 无输出。
+- **Java 版**:没写代码，已在 Java 仓 `PARITY.md` 登记待核对。
+
+## 2026-11-26 Claude：交接单第 1 节与第 4 节第 2~4 条——EnterGame 的 2005 按含义拆开、换角编排用例与客户端小项、data_service 坏消息进死信、判陈旧两条复核（Opus 5.5，负责人放行；未生成、未编译、未测试，待 Gemini 验证）
+
+- **范围**：接 `docs/handoff/review-suggestions-remaining-handoff-20261126.md`。负责人当晚改定由 Claude 写；本会话做第 1 节与第 4 节第 2~4 条，第 2、3、5 节与第 4 节第 1 条归「交接单里的代码改动清零与方案入档」会话。设计记录都写进了设计文档，r2 审计文档 §1a 加了三行入口，§6「清点」第 2~4 条标了状态。
+- **EnterGame 的 2005 按含义拆开**（`client-request-ordering.md` §6.2 有表与取舍）：
+  - `data/tip/Tip.xlsx` 登录段末尾追加 `LoginRoleTradeFrozen`（2057，角色挂着交易冻结）、`LoginEnterGameBusy`（2058，进场池满，fault）。已核对：表里其余 702 行逐行不变，新码接在 2056 后面。
+  - `entergamelogic.go`：交易冻结回 2057，池满回 2058，2005 只剩「本连接绑着别的角色 / 这名角色的进场链还没结束」。客户端判定逻辑不用改（非 2005 本来就按拒绝收尾），只改了注释。
+  - 没把「进行中」挪到 2007：两版共享的客户端契约（Java 仓 `mmorpg-client-contract-login.md`）写明「进场还在进行中返回 2005」。
+  - 同步：`new-player-first-enter-no-cold-read.md` 里池满的口径、`stress_summarize.ps1` 注释；Java 待做已登记。
+- **客户端**（客户端仓 main）：
+  - 新文件 `Assets/Tests/EditMode/Net/EnterGameRoleSwitchFlowTests.cs`（加 `.meta`）：回环假 gate 按脚本应答，四条用例——换角先 LeaveGame、2028 后令牌重登、同一请求号重发；LeaveGame 三次结果不明拆连接、不发 EnterGame；同一角色 1003 后重发、2005 接着等；重发撞上 2058 按拒绝交回。选角页回选次数上限在完整登录管线里，没补。
+  - `EnterGameRoleSwitchTests` 加 `TradeFrozenAndBusyAreRejectionsEvenOnASameRoleResend`。
+  - `ClientRequestKeys.ReportKeyReused` 的日志改成两种可能都写上（三处钉着旧文案的用例同步）；没为键复用单独发码，理由写进 `client-request-idempotency.md` 第 5 条。
+  - 临时格：未就绪时状态行显示原因（`PlayerFeaturesClient.PrepareRequest` 补写临时格的读错误）；面板重画保住焦点（`TemporaryBagDialog.Redraw`）。记录在 `bag-rule-policy-layering.md` §6.6 (5)。
+  - `LeaveThenEnter` 分支补注释说明是防御分支。
+- **data_service 坏消息进死信**（`kafka-bound-consumer-group.md` §15.6）：
+  - 新文件 `go/data_service/internal/kafka/dead_letter.go`：进批时给坏消息留原件深拷贝，flush 第一步按顺序写本组死信「消费组名-dlq」（cause unprocessable），每条有界重试 5 次；写不进整批不提交，返回 `ErrConsumerStoppedOnDeadLetter`，`finishAttempt` 与 DB 停机同样按「确定未提交」交还。
+  - `txlog_consumer.go`、`snapshot_consumer.go`、`snapshot_worker.go`：decode 改回原因串；`start.go` 确保两个死信 topic 并建写入端，supervisor 退出时关掉。
+  - kafkautil：新增 `DeadLetterTopicSpecFor`（原 topic 上限加 64KiB 余量，快照的死信是 16MiB 加余量）；`NewKafkaDeadLetterSink` 改按契约建（单批上限取契约里的上限），guild 调用点同步；`cmd/kafka_dlq` 读死信与写回原件的单条上限放到 32MiB（原来写回超过 1MiB 的原件会在本地被拒）。
+  - 告警与手册：`DataServiceAuditMessagesSkipped`、`DataServiceAuditConsumerStopped` 的说明，`kafka-bound-consumer-runbook.md` §1.2，`audit-topic-generation-bump-runbook.md` 告警表。
+  - 用例：新增 `TestTxLogConsumer_StopsWithoutCommitWhenDeadLetterKeepsFailing`、`TestSnapshotConsumer_StopsWithoutCommitWhenDeadLetterKeepsFailing`、`TestNewBadMessageCopiesTheOriginal`；改名改断言 `TestTxLogConsumer_DeadLettersUndecodableAndZeroTxIdThenCommitsThem`、`TestSnapshotConsumer_DeadLettersBadMessagesThenCommitsThem`；kafkautil 的 `TestDeadLetterMessageRoundTripsTheOriginal` 加了 16MiB 契约。
+- **判陈旧两条**（记录在 `horizontal-scale-logical-db.md`「标了保留的建角 ref」一段末尾）：别的账号上的 ref 11-12 已收（逐片读、有 ACTIVE 即保留）；「建成了、从没进过场、绑定也没做完」复核后不改代码。
+- **交 Gemini**（失败保留首错原文，要改源码或断言就停下交回 Claude）：
+  1. 导表与协议：按 `data/AGENTS.md` 导 Tip（新增 2057、2058）；`dev_tools.ps1 -Command proto-gen-run`；客户端仓跑 `tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`tools/client_compile_check.ps1`。生成之前 login 与客户端引用的两个新常量编不过，属预期。
+  2. `cd go/login`：`go vet ./internal/logic/clientplayerlogin/`；`go test -count=1 -run 'TestEnterGame_PoolSaturatedCountsWithoutLatencySample|TestEnterGame_RoleFrozenByTradeHasItsOwnCode|TestPrimeEnterGameMetrics' ./internal/logic/clientplayerlogin/`，再整包。
+  3. `cd go/data_service`：`gofmt -l ./internal/kafka/` 无输出；`go vet ./internal/kafka/`；`go test -race -count=1 ./internal/kafka/`，上面点名的五条在列。有真 Kafka 时跑 `consumer_integration_test.go`，核对启动之后多了两个「消费组名-dlq」topic。
+  4. `cd go/shared`：`go test -count=1 ./kafkautil/ ./cmd/kafka_dlq/`；`cd go/guild`：`go vet ./internal/kafka/ && go test -count=1 ./internal/kafka/`。
+  5. 客户端 EditMode：`EnterGameRoleSwitchFlowTests` 四条、`EnterGameRoleSwitchTests` 全部、`AttributeClientTests`、`EquipForgeClientTests`、`MysteryMerchantClientTests`（日志文案改过的三处）全绿。
+  6. 仓库根：`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1`（告警说明改过）；`promtool check rules deploy/k8s/data-service-audit-alerts.yaml`。
+- **Java 版**：待做，已登记进 Java 仓 `PARITY.md` 2026-11-12 那一节末尾（2057 / 2058、审计消费者死信）。
+
+## 2026-11-26 Claude:已删 / 已归档会话留在 git 里的残留逐项核对——没有要合并的(只核对,没改代码)
+
+- 补同日「核对本会话与已删会话的工作是否都在主仓 main」那条没查的地方,查了以下五处:
+  - `refs/archive/branch/*`:15 个旧会话分支;
+  - `refs/archive/worktree/*`:11-02 收成 main-only 之前的 11 个 worktree 快照;
+  - 36 个悬空提交,含丢掉的 stash;
+  - Codex 的 `refs/codex/*` 工作区快照;
+  - `build/verification`、`run/verification` 两个验证副本的未提交改动。
+- 核对方法分两步:
+  - 先逐文件比对 main 历史里出现过的版本;
+  - 不一致的,再把新增的标识符逐个用 `git log -S` 查 main 历史。
+- 已在 main 的,包括内容相同的和进过 main 后又改过的:
+  - 13 个归档分支指向的提交本来就在 main;
+  - `claude/player-store-direct-commit` 的内容 10-30~11-01 进过 main,之后改了版;
+  - 9 个 worktree 快照的代码都在 main;
+  - 11-23~11-26 的悬空提交是变基或 amend 之前的旧版本。
+- 不在 main,但已被后来的方案取代,**不要再并回来**:
+  - 战斗结算恢复:`refs/archive/branch/claude/recover-battle-settlement-f39089db` 和 `wt-recover-battle-settlement` 快照,做的是 Redis 每局待结算记录加墓碑。11-01 起结算改走 match SQL + player_inbox,见 `turn-battle-gap-closure.md` 开头的更正和 §10;
+  - LeaveGame 之后 gate 释放会话身份:practical-bouman 的两个 stash。现在由 `location-release-binding.md` §3.5 的发出钩子负责;
+  - match 会话头解不开时回落到请求体身份:ecstatic-williamson 的两个 stash。现在由 `go/shared/callerauth` 验签,带了会话头却验不过的一律拒绝;
+  - 令牌家族的旧版:relaxed-cerf 快照。11-01 已按 Lua 重写进 main,见 `family.go` 和 `dual-token-authentication.md` 第 121 行;
+  - 玩家存盘 redis / direct 开关的配置注释:玩家存档只存 TiDB 之后,这个开关已经不存在。
+- 不在 main 的只剩记录性内容:
+  - 10-15~10-30 几个 worktree 会话的 PROGRESS 条目没进 main,代码都已在 main。11-01 之前的条目按 11-20 瘦身的口径不补;
+  - Codex 10-12 写的 `player-storage-placement.md` v2.5 §17 讨论稿没进 main(main 仍是 v2.4),内容已被后来的映射直读 TiDB 方案取代;
+  - Codex `refs/codex/turn-diffs` 快照和 main 的差别只在生成代码。
+- 别的仓:客户端、Java、Go(xuanming-server)、python 仓都在 main 上,没有未合并的分支和 stash。客户端的改动本来就该在客户端仓。
+- 归档引用和悬空提交都没删,留着备查。
+
+## 2026-11-26 Claude:gate 准入 P1-5——gate / battle Pod 加 safe sysctl(keepalive 120 / 10 / 6、收发缓冲上限 512KB;只改部署模板,未运行,待 Gemini;Java 仓无 K8s 清单,不涉及)
+
+- **起因**:负责人要求把同日「定为不做」的两项做完。本条做 P1-5 的 sysctl;P2-4 票据先行另开会话做(gate-ticket-first),结果以它自己的条目为准。
+- **复核**:原先不做的两条理由都不成立。应用层的握手期限与心跳只管客户端连接,节点间长连接与 sidecar 的出站连接空闲时按内核缺省要约 2 小时 11 分才发现对端已死;
+  muduo 每条 `TcpConnection` 都开 `SO_KEEPALIVE`(Windows 副本与 Linux gitlink b55b0ac / f1fc77e 的 `TcpConnection.cc:63`),所以这三项对 Pod 内所有连接生效。
+  版本要求(keepalive 1.29、收发缓冲 1.32、节点内核 ≥ 4.15)被本仓钉的 Agones 1.58 覆盖:它只支持 Kubernetes 1.33~1.35。
+- **取值**:`tcp_keepalive_time / intvl / probes` = 120 / 10 / 6(约 3 分钟回收;120 秒低于 Azure LB 4 分钟、AWS NLB 350 秒的空闲回收);
+  `tcp_rmem` = `4096 131072 524288`、`tcp_wmem` = `4096 16384 524288`:只压上限,初始值照内核缺省(空闲连接不占缓冲,压初始值省不了内存)。
+  上限封住对端不读 / 本端卡住时单连接内核缓冲的最坏值(cgroup v2 下算进 Pod 内存),客户端 200ms 往返仍有约 1.3MB/s。推导全文在设计稿 P1-5「safe sysctl」条。
+- **改动**:
+  - `tools/scripts/lib/k8s_client_entry.ps1`:新增 `Get-ClientFacingPodSysctlsYaml`(取值只在这一处);gate StatefulSet、battle Fleet、battle hostPort 三个生成器在 Pod spec 上紧跟 `terminationGracePeriodSeconds` 写入。
+  - `tools/scripts/k8s_deploy.ps1` 的 `New-NodeDeploymentYaml`:gate / battle 两个角色写,scene 不写(只动了这一处,同文件别的会话的未提交改动没碰)。
+  - `tools/scripts/tests/k8s_deploy_contract.tests.ps1`:新增「P1-5:gate / battle 的 Pod spec 紧跟 terminationGracePeriodSeconds 带五项 safe sysctl…」,按 DryRun 核五套 C++ 模板,值独立钉一份。
+  - 文档:设计稿 `gate-connection-admission-control.md` 状态头、P1-5 正文与逐条状态表、§9.5(定容时每连接内核侧再加 1MB)、§9.6 新增集群验收行;`deploy/k8s/README.md` 写了集群要求与核对命令。
+  - 顺带改正两份运维文档的冲突值:`docs/ops/gate-kernel-tuning-runbook.md` §二(keepalive 300 / 30 / 3 → 120 / 10 / 6,收发缓冲上限 16MB → 512KB,注明 K8s 上节点值配不到 Pod 里)、
+    同文 §三删掉设 `net.core.somaxconn` 的 Pod 示例(unsafe sysctl,照抄会被 kubelet 拒收 Pod);`docs/ops/release-checklist.md` A.3 同步。
+    版本门槛与「新网络命名空间不继承节点 keepalive」按 Kubernetes v1.28~v1.32 与 Linux v6.12 源码核过,出处写在设计稿 P1-5 第 3 条。
+- **静态检查**:两份脚本 `Parser::ParseFile` 0 错误;单独渲染了新函数,核对过空格缩进与制表符换算后的两种输出。契约测试没跑。
+- **交 Gemini**(失败保留首错原文,要改源码或断言就停下交回 Claude):
+  1. 仓库根:`pwsh -NoProfile -File tools/scripts/tests/k8s_deploy_contract.tests.ps1` 全绿,新用例在列。
+  2. `pwsh -NoProfile -File tools/scripts/tests/k8s_client_entry_contract.tests.ps1`、`pwsh -NoProfile -File tools/scripts/tests/scene_planned_drain_deploy.tests.ps1`、`pwsh -NoProfile -File tools/scripts/tests/k8s_log_collection_contract.tests.ps1` 仍全绿(三个生成器的输出多了这一段)。
+  3. 有 kind(node v1.35.8)时按设计稿 §9.6「Pod 级 safe sysctl」那一行核:gate / battle 的 `/proc/sys` 是新值、scene 是缺省、没有 `SysctlForbidden` 事件。
+- **Java 版**:不涉及(Java 仓没有 K8s 清单)。设计稿记了一条:Netty 子 channel 缺省不开 `SO_KEEPALIVE`,将来照抄这组 sysctl 时要同时打开。
+
+## 2026-11-27 Claude:第三方登录线复核——工作都在 main、无待合并;两处文档补正(只改文档,未运行任何命令)
+
+- **工作都在 main 上**:服务器仓和客户端仓都在 main,没有未合并分支,也没有 stash。另外几个 worktree 都是 `build/` 与 `run/verification` 下的构建快照。
+  - 引用日志里有服务器仓 5 个、客户端仓 4 个提交不在 main 上,都是 amend 或变基之前的旧版,替代它们的提交都在 main:
+    - `ef8355f3d` 的替代是 `95009ecd1`:父提交相同,标题多了「与帮战」;
+    - `f300812b2` 的改动用 `git merge-tree` 合到 main 上,树不变,说明已经在 main 里;
+    - 其余 7 个在 main 上都有同标题的提交。
+  - 本线派生、后来被删掉的两个子会话(防沉迷 K8s 部署参数、go/payment 未成年人限额闸)都在主工作区干活,代码都在 HEAD。没有要合并的东西。
+- **代码核对**:本线代码在 HEAD 上与后来别的线的改动是一致的,没有要改的代码。核对了这几处:
+  - sandbox mock 的路由;
+  - `auth_init.go` 的注册(现在带 `WithReplayGuard`);
+  - `ErrAccessRejected` 的分流;
+  - 分配 gate 的匿名规则(登录排队线 11-26 改成「旧路径开着、并且排队关着」)。
+- **文档补正**:
+  - 交接单 `third-party-login-and-anti-addiction-handoff-20261126.md` 的 §2.2 冒烟与 §5 定案,改成新的匿名规则。
+  - `docs/design/dual-token-authentication.md` 新增一节「access token 校验:被拒与存储故障分开」。这段分析原来只在 11-13 的 PROGRESS 条目里,那条已随 11-20 瘦身移出。
+
+## 2026-11-26 Claude：数据覆写审计 r2 第 4 轮其余 9 条改由 Claude 写（负责人定；只改文档）
+
+- 负责人定：第 4 轮除批 V/W/X 外的 9 条，由 Claude 用 Opus 5.5 写，不交 Gemini。
+  - 两条 medium：r2-mall#1、r2-craft#1（悬赏求书改走 go/trade 托管）。
+  - 七条 low：r2-jh#3、r2-craft#2~#4、r2-ops#1、r2-ops#2、r2-oa#1。
+- 安排：
+  - 由第 4 轮会话在 V/W/X 之后接着做，先做两条 medium。V/W/X 已写完，见交接单 §7，复核在「交接单里的代码改动清零与方案入档」会话。
+  - 周额度（全部模型）超过 80% 就停在一批的边界上，没做的写回交接单 §6，交 Gemini。
+- 更正：同日上一条回复里写的「三批 7 条、剩下 10 条」不对，应为三批 8 条（帮战 4、锦标赛 2、生死状 2），剩下 9 条。
+- 文档：第 4 轮交接单 §3「其余」中 craft#1 的顺序与 §6 已改成这个定案。

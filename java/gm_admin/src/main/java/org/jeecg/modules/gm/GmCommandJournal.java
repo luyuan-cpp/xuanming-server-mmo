@@ -132,11 +132,20 @@ public final class GmCommandJournal {
         return prepareInternal(operator, clientRequestId, "0", reason, input, "TRADE_MANUAL");
     }
 
+    /**
+     * 运营处置(docs/design/admin-identity-and-dual-control.md §8 批 4、批 5):商城人工单与 SKU、账号类、回收、收件箱、榜单、阵容。
+     * input 是 {target, command, body}:下游与命令由 GmOpsController 的目录核过,操作人、原因等服务端字段已由它填进 body。
+     * 流水再补 requestId(就是流水号,也就是批准号)。接入这一类的下游都必须按这个号判重,所以结果未知后可以用原申请重试。
+     */
+    public ObjectNode prepareOps(String operator, String clientRequestId, String reason, ObjectNode input) {
+        return prepareInternal(operator, clientRequestId, "0", reason, input, "OPS");
+    }
+
     private ObjectNode prepareInternal(String operator, String clientRequestId, String playerId,
             String reason, ObjectNode input, String kind) {
         check(operator != null && !operator.isBlank() && bytes(operator).length <= 512, "操作者非法");
         check(clientRequestId != null && clientRequestId.matches("[A-Za-z0-9._:-]{1,128}"), "客户端幂等号非法");
-        if (kind.equals("SYSTEM_MAIL") || kind.equals("MAIL_CAMPAIGN") || kind.equals("TRADE_MANUAL")) {
+        if (kind.equals("SYSTEM_MAIL") || kind.equals("MAIL_CAMPAIGN") || kind.equals("TRADE_MANUAL") || kind.equals("OPS")) {
             check("0".equals(playerId), "该类命令不绑定单个玩家");
         } else {
             check(playerId != null && playerId.matches("[1-9][0-9]{0,19}"), "玩家 ID 非法");
@@ -159,6 +168,12 @@ public final class GmCommandJournal {
             if (kind.equals("MAIL")) {
                 check(!input.has("recipientPlayerId") || playerId.equals(input.path("recipientPlayerId").asText()), "玩家不一致");
             }
+        } else if (kind.equals("OPS")) {
+            check(input.size() == 3 && input.path("target").isTextual() && input.path("command").isTextual() && input.get("body") instanceof ObjectNode,
+                    "运营处置格式非法");
+            // 请求号与批准记录由服务端补,草稿里不许出现;调用证明在发送时现签。
+            for (String frozen : List.of("requestId", "approval", "auth"))
+                check(!input.path("body").has(frozen), "不得覆盖服务端冻结字段");
         } else if (kind.equals("TRADE_MANUAL")) {
             check(input.path("commerceId").isTextual() && input.path("action").isTextual() && input.path("expectVersion").isTextual()
                     && input.path("expectTarget").isTextual(), "交易人工处置格式非法");
@@ -196,6 +211,8 @@ public final class GmCommandJournal {
                         .put("expireMs", Long.toString(Math.addExact(now, days * 86_400_000L)));
             } else if (kind.equals("TRADE_MANUAL")) {
                 request.put("operator", operator).put("reason", reason);
+            } else if (kind.equals("OPS")) {
+                request.put("requestId", id);
             } else {
                 request.put("requestId", id)
                         .put("playerId", playerId).put("operator", operator).put("reason", reason)
@@ -260,6 +277,10 @@ public final class GmCommandJournal {
 
     public ObjectNode listTradeManual(int page, int pageSize, String status) {
         return list("TRADE_MANUAL", page, pageSize, null, status);
+    }
+
+    public ObjectNode listOps(int page, int pageSize, String status) {
+        return list("OPS", page, pageSize, null, status);
     }
 
     public ObjectNode listPlayerCommands() {
@@ -373,6 +394,11 @@ public final class GmCommandJournal {
         return sendInternal(id, operator, sender, "TRADE_MANUAL");
     }
 
+    /** 运营处置的放行;sender 的第二个参数是批准记录,与交易人工处置同一口径。 */
+    public ObjectNode sendOps(String id, String operator, BiFunction<ObjectNode, ObjectNode, ObjectNode> sender) {
+        return sendInternal(id, operator, sender, "OPS");
+    }
+
     private ObjectNode sendInternal(String id, String operator, BiFunction<ObjectNode, ObjectNode, ObjectNode> sender, String kind) {
         Objects.requireNonNull(sender);
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
@@ -380,7 +406,7 @@ public final class GmCommandJournal {
         }
         boolean mailKind = isMailKind(kind);
         // 下游按请求号或批准号判重的命令,结果未知后可以用原号重试;在线玩家的直接 GM 没有这样的判重,不能重试。
-        boolean retryable = mailKind || kind.equals("TRADE_MANUAL");
+        boolean retryable = mailKind || kind.equals("TRADE_MANUAL") || kind.equals("OPS");
         String complete = mailKind ? "DELIVERED" : "EXECUTED";
         long leaseMs = kind.equals("MAIL_CAMPAIGN") ? CAMPAIGN_LEASE_MS : MAIL_LEASE_MS;
         Row claimed = tx.execute(status -> {

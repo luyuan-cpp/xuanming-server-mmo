@@ -43,6 +43,16 @@ void LogSampled(const char *reason, const SessionId sessionId, const uint64_t to
 	}
 }
 
+// 同上,给还没验签的连接:它们只有一条未验签记录,没有 session_id 可打。
+void LogUnauthenticatedSampled(const char *reason, const uint64_t total)
+{
+	if ((total & 0x3FF) == 1)
+	{
+		LOG_WARN << "[ClientHeartbeat] unauthenticated connection rejected (sampled), reason=" << reason
+				 << ", rejected_total=" << total;
+	}
+}
+
 SessionInfo *FindSession(const uint32_t sessionId, const uint64_t incarnation)
 {
 	auto &sessions = tlsSessionManager.sessions();
@@ -62,17 +72,36 @@ void ForceClose(SessionInfo &session)
 	}
 }
 
-// 握手期限到了还没验签:只关连接。没验签的会话没有角色、没向 login 发过登录,断开回调只删会话。
-void CloseHandshakeTimeout(const uint32_t sessionId, const uint64_t incarnation)
+// 握手期限(docs/design/gate-client-heartbeat.md §5.1,准入设计 P2-4「票据先行」):验签之前 gate 没有会话,只有未验签表里的
+// 一条记录。表按建连先后有序(键是建连时单调分配的代次),从表头起关掉建连满 handshakeTimeout 的,碰到第一条没满的就停,
+// 每轮只碰到期的那几条。判据是「距建连的时长」,期间收到过字节也不续期。
+// 关的时候当场摘记录:这一刻起它不再占未验签名额,也不会再被承压淘汰选中;连接随后照常走断开回调(找不到记录,什么都不做,
+// 不通知 login / scene)。本轮扫描迟到(本端 loop 卡过)时只计推迟、不关:验签请求可能还在接收缓冲里没读,下一轮准时的扫描再判。
+// 返回推迟的条数。
+uint64_t CloseExpiredHandshakes(const SteadyTime now, const bool late)
 {
-	SessionInfo *session = FindSession(sessionId, incarnation);
-	if (session == nullptr)
+	auto &preAuthConnections = tlsSessionManager.preAuthConnections();
+	const auto handshakeTimeout = client_liveness::kClientLiveness.handshakeTimeout;
+	uint64_t deferred = 0;
+	auto it = preAuthConnections.begin();
+	while (it != preAuthConnections.end() && now - it->second.connectedAt >= handshakeTimeout)
 	{
-		return; // 同一次扫描里刚核对过,不会走到这里
+		if (late)
+		{
+			++deferred;
+			++it;
+			continue;
+		}
+		const auto conn = it->second.conn.lock();
+		it = preAuthConnections.erase(it);
+		++tlsCounters.handshakeTimeouts;
+		LogUnauthenticatedSampled("handshake_timeout", tlsCounters.handshakeTimeouts);
+		if (conn)
+		{
+			conn->forceClose(); // 排队关闭,不会在这个循环里同步走断开回调
+		}
 	}
-	++tlsCounters.handshakeTimeouts;
-	LogSampled("handshake_timeout", sessionId, tlsCounters.handshakeTimeouts);
-	ForceClose(*session);
+	return deferred;
 }
 
 // 静默满阈值:只关连接。断开回调随后照常代发 ExitGame(DISCONNECTED)、通知 login、清 lane 与观战订阅、删会话。
@@ -155,11 +184,6 @@ void LogSummaryIfDue(const SteadyTime now)
 
 } // namespace
 
-void ExpectHandshake(const SessionId sessionId, const SessionInfo &session, const SteadyTime now)
-{
-	tlsSweeper.ExpectHandshake(sessionId, session.incarnation, now);
-}
-
 void OnTokenVerified(const SessionId sessionId, SessionInfo &session, ClientTokenVerifyResponse &response,
 					 const SteadyTime now)
 {
@@ -179,6 +203,14 @@ void OnHeartbeatRequest(const muduo::net::TcpConnectionPtr &conn, const std::sha
 
 void HandleHeartbeat(const muduo::net::TcpConnectionPtr &conn, const ClientHeartbeatRequest &request, const SteadyTime now)
 {
+	// 还没验签(连接只有一条未验签记录,没有会话):与验签之前发 ClientRequest 同一处置,不回包,直接断开。
+	if (PreAuthIncarnationOf(conn))
+	{
+		++tlsCounters.beforeVerify;
+		LogUnauthenticatedSampled("heartbeat_before_token_verify", tlsCounters.beforeVerify);
+		conn->forceClose();
+		return;
+	}
 	const SessionId sessionId = SessionIdOf(conn);
 	auto &sessions = tlsSessionManager.sessions();
 	const auto sessionIt = sessions.find(sessionId);
@@ -196,7 +228,7 @@ void HandleHeartbeat(const muduo::net::TcpConnectionPtr &conn, const ClientHeart
 	switch (client_liveness::AdmitHeartbeat(session.liveness, session.verified, now, client_liveness::kClientLiveness))
 	{
 	case HeartbeatAction::kRejectUnverified:
-		// 与验签之前发 ClientRequest 同一处置:验签之前除了验签请求,什么都不收。
+		// 会话只在验签成功之后才建,走不到这里;留作纵深防御,处置与上面还没验签的连接相同。
 		++tlsCounters.beforeVerify;
 		LogSampled("heartbeat_before_token_verify", sessionId, tlsCounters.beforeVerify);
 		conn->forceClose();
@@ -238,21 +270,21 @@ void SweepLiveness(const SteadyTime now)
 			{
 				return std::nullopt;
 			}
-			return LivenessSweeper::SessionView{
-				.verified = session->verified, .loggedIn = session->loginSucceeded, .liveness = session->liveness};
+			return LivenessSweeper::SessionView{.loggedIn = session->loginSucceeded, .liveness = session->liveness};
 		},
-		[](const uint32_t sessionId, const uint64_t incarnation) { CloseHandshakeTimeout(sessionId, incarnation); },
 		[](const uint32_t sessionId, const uint64_t incarnation, const SteadyTime::duration silentFor)
 		{ CloseIdleSession(sessionId, incarnation, silentFor); },
 		[](const uint32_t sessionId, const uint64_t incarnation) { CloseLoginTimeout(sessionId, incarnation); });
+	// 握手期限:扫未验签表。本轮迟不迟到沿用上面这一次扫描的判定(同一个节拍)。
+	const uint64_t deferred = result.deferred + CloseExpiredHandshakes(now, result.late);
 
-	if (result.deferred > 0)
+	if (deferred > 0)
 	{
 		// gate 的 loop 卡过 2s 以上才会走到这里,本身就是该看的服务端问题。一次卡顿只打一行,不按连接打。
-		tlsCounters.deferred += result.deferred;
+		tlsCounters.deferred += deferred;
 		LOG_WARN << "[ClientHeartbeat] liveness verdicts deferred, local loop stalled: check_gap_ms="
 				 << std::chrono::duration_cast<std::chrono::milliseconds>(result.checkGap).count()
-				 << ", deferred=" << result.deferred << ", deferred_total=" << tlsCounters.deferred;
+				 << ", deferred=" << deferred << ", deferred_total=" << tlsCounters.deferred;
 	}
 	LogSummaryIfDue(now);
 }

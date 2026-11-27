@@ -1,12 +1,16 @@
 #include "player_craft.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <random>
 #include <set>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <hiredis/hiredis.h>
@@ -71,7 +75,8 @@ PlayerCraftSystem::PersistFn gCraftPersistFn = &PlayerLifecycleSystem::SavePlaye
 thread_local std::map<uint64_t, CraftProxyStallInfo> tlsProxyStallDirectory;
 thread_local std::map<uint64_t, PendingProxyReputation> tlsPendingProxyReputation;
 thread_local std::map<uint64_t, HotProxyCounters> tlsHotProxyCounters;
-thread_local std::set<uint64_t> tlsDrainingProxyMasters;
+// 本节点正在从台账取走待回账的宗师:同一名宗师至多一次在途,入账(含存盘排程)期间不重入。
+thread_local std::set<uint64_t> tlsProxyReputationTakesInFlight;
 muduo::net::EventLoop* gProxyDirectoryLoop = nullptr;
 muduo::net::TimerId gProxyDirectoryTimerId{};
 bool gProxyDirectoryTimerActive = false;
@@ -357,6 +362,128 @@ int64_t ParseNonNegativeInt64(std::string_view text) {
         val = val * 10 + digit;
     }
     return neg ? 0 : val;
+}
+
+// ── 口碑待回账的取走与入账(r2-craft#4,设计见 craft-proxy-reputation-digest-and-hot-ranking.md §2.3)──
+// 取走 = 同一段脚本里先 HMGET 再 HDEL:两个节点同时取同一名宗师,只有先执行的一方拿到值。字段与
+// RecordProxyOrderReputation 写的一致(<id>:o/s/r/g/b);热榜的 :24o / :24s 不取。
+constexpr char kTakeProxyReputationLua[] =
+    "local k=KEYS[1] local p=ARGV[1] "
+    "local v=redis.call('HMGET',k,p..':o',p..':s',p..':r',p..':g',p..':b') "
+    "redis.call('HDEL',k,p..':o',p..':s',p..':r',p..':g',p..':b') "
+    "return v";
+
+// 取走脚本的应答是 5 项数组,缺的字段为 nil;负数(旧版回账多扣出来的)按 0 算,这一次已一并删掉。形状不对 = 结果未知。
+std::optional<PlayerCraftSystem::TakenProxyReputation> ParseTakenReputation(const redisReply* reply) {
+    if (reply == nullptr || reply->type != REDIS_REPLY_ARRAY || reply->elements != 5) return std::nullopt;
+    std::array<std::string_view, 5> values{};
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const redisReply* el = reply->element[i];
+        if (el == nullptr) return std::nullopt;
+        if (el->type == REDIS_REPLY_NIL) continue;
+        if (el->type != REDIS_REPLY_STRING || el->str == nullptr) return std::nullopt;
+        values[i] = std::string_view(el->str, el->len);
+    }
+    const auto asU32 = [](std::string_view text) {
+        return static_cast<uint32_t>(std::min<int64_t>(ParseNonNegativeInt64(text), std::numeric_limits<uint32_t>::max()));
+    };
+    PlayerCraftSystem::TakenProxyReputation taken;
+    taken.orders = asU32(values[0]);
+    taken.supreme = asU32(values[1]);
+    taken.rare = asU32(values[2]);
+    taken.netGold = static_cast<uint64_t>(ParseNonNegativeInt64(values[3]));
+    if (!values[4].empty()) taken.lastBuyer.assign(values[4].data(), values[4].size());
+    return taken;
+}
+
+bool RedisTakeReputation(uint64_t masterId, PlayerCraftSystem::ProxyReputationTakeDone done) {
+    if (!tlsControlRedis.connected() || masterId == 0) return false;
+    const std::string key = PlayerCraftSystem::ProxyReputationLedgerKey(GetZoneId());
+    const std::string master = std::to_string(masterId);
+    const int ret = tlsControlRedis.command(
+        [done = std::move(done)](hiredis::Hiredis*, redisReply* reply) { done(ParseTakenReputation(reply)); },
+        "EVAL %s 1 %s %s", kTakeProxyReputationLua, key.c_str(), master.c_str());
+    if (ret != REDIS_OK) {
+        LOG_WARN << "[CraftProxyRep] Reputation take command was not sent; pending stays in Redis: master_id=" << masterId
+                 << " ret=" << ret;
+        return false;
+    }
+    return true;
+}
+
+PlayerCraftSystem::ProxyReputationLedger WithDefaultLedger(PlayerCraftSystem::ProxyReputationLedger ledger) {
+    if (!ledger.add) ledger.add = &RedisHIncrByReputation;
+    if (!ledger.setLastBuyer) ledger.setLastBuyer = &RedisHSetReputationBuyer;
+    if (!ledger.take) ledger.take = &RedisTakeReputation;
+    return ledger;
+}
+
+// 当前生效的台账。只在 scene loop 线程读写;函数内静态,不依赖别的翻译单元的初始化顺序。
+PlayerCraftSystem::ProxyReputationLedger& Ledger() {
+    static PlayerCraftSystem::ProxyReputationLedger ledger = WithDefaultLedger({});
+    return ledger;
+}
+
+void GiveBackProxyReputation(uint64_t masterId, const PlayerCraftSystem::TakenProxyReputation& taken) {
+    if (taken.orders > 0) Ledger().add(masterId, ":o", static_cast<int64_t>(taken.orders));
+    if (taken.supreme > 0) Ledger().add(masterId, ":s", static_cast<int64_t>(taken.supreme));
+    if (taken.rare > 0) Ledger().add(masterId, ":r", static_cast<int64_t>(taken.rare));
+    if (taken.netGold > 0 && taken.netGold <= kMaxPayableGold) {
+        Ledger().add(masterId, ":g", static_cast<int64_t>(taken.netGold));
+    }
+    if (!taken.lastBuyer.empty()) Ledger().setLastBuyer(masterId, taken.lastBuyer);
+}
+
+// 取走的应答回到 loop:按 player_id 重新找实体。数额只认取走的值;宗师已离开或存盘排不上,原样还回台账,下一次再取。
+void ApplyTakenProxyReputation(uint64_t masterId, const std::optional<PlayerCraftSystem::TakenProxyReputation>& taken) {
+    if (!taken.has_value()) {
+        LOG_WARN << "[CraftProxyRep] Reputation take result unknown; nothing applied, the pending delta is either still in Redis"
+                 << " or lost (display-only counters): master_id=" << masterId;
+        return;
+    }
+    if (taken->orders == 0 && taken->supreme == 0 && taken->rare == 0 && taken->netGold == 0) {
+        // 别的节点已取走,或本节点镜像过时(在途刷新带回的旧值):什么都不记,镜像这一条作废,下一次刷新以台账为准。
+        tlsPendingProxyReputation.erase(masterId);
+        return;
+    }
+    const entt::entity player = tlsEcs.GetPlayer(masterId);
+    auto* craft = tlsEcs.actorRegistry.valid(player) && PlayerLifecycleSystem::IsPlayerMutable(player)
+        ? tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player)
+        : nullptr;
+    if (craft == nullptr) {
+        GiveBackProxyReputation(masterId, *taken);
+        LOG_INFO << "[CraftProxyRep] Master is no longer mutable here; taken reputation given back to Redis: master_id="
+                 << masterId << " orders=" << taken->orders;
+        return;
+    }
+    const PlayerCraftComp backup = *craft;
+    ApplyReputationToCraftComp(*craft, taken->orders, taken->supreme, taken->rare, taken->netGold, taken->lastBuyer);
+    if (gCraftPersistFn == nullptr || !gCraftPersistFn(player)) {
+        *craft = backup;
+        GiveBackProxyReputation(masterId, *taken);
+        LOG_WARN << "[CraftProxyRep] Failed to persist drained proxy reputation; taken delta given back to Redis: master_id="
+                 << masterId << " orders=" << taken->orders;
+        return;
+    }
+    // 镜像扣掉取走的部分(只影响西市列表的叠加展示;取走之后本节点又记的增量留着)。存盘排程之后再查,不跨调用持迭代器。
+    if (const auto mirror = tlsPendingProxyReputation.find(masterId); mirror != tlsPendingProxyReputation.end()) {
+        auto& cur = mirror->second;
+        cur.orders = cur.orders > taken->orders ? cur.orders - taken->orders : 0u;
+        cur.supreme = cur.supreme > taken->supreme ? cur.supreme - taken->supreme : 0u;
+        cur.rare = cur.rare > taken->rare ? cur.rare - taken->rare : 0u;
+        cur.netGold = cur.netGold > taken->netGold ? cur.netGold - taken->netGold : 0u;
+        if (cur.orders == 0 && cur.supreme == 0 && cur.rare == 0 && cur.netGold == 0) {
+            tlsPendingProxyReputation.erase(mirror);
+        }
+    }
+    CraftProxyStallInfo updatedStall;
+    if (BuildLocalStallSnapshot(player, masterId, updatedStall)) {
+        tlsProxyStallDirectory[masterId] = updatedStall;
+        PublishStallToRedis(masterId, updatedStall);
+    }
+    LOG_INFO << "[CraftProxyRep] Drained offline proxy reputation: master_id=" << masterId
+             << " orders=" << taken->orders << " supreme=" << taken->supreme
+             << " rare=" << taken->rare << " net_gold=" << taken->netGold;
 }
 
 void OnProxyReputationReply(redisReply* reply) {
@@ -776,6 +903,11 @@ void PlayerCraftSystem::CraftSkillBook(entt::entity player, const CraftSkillBook
     }
     if (request.expected_revision() != craft.scroll_craft_revision()) {
         fail(kSkillCraftRevisionChanged);
+        return;
+    }
+    // 书架满了不制书:扣料扣银之前判;提交段核修订号未变,书架在两次检查之间不会变多。
+    if (static_cast<uint32_t>(craft.skill_books_size()) >= equipcraft::kMaxBookshelfBooks) {
+        fail(kSkillBookshelfFull);
         return;
     }
 
@@ -1486,6 +1618,11 @@ void PlayerCraftSystem::UnsealSkillBook(entt::entity player, const UnsealSkillBo
         fail(kFeatureUnavailable);
         return;
     }
+    // 书架满了不开卷,封卷道籍留在背包里。
+    if (static_cast<uint32_t>(craft.skill_books_size()) >= equipcraft::kMaxBookshelfBooks) {
+        fail(kSkillBookshelfFull);
+        return;
+    }
 
     const uint64_t bookId = craft.next_book_seq() == 0 ? 1u : craft.next_book_seq();
     const uint64_t revBefore = craft.scroll_craft_revision();
@@ -1752,9 +1889,9 @@ void PlayerCraftSystem::RecordProxyOrderReputation(uint64_t masterPlayerId, uint
     auto& hot = tlsHotProxyCounters[masterPlayerId];
     hot.orders24h = SaturatingAddU32(hot.orders24h, 1u);
     hot.supreme24h = SaturatingAddU32(hot.supreme24h, supremeDelta);
-    RedisHIncrByReputation(masterPlayerId, ":24o", 1);
+    Ledger().add(masterPlayerId, ":24o", 1);
     if (supremeDelta > 0) {
-        RedisHIncrByReputation(masterPlayerId, ":24s", static_cast<int64_t>(supremeDelta));
+        Ledger().add(masterPlayerId, ":24s", static_cast<int64_t>(supremeDelta));
     }
 
     const entt::entity localMaster = tlsEcs.GetPlayer(masterPlayerId);
@@ -1777,66 +1914,39 @@ void PlayerCraftSystem::RecordProxyOrderReputation(uint64_t masterPlayerId, uint
     if (!buyerName.empty()) {
         pending.lastBuyer = buyerName;
     }
-    RedisHIncrByReputation(masterPlayerId, ":o", 1);
-    if (supremeDelta > 0) RedisHIncrByReputation(masterPlayerId, ":s", static_cast<int64_t>(supremeDelta));
-    if (rareDelta > 0) RedisHIncrByReputation(masterPlayerId, ":r", static_cast<int64_t>(rareDelta));
+    Ledger().add(masterPlayerId, ":o", 1);
+    if (supremeDelta > 0) Ledger().add(masterPlayerId, ":s", static_cast<int64_t>(supremeDelta));
+    if (rareDelta > 0) Ledger().add(masterPlayerId, ":r", static_cast<int64_t>(rareDelta));
     if (netGoldEarned > 0 && netGoldEarned <= kMaxPayableGold) {
-        RedisHIncrByReputation(masterPlayerId, ":g", static_cast<int64_t>(netGoldEarned));
+        Ledger().add(masterPlayerId, ":g", static_cast<int64_t>(netGoldEarned));
     }
-    RedisHSetReputationBuyer(masterPlayerId, buyerName);
+    Ledger().setLastBuyer(masterPlayerId, buyerName);
 }
 
 bool PlayerCraftSystem::DrainPendingProxyReputation(entt::entity player) {
     if (!tlsEcs.actorRegistry.valid(player) || !PlayerLifecycleSystem::IsPlayerMutable(player)) return false;
     const uint64_t pid = tlsEcs.GetPlayerId(player);
-    if (pid == 0 || tlsDrainingProxyMasters.count(pid) > 0) return false;
-    auto* craft = tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player);
-    if (craft == nullptr) return false;
+    if (pid == 0 || tlsProxyReputationTakesInFlight.count(pid) > 0) return false;
+    if (tlsEcs.actorRegistry.try_get<PlayerCraftComp>(player) == nullptr) return false;
     const auto it = tlsPendingProxyReputation.find(pid);
     if (it == tlsPendingProxyReputation.end()) return false;
-    const PendingProxyReputation delta = it->second;
-    if (delta.orders == 0 && delta.supreme == 0 && delta.rare == 0 && delta.netGold == 0) {
+    const PendingProxyReputation& hint = it->second;
+    if (hint.orders == 0 && hint.supreme == 0 && hint.rare == 0 && hint.netGold == 0) {
         tlsPendingProxyReputation.erase(it);
         return false;
     }
 
-    tlsDrainingProxyMasters.insert(pid);
-    const PlayerCraftComp backup = *craft;
-    ApplyReputationToCraftComp(*craft, delta.orders, delta.supreme, delta.rare, delta.netGold, delta.lastBuyer);
-    const bool persisted = gCraftPersistFn != nullptr && gCraftPersistFn(player);
-    tlsDrainingProxyMasters.erase(pid);
-    if (!persisted) {
-        *craft = backup;
-        LOG_WARN << "[CraftProxyRep] Failed to persist drained proxy reputation; retaining pending delta: master_id="
-                 << pid << " orders=" << delta.orders;
+    // 镜像只说明「可能有待回账」:它可能过时(别的节点已回过账,或在途的整表刷新带回了回账前的值),照它的数额入账
+    // 会把同一批口碑记两次(r2-craft#4)。数额以原子取走的为准,入账与「还回去」都在应答里做。
+    tlsProxyReputationTakesInFlight.insert(pid);
+    const bool sent = Ledger().take(pid, [pid](std::optional<TakenProxyReputation> taken) {
+        ApplyTakenProxyReputation(pid, taken);
+        tlsProxyReputationTakesInFlight.erase(pid);
+    });
+    if (!sent) {
+        tlsProxyReputationTakesInFlight.erase(pid);
         return false;
     }
-
-    if (auto cur = tlsPendingProxyReputation.find(pid); cur != tlsPendingProxyReputation.end()) {
-        cur->second.orders = cur->second.orders > delta.orders ? cur->second.orders - delta.orders : 0u;
-        cur->second.supreme = cur->second.supreme > delta.supreme ? cur->second.supreme - delta.supreme : 0u;
-        cur->second.rare = cur->second.rare > delta.rare ? cur->second.rare - delta.rare : 0u;
-        cur->second.netGold = cur->second.netGold > delta.netGold ? cur->second.netGold - delta.netGold : 0u;
-        if (cur->second.orders == 0 && cur->second.supreme == 0 &&
-            cur->second.rare == 0 && cur->second.netGold == 0) {
-            tlsPendingProxyReputation.erase(cur);
-        }
-    }
-    if (delta.orders > 0) RedisHIncrByReputation(pid, ":o", -static_cast<int64_t>(delta.orders));
-    if (delta.supreme > 0) RedisHIncrByReputation(pid, ":s", -static_cast<int64_t>(delta.supreme));
-    if (delta.rare > 0) RedisHIncrByReputation(pid, ":r", -static_cast<int64_t>(delta.rare));
-    if (delta.netGold > 0 && delta.netGold <= kMaxPayableGold) {
-        RedisHIncrByReputation(pid, ":g", -static_cast<int64_t>(delta.netGold));
-    }
-
-    CraftProxyStallInfo updatedStall;
-    if (BuildLocalStallSnapshot(player, pid, updatedStall)) {
-        tlsProxyStallDirectory[pid] = updatedStall;
-        PublishStallToRedis(pid, updatedStall);
-    }
-    LOG_INFO << "[CraftProxyRep] Drained offline proxy reputation: master_id=" << pid
-             << " orders=" << delta.orders << " supreme=" << delta.supreme
-             << " rare=" << delta.rare << " net_gold=" << delta.netGold;
     return true;
 }
 
@@ -1906,14 +2016,18 @@ void PlayerCraftSystem::RemoveProxyStallForTest(uint64_t masterPlayerId) {
     tlsProxyStallDirectory.erase(masterPlayerId);
     tlsPendingProxyReputation.erase(masterPlayerId);
     tlsHotProxyCounters.erase(masterPlayerId);
-    tlsDrainingProxyMasters.erase(masterPlayerId);
+    tlsProxyReputationTakesInFlight.erase(masterPlayerId);
 }
 
 void PlayerCraftSystem::ClearProxyStallDirectoryForTest() {
     tlsProxyStallDirectory.clear();
     tlsPendingProxyReputation.clear();
     tlsHotProxyCounters.clear();
-    tlsDrainingProxyMasters.clear();
+    tlsProxyReputationTakesInFlight.clear();
+}
+
+void PlayerCraftSystem::SetProxyReputationLedgerForTest(ProxyReputationLedger ledger) {
+    Ledger() = WithDefaultLedger(std::move(ledger));
 }
 
 void PlayerCraftSystem::ClaimScrollCollectionMilestone(entt::entity player,
@@ -2525,6 +2639,11 @@ void PlayerCraftSystem::FulfillWantedOrder(entt::entity player, const FulfillSki
     const int orderIdx = FindWantedOrderIndex(*posterCraft, request.order_id());
     if (orderIdx < 0) {
         fail(kSkillBookNotFound);
+        return;
+    }
+    // 发榜人书架满了拒绝这次交付(卖家的书与银两都不动),发榜人腾出位置后可再揭。
+    if (static_cast<uint32_t>(posterCraft->skill_books_size()) >= equipcraft::kMaxBookshelfBooks) {
+        fail(kSkillWantedPosterBookshelfFull);
         return;
     }
     const SkillBookWantedOrder order = posterCraft->wanted_orders(orderIdx);

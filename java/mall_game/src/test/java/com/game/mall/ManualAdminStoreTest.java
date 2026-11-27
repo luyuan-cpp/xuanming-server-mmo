@@ -210,6 +210,104 @@ class ManualAdminStoreTest {
         }
     }
 
+    /** 数据覆写审计 r2-mall#1:付款仍 PAID 时不许退还托管(否则收了钱既不交付也不退款),交付结局只按 trade 的回执落定。 */
+    @Test void 寄售交付转人工而付款仍PAID时拒绝退还托管_按交易结局重新收敛交付() {
+        try (var f = new CommerceFixture()) {
+            var rmbProps = new RmbConsignmentProperties();
+            rmbProps.setNoticeMs(0);
+            rmbProps.setSaleMs(3_600_000);
+            rmbProps.setCoolingMs(60_000);
+            rmbProps.setFeeBps(500);
+            var rmb = new RmbConsignmentStore(f.jdbc, f.manager, CLOCK, rmbProps, (txJdbc, receipt) -> {});
+            var orders = new CommerceStore(f.jdbc, f.manager, CLOCK, f.props, rmb);
+            var delivery = new DeliveryStore(f.jdbc, f.manager, f.props, rmb, CLOCK);
+            var revision = revision(f);
+            var manual = manual(f);
+
+            // 场景 1: trade 把交付转人工(部分发放 / 合同隔离),付款仍 PAID。退还托管被拒且什么都不改。
+            rmb.register(new RmbConsignmentApi.Escrow("9201", "30", "seller-m1", 1, "ITEMS", null, "7201", ESCROW_PROOF, 1000, "玄铁剑"));
+            var o1 = orders.createConsignment(new RmbConsignmentApi.Buy("9201", "40", "buyer-m1", "buy-m-001", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o1.orderId(), "test", "mpay-001", 1000, "CNY"));
+            delivery.receipt(new DeliveryApi.Receipt(o1.orderId(), "6201", "MANUAL", PROOF));
+            refuses(409, () -> manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-ret-paid-1", "9201", "RETURN_TO_SELLER", "ticket-paid")));
+            assertEquals("MANUAL", orders.paymentOrderView(o1.orderId()).state());
+            assertEquals("MANUAL", rmb.get(new RmbConsignmentApi.Get("9201")).state());
+            assertEquals(0, f.count("commerce_refund_intent"));
+            assertTrue(rmb.returns(new DeliveryApi.Poll(10)).entries().isEmpty(), "付款仍 PAID 时不能让 trade 退回托管");
+
+            // RETRY_DELIVERY: 清掉 MANUAL 回执,交付待办回 PENDING、订单回待交付、寄售回 SOLD;同 requestId 重放返回原快照。
+            var retryCmd = new ManualAdminApi.ResolveConsignment("consign-retry-m1a", "9201", "RETRY_DELIVERY", "ticket-trade-resumed");
+            var retried = manual.resolveConsignment(ACTOR, retryCmd);
+            assertEquals("SOLD", retried.resultingState());
+            assertEquals(retried, manual.resolveConsignment(ACTOR, retryCmd), "同 requestId 重放返回原提交快照");
+            assertEquals("DELIVERY_PENDING", orders.paymentOrderView(o1.orderId()).state());
+            assertEquals(0, receipts(f, o1.orderId()));
+            assertTrue(pendingDelivery(rmb, o1.orderId()), "trade 能重新拉到这张交付待办");
+            // trade 仍在人工:再回 MANUAL,回到人工单;换请求号可以再收敛一次。
+            delivery.receipt(new DeliveryApi.Receipt(o1.orderId(), "6201", "MANUAL", PROOF));
+            assertEquals("MANUAL", orders.paymentOrderView(o1.orderId()).state());
+            manual.resolveConsignment(ACTOR, new ManualAdminApi.ResolveConsignment("consign-retry-m1b", "9201", "RETRY_DELIVERY", "ticket-trade-fixed"));
+            // trade 人工处理后交付完成:回执 DELIVERED,同一事务记卖家收入(带冷静期)。
+            delivery.receipt(new DeliveryApi.Receipt(o1.orderId(), "6201", "DELIVERED", PROOF));
+            assertEquals("DELIVERED", orders.paymentOrderView(o1.orderId()).state());
+            var income1 = rmb.incomes(new RmbConsignmentApi.IncomePage("seller-m1", "", 10)).incomes();
+            assertEquals(1, income1.size());
+            assertEquals(950, income1.getFirst().netFen());
+            refuses(409, () -> manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-retry-m1c", "9201", "RETRY_DELIVERY", "ticket-late")));
+
+            // 场景 2: trade 人工判定不交付:收敛后回执 REFUND_PENDING,建退款待办、寄售转 RETURNING 由 trade 退回托管。
+            rmb.register(new RmbConsignmentApi.Escrow("9202", "31", "seller-m2", 1, "ITEMS", null, "7202", ESCROW_PROOF, 1000, "灵玉"));
+            var o2 = orders.createConsignment(new RmbConsignmentApi.Buy("9202", "41", "buyer-m2", "buy-m-002", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o2.orderId(), "test", "mpay-002", 1000, "CNY"));
+            delivery.receipt(new DeliveryApi.Receipt(o2.orderId(), "6202", "MANUAL", PROOF));
+            manual.resolveConsignment(ACTOR, new ManualAdminApi.ResolveConsignment("consign-retry-m2a", "9202", "RETRY_DELIVERY", "ticket-leg-rejected"));
+            delivery.receipt(new DeliveryApi.Receipt(o2.orderId(), "6202", "REFUND_PENDING", PROOF));
+            assertEquals("REFUND_PENDING", orders.paymentOrderView(o2.orderId()).state());
+            assertEquals(1, delivery.refunds().size());
+            assertEquals("RETURNING", rmb.get(new RmbConsignmentApi.Get("9202")).state());
+
+            // 场景 3: 交付转人工之后付款被渠道撤销(钱已回到买家):RETRY_DELIVERY 拒绝,RETURN_TO_SELLER 放行。
+            rmb.register(new RmbConsignmentApi.Escrow("9203", "32", "seller-m3", 1, "ITEMS", null, "7203", ESCROW_PROOF, 1000, "法宝"));
+            var o3 = orders.createConsignment(new RmbConsignmentApi.Buy("9203", "42", "buyer-m3", "buy-m-003", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o3.orderId(), "test", "mpay-003", 1000, "CNY"));
+            delivery.receipt(new DeliveryApi.Receipt(o3.orderId(), "6203", "MANUAL", PROOF));
+            revision.record(new CommerceApi.Revision(o3.orderId(), "test", "mpay-003", 1, "REVOKED"));
+            refuses(409, () -> manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-retry-m3", "9203", "RETRY_DELIVERY", "ticket-revoked")));
+            var returned = manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-ret-m3", "9203", "RETURN_TO_SELLER", "ticket-revoked"));
+            assertEquals("RETURNING", returned.resultingState());
+            assertEquals("REVERSED", orders.paymentOrderView(o3.orderId()).state());
+
+            // 场景 4: 交付前撤款被商城拦下(交付待办 REVOKED),之后撤款又被撤回(付款回到 PAID):只能重新收敛交付。
+            rmb.register(new RmbConsignmentApi.Escrow("9204", "33", "seller-m4", 1, "ITEMS", null, "7204", ESCROW_PROOF, 1000, "宝珠"));
+            var o4 = orders.createConsignment(new RmbConsignmentApi.Buy("9204", "43", "buyer-m4", "buy-m-004", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o4.orderId(), "test", "mpay-004", 1000, "CNY"));
+            revision.record(new CommerceApi.Revision(o4.orderId(), "test", "mpay-004", 1, "REVOKED"));
+            revision.record(new CommerceApi.Revision(o4.orderId(), "test", "mpay-004", 2, "PAID"));
+            refuses(409, () -> manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-ret-paid-4", "9204", "RETURN_TO_SELLER", "ticket-reinstated")));
+            assertEquals("SOLD", manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-retry-m4", "9204", "RETRY_DELIVERY", "ticket-reinstated")).resultingState());
+            assertTrue(pendingDelivery(rmb, o4.orderId()));
+            delivery.receipt(new DeliveryApi.Receipt(o4.orderId(), "6204", "DELIVERED", PROOF));
+            assertEquals("DELIVERED", orders.paymentOrderView(o4.orderId()).state());
+
+            // 场景 5: 已交付、撤款冻结收入之后撤款又被撤回:交付已有结局,不能重开交付(收入走 UNFREEZE_INCOME / FORFEIT_INCOME)。
+            rmb.register(new RmbConsignmentApi.Escrow("9205", "34", "seller-m5", 1, "ITEMS", null, "7205", ESCROW_PROOF, 1000, "灵符"));
+            var o5 = orders.createConsignment(new RmbConsignmentApi.Buy("9205", "44", "buyer-m5", "buy-m-005", "1"));
+            orders.recordTrustedPayment(new CommerceApi.Payment(o5.orderId(), "test", "mpay-005", 1000, "CNY"));
+            delivery.receipt(new DeliveryApi.Receipt(o5.orderId(), "6205", "DELIVERED", PROOF));
+            revision.record(new CommerceApi.Revision(o5.orderId(), "test", "mpay-005", 1, "REVOKED"));
+            revision.record(new CommerceApi.Revision(o5.orderId(), "test", "mpay-005", 2, "PAID"));
+            refuses(409, () -> manual.resolveConsignment(ACTOR,
+                new ManualAdminApi.ResolveConsignment("consign-retry-m5", "9205", "RETRY_DELIVERY", "ticket-delivered")));
+            assertEquals("MANUAL", orders.paymentOrderView(o5.orderId()).state());
+        }
+    }
+
     @Test void G2_逐单争议冻结与提现同账号锁拦截_支持部分冻结与释放审计() {
         try (var f = new CommerceFixture()) {
             var manual = manual(f);
@@ -267,6 +365,14 @@ class ManualAdminStoreTest {
 
     private static PaymentRevisionStore revision(CommerceFixture f) {
         return new PaymentRevisionStore(f.jdbc, f.manager, CLOCK, f.props);
+    }
+
+    private static int receipts(CommerceFixture f, String orderId) {
+        return f.jdbc.queryForObject("SELECT COUNT(*) FROM commerce_delivery_receipt WHERE order_sn=?", Integer.class, orderId);
+    }
+
+    private static boolean pendingDelivery(RmbConsignmentStore rmb, String orderId) {
+        return rmb.deliveries(new DeliveryApi.Poll(100)).entries().stream().anyMatch(e -> e.intent().orderId().equals(orderId));
     }
 
     private static void refuses(int status, Executable call) {

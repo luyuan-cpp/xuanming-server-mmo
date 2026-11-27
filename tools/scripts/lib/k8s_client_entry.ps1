@@ -1031,6 +1031,32 @@ function Get-ClientEntryResourcesYaml {
 	return "`n${KeyIndent}resources:`n${KeyIndent}  requests:`n${KeyIndent}    cpu: $cpu`n${KeyIndent}    memory: $memory"
 }
 
+# 客户端面 C++ 节点(gate、battle)的 Pod 级 safe sysctl(准入设计 P1-5「safe sysctl」),接在调用方 terminationGracePeriodSeconds
+# 那一行之后(带前导换行)。只作用于本 Pod 的网络命名空间(含 sidecar),不动节点。取值与推导见 docs/design/gate-connection-admission-control.md P1-5:
+#   - tcp_keepalive_time / intvl / probes = 120 / 10 / 6:空闲连接 120 秒起探、每 10 秒一探、6 次不回就断,真死的对端约 3 分钟回收
+#     (内核缺省 7200 / 75 / 9 要 2 小时 11 分)。muduo 每条 TcpConnection 都开 SO_KEEPALIVE;客户端连接应用层已有握手期限与心跳,
+#     这一道兜的是应用层不跟踪的连接(节点间长连接、sidecar 的出站连接)。
+#   - tcp_rmem / tcp_wmem 只把上限压到 512KB(内核缺省 6MB / 4MB),最小值与初始值照内核缺省:对端不读或本端 loop 卡住时,
+#     单连接内核缓冲最多 512KB(cgroup v2 下算进 Pod 内存);512KB 窗口在 200ms 往返下单连接仍有 1MB/s 以上,远超游戏流量。
+# 这五项进 Kubernetes safe sysctl 的版本:keepalive 1.29、收发缓冲 1.32,节点内核 ≥ 4.15;本仓钉的 Agones 1.58 只支持 1.33~1.35。
+# 不给 scene:scene 没有客户端连接。-KeyIndent = Pod spec 键所在缩进;模板用制表符缩进的调用方照传制表符,换算成空格由调用方统一做。
+function Get-ClientFacingPodSysctlsYaml {
+	param([Parameter(Mandatory = $true)][string]$KeyIndent)
+	$sysctls = [ordered]@{
+		'net.ipv4.tcp_keepalive_time'   = '120'
+		'net.ipv4.tcp_keepalive_intvl'  = '10'
+		'net.ipv4.tcp_keepalive_probes' = '6'
+		'net.ipv4.tcp_rmem'             = '4096 131072 524288'
+		'net.ipv4.tcp_wmem'             = '4096 16384 524288'
+	}
+	$lines = @("${KeyIndent}securityContext:", "${KeyIndent}  sysctls:")
+	foreach ($name in $sysctls.Keys) {
+		$lines += "${KeyIndent}    - name: $name"
+		$lines += "${KeyIndent}      value: `"$($sysctls[$name])`""
+	}
+	return "`n" + ($lines -join "`n")
+}
+
 # C++ /metrics 出口的容器端口项,接在调用方 ports 列表最后一项之后(带前导换行)。端口为 0 时返回空串,生成物与引入前逐字相同。
 # -ItemIndent = 列表项「- containerPort:」所在缩进。
 function Get-ClientEntryMetricsPortYaml {
@@ -1271,7 +1297,7 @@ spec:
       labels:
         app: gate$releaseTrackLabelLine
     spec:
-      terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$($sidecar.InitBlock)
+      terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$(Get-ClientFacingPodSysctlsYaml -KeyIndent '      ')$($sidecar.InitBlock)
       containers:
         - name: gate
           image: $($PodCommon.Image)
@@ -1524,7 +1550,7 @@ spec:
             mmorpg.io/build: $buildValue$podTrackLabel
         spec:
           serviceAccountName: $($contract.AgonesSdkServiceAccount)
-          terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$($sidecar.InitBlock)
+          terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$(Get-ClientFacingPodSysctlsYaml -KeyIndent '          ')$($sidecar.InitBlock)
           containers:
             - name: battle
               image: $($PodCommon.Image)
@@ -1613,7 +1639,7 @@ spec:
       labels:
         app: battle
     spec:
-      terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$($sidecar.InitBlock)
+      terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$(Get-ClientFacingPodSysctlsYaml -KeyIndent '      ')$($sidecar.InitBlock)
       containers:
         - name: battle
           image: $($PodCommon.Image)

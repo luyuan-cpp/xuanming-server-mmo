@@ -10,6 +10,7 @@ import (
 	"chat/internal/authority"
 	"chat/internal/config"
 	dspb "proto/data_service"
+	"shared/accountdirectory"
 	"shared/authoritysql"
 	"shared/contentguard"
 	"shared/dbplacement"
@@ -31,13 +32,19 @@ func openDirectory(c config.Config) (*grpc.ClientConn, rolefence.StateReader, au
 		return nil, nil, nil, fmt.Errorf("聊天目录客户端装配失败: %w", err)
 	}
 	dsClient := dspb.NewDataServiceClient(client.Conn())
-	states, err := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, os.Getenv(rolefence.SecretEnv(RoleFenceCaller)))
+	// 读角色护栏与读玩家画像用同一把密钥:密钥按调用方发,签名里带着方法名(accountdirectory.ChatCaller 的注释)。
+	secret := os.Getenv(rolefence.SecretEnv(RoleFenceCaller))
+	states, err := rolefence.NewDirectoryReader(dsClient, RoleFenceCaller, secret)
 	if err != nil {
 		_ = client.Conn().Close()
 		return nil, nil, nil, fmt.Errorf("聊天调用方密钥 %s 不可用: %w", rolefence.SecretEnv(RoleFenceCaller), err)
 	}
 	profiles := authority.ProfileReaderFunc(func(callCtx context.Context, playerID uint64) (authority.PlayerProfile, error) {
-		resp, rpcErr := dsClient.GetPlayerChannelIdentity(callCtx, &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID})
+		req := &dspb.GetPlayerChannelIdentityRequest{PlayerId: playerID}
+		if signErr := accountdirectory.SignChannelIdentityRequest(req, accountdirectory.ChatCaller, secret); signErr != nil {
+			return authority.PlayerProfile{}, fmt.Errorf("sign player profile lookup: %w", signErr)
+		}
+		resp, rpcErr := dsClient.GetPlayerChannelIdentity(callCtx, req)
 		if rpcErr != nil {
 			return authority.PlayerProfile{}, rpcErr
 		}

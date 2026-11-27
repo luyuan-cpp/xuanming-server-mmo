@@ -10,7 +10,6 @@
 #include "message_limiter/message_limiter.h"
 #include "network/client_liveness.h"
 #include "pending_scene_entry_comp.h"
-#include "pre_auth_slot.h"
 #include "router_lane_item.h"
 #include "scene_lane_item.h"
 
@@ -115,8 +114,9 @@ struct SessionInfo
 	// 转发从会话取值盖章。会话销毁即随之消失。
 	uint64_t loginGeneration{0};
 
-	// 会话代次(docs/design/client-request-ordering.md §4.2):建连时由 gate_lane::NextIncarnation() 分配,
-	// 进程内单调、会话存续期间不变,与 gate_instance_id 合起来全局唯一。随 SessionDetails.session_incarnation 发出:
+	// 会话代次(docs/design/client-request-ordering.md §4.2):建连时由 gate_lane::NextIncarnation() 分配(先作这条连接
+	// 在未验签表里的键,验签成功建会话时沿用,pre_auth_connection.h),进程内单调、会话存续期间不变,
+	// 与 gate_instance_id 合起来全局唯一。随 SessionDetails.session_incarnation 发出:
 	// gate 认领回包时用它挡住 session_id 被新连接复用后迟到的旧回包,login 会话栅栏用它建键。0 = 未分配。
 	uint64_t incarnation{0};
 	// 路由 lane:本会话经路由服转发的 gRPC 类请求按收包顺序单飞(client-request-ordering.md §4)。
@@ -150,10 +150,10 @@ struct SessionInfo
 	// 这条连接验签用的票据签名。一张票同一时刻只开一条连接(SessionManager::ClaimTicket),会话删除时凭它摘掉占位。
 	// 空 = 没验过票(dev 免验签)。
 	std::string ticketKey;
-	bool verified{false};			// True after client passes Gate connection token verification
-	// 未验签占位(pre_auth_slot.h):建连时发给还没验签的会话,验签成功时归还;会话销毁时随之归还。
-	// 只由 nodes/gate/handler/rpc/connection_admission.cpp 读写。空 = 已验签,或建连即免验签(dev)。
-	std::shared_ptr<PreAuthSlot> preAuthSlot;
+	// 是否已验签。会话只在验签成功时才建(dev 免验签在建连时建),建出来就是 true;还没验签的连接只有一条未验签记录
+	// (pre_auth_connection.h),不在会话表里(docs/design/gate-connection-admission-control.md P2-4「票据先行」)。
+	// 各收包入口仍判它,留作纵深防御。
+	bool verified{false};
 	// True once Gate actually dispatches ClientPlayerLogin.Login to Login.
 	// Disconnect uses this to clean Login's session-id state without turning
 	// every verified-but-idle TCP close into a cross-service RPC.

@@ -94,6 +94,8 @@ type SnapshotConsumer struct {
 	sem chan struct{}
 	// commitMu 串行化 CommitMessages:各分区 worker 会并发提交,这里不依赖 kafka-go Reader 对并发提交的未写明承诺。
 	commitMu sync.Mutex
+	// deadLetter 是坏消息的死信出口(dead_letter.go),由 Start 装配;零值 = 不转死信(只有单测)。
+	deadLetter deadLetterTarget
 }
 
 // NewSnapshotConsumer 组装消费者;Run 之前不做任何 IO。
@@ -111,29 +113,29 @@ func NewSnapshotConsumer(cfg SnapshotConsumerConfig, reader MessageReader, sink 
 // Health 返回健康标志。
 func (c *SnapshotConsumer) Health() *Health { return c.health }
 
-// decode 把一条消息解成 source=1 的行;坏消息返回 ok=false,调用方只提交不入库。
+// decode 把一条消息解成 source=1 的行;坏消息返回非空的原因,调用方不入库、先写死信再提交。
 // data 列存**收到的原始字节**(整条 PlayerSnapshotEntry,含两个 player_database blob 与
 // schema_version),而不是拆开的 blob:source=1 的恢复路径是下一阶段,存原样最不丢信息。
-func (c *SnapshotConsumer) decode(msg kafkago.Message) (*store.SnapshotRow, bool) {
+func (c *SnapshotConsumer) decode(msg kafkago.Message) (*store.SnapshotRow, string) {
 	entry := &rollbackpb.PlayerSnapshotEntry{}
 	if err := proto.Unmarshal(msg.Value, entry); err != nil {
 		messageLogger(msg).Errorf("[%s] undecodable message skipped partition=%d offset=%d key=%s: %v",
 			ConsumerSnapshot, msg.Partition, msg.Offset, string(msg.Key), err)
 		metrics.ObserveKafkaConsumerMessages(ConsumerSnapshot, "decode_error", 1)
-		return nil, false
+		return nil, "decode_error: " + err.Error()
 	}
 	if entry.GetSnapshotId() == 0 || entry.GetPlayerId() == 0 {
 		// 生产者对 snapshot_id=0 fail-closed;player_id=0 的快照无主。两者都无法按 guid 去重 / 按玩家检索。
 		messageLogger(msg).Errorf("[%s] invalid snapshot skipped partition=%d offset=%d snapshot_id=%d player_id=%d",
 			ConsumerSnapshot, msg.Partition, msg.Offset, entry.GetSnapshotId(), entry.GetPlayerId())
 		metrics.ObserveKafkaConsumerMessages(ConsumerSnapshot, "invalid", 1)
-		return nil, false
+		return nil, "invalid: snapshot_id or player_id is 0"
 	}
 	if len(msg.Value) > c.cfg.MaxBlobBytes {
 		messageLogger(msg).Errorf("[%s] oversize snapshot skipped partition=%d offset=%d snapshot_id=%d player_id=%d bytes=%d limit=%d",
 			ConsumerSnapshot, msg.Partition, msg.Offset, entry.GetSnapshotId(), entry.GetPlayerId(), len(msg.Value), c.cfg.MaxBlobBytes)
 		metrics.ObserveKafkaConsumerMessages(ConsumerSnapshot, "oversize", 1)
-		return nil, false
+		return nil, fmt.Sprintf("oversize: %d bytes over the %d-byte column limit", len(msg.Value), c.cfg.MaxBlobBytes)
 	}
 
 	// 拷贝一份:reader 复用的缓冲不能被存进行里。
@@ -150,7 +152,7 @@ func (c *SnapshotConsumer) decode(msg kafkago.Message) (*store.SnapshotRow, bool
 		Data:         data,
 		SnapshotGuid: entry.GetSnapshotId(),
 		Source:       store.SnapshotSourceSceneKafka,
-	}, true
+	}, ""
 }
 
 // runAttempt 在本实例的快照落库名额下跑一次 DB 尝试,口径见 runFlushAttempt。

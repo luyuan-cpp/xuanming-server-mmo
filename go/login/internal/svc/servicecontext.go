@@ -22,10 +22,10 @@ import (
 	"login/internal/config"
 	"login/internal/kafka"
 	"login/internal/logic/pkg/accountdeletion"
-	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/loginqueue"
 	"login/internal/logic/pkg/node"
+	"login/internal/logic/pkg/passportsession"
 	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/token"
 	"login/internal/logic/pkg/zonepolicy"
@@ -66,9 +66,10 @@ type ServiceContext struct {
 	// AccountDeletion 编排申请、撤销与执行者。见 account_deletion.go 的 initAccountDeletion。单测替身不设时都为 nil。
 	AccountDeletions accountdirectory.Deletions
 	AccountDeletion  *accountdeletion.Service
-	// PassportAdmin 调官方通行证的管理接口:刷新令牌前核对改密 / 封禁(docs/design/official-passport-registration.md §3.6),
-	// 注销时删通行证用户(§3.5)。没配通行证或没配管理凭据(只有 dev/test 允许)时为 nil,两件事都不做。
-	PassportAdmin *auth.PassportAdmin
+	// PassportSessions 把官方通行证里的改密、封禁、删除落到游戏登录上:登录与刷新前核对、通行证回调时吊销并踢线
+	// (docs/design/official-passport-registration.md §3.6、§3.7)。没配通行证或没配管理凭据(只有 dev/test 允许)时为 nil,
+	// 那时这些都不做,注销也不删通行证用户。
+	PassportSessions *passportsession.Enforcer
 	// ControlRedis 是控制集群句柄(shared/clusterredis,ControlClusterKeys 键策略;2026-11-12 取代不带守卫的 RedisClient):
 	// gate 排空 / 已排空 / 停写标记(gm 族),以及排队(loginqueue.Queue)与放行锁(loginqueue.Dispatcher,q 族)。
 	// 没写 ControlRedis.Addrs 时连的是 Node.RedisClient 那一个实例。

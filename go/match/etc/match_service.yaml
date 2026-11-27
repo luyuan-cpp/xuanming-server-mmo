@@ -246,6 +246,8 @@ GuildRpc:
   Endpoints: [127.0.0.1:50300]
   Timeout: 1500
   NonBlock: true
+# 群仙问道赛领奖邮件(MailAdmin.SendPersonalMail,sender_kind 6;docs/planning/season-team-tournament-v1.md 第七节)。
+# 密钥变量与 go/mail 的 Producers.match 同名,本机由 go_services.ps1 注入开发值;K8s 的 ConfigMap 镜像 Timeout 与 MailSecretEnv。
 MailRpc:
   Endpoints: [127.0.0.1:50900]
   Timeout: 1800

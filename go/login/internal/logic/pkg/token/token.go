@@ -635,6 +635,23 @@ func (m *Manager) RevokeAll(ctx context.Context, account string) error {
 	return nil
 }
 
+// RevokeIssuedBefore 吊销账号下身份令牌签发时刻不晚于 cutoff(unix 秒,签发方的时钟)的令牌家族,回吊销了几个。
+// 载荷没有这一项(TokenData.IdentityIssuedAt 为 0)的按最早算。官方通行证改密之后用:只作废改密之前的登录,
+// 改密之后重新登录的设备不受影响(docs/design/official-passport-registration.md §3.6)。一次原子提交,
+// 撤掉的家族签出的 access 立即失效。
+func (m *Manager) RevokeIssuedBefore(ctx context.Context, account string, cutoff int64) (int64, error) {
+	tag := redisslot.AccountTag(account)
+	count, err := retireIssuedBeforeScript.Run(ctx, m.rdb, []string{redisslot.AccountRefreshKey(account)},
+		account, redisslot.RefreshTokenKeyPrefix(tag), redisslot.RefreshFamilyKeyPrefix(tag), cutoff).Int64()
+	if err != nil {
+		return 0, fmt.Errorf("revoke refresh families issued before %d: %w", cutoff, err)
+	}
+	if count > 0 {
+		logx.Infof("[Token] Revoked refresh families issued before %d for account=%s count=%d", cutoff, account, count)
+	}
+	return count, nil
+}
+
 // retire 淘汰账号索引里超出 keep 的最旧成员。脚本现拼的 refresh / family 键都带账号 tag,与索引键同槽。
 func (m *Manager) retire(ctx context.Context, account string, keep int, protect string) (int64, error) {
 	tag := redisslot.AccountTag(account)

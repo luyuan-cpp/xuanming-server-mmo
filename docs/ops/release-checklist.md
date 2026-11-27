@@ -111,7 +111,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   `-ReleaseVersion` 追加的 H 节检查项:`release.version`、`release.changelog`、`release.artifact.dir`、`release.artifact.sha256sums`、`release.buildinfo.version`、`release.buildinfo.clean`、`release.manifest`、`release.imagetag.commit`(给了 `-ImageTag` 时),以及只告警的 `release.buildinfo.commit`——当前工作树不在制品 commit 上时,A–G 节读到的配置不代表该版本,切到发布提交重跑。
   注意:`k8s_image.ps1` / `k8s_deploy.ps1` 在 staging/prod 自动调用的预检**不带** `-ReleaseVersion`,只查配置与 tag;制品检查只靠这一步手动跑。
 - [ ] **⑦(人工)打 tag、部署、核对**:
-  **内部调用密钥不用先手工补（2026-11-20 起）**：`domain-service-secrets` 里 zone 工作负载引用的 16 把 HMAC 密钥（角色护栏、账号目录与查实名、存盘、`mail-producer-battle`）由 `k8s_deploy.ps1` 维护：写工作负载之前补齐缺的（从 infra 复制，全新集群生成），全集群每把一个值。现有环境里值不同、不足 32 字节或两把同值时，在任何写操作之前拒绝、一个都不写，报错点名键与 namespace；确认后带 `-ResyncDomainServiceSecrets` 重跑，统一成一个值并重启读这些键的 Pod（选低峰）。`-DryRun` 只打一行说明。发布预检 `release_preflight.ps1` 只查配置与制品、不连集群，不查这一项。细节与换值步骤见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。
+  **内部调用密钥不用先手工补（2026-11-20 起）**：`domain-service-secrets` 里 zone 工作负载引用的 17 把 HMAC 密钥（角色护栏、账号目录与查实名、查渠道身份、存盘、`mail-producer-battle`）由 `k8s_deploy.ps1` 维护：写工作负载之前补齐缺的（从 infra 复制，全新集群生成），全集群每把一个值。现有环境里值不同、不足 32 字节或两把同值时，在任何写操作之前拒绝、一个都不写，报错点名键与 namespace；确认后带 `-ResyncDomainServiceSecrets` 重跑，统一成一个值并重启读这些键的 Pod（选低峰）。`-DryRun` 只打一行说明。发布预检 `release_preflight.ps1` 只查配置与制品、不连集群，不查这一项。细节与换值步骤见 [k8s-open-server-runbook.md](k8s-open-server-runbook.md) §1。
   ```powershell
   git tag vX.Y.Z <12位commit>
   git push origin vX.Y.Z
@@ -338,12 +338,16 @@ net.ipv4.tcp_fin_timeout     = 15
 net.core.somaxconn           = 65535
 net.ipv4.tcp_max_syn_backlog = 65535
 net.netfilter.nf_conntrack_max = 1048576
-net.ipv4.tcp_keepalive_time   = 300
-net.ipv4.tcp_keepalive_intvl  = 30
-net.ipv4.tcp_keepalive_probes = 3
+net.ipv4.tcp_keepalive_time   = 120
+net.ipv4.tcp_keepalive_intvl  = 10
+net.ipv4.tcp_keepalive_probes = 6
+net.ipv4.tcp_rmem             = 4096 131072 524288
+net.ipv4.tcp_wmem             = 4096 16384 524288
 ```
 
 ⚠️ **不开** `tcp_tw_recycle`(NAT 环境会丢)。
+**2026-11-26 改**:keepalive 由 300 / 30 / 3 改为 120 / 10 / 6,并加了收发缓冲上限两行,与 gate 准入设计 P1-5 对齐(推导见 runbook §二末尾)。
+这一段只对在主机网络里跑 gate 的机器生效;K8s 上 gate、battle 的 Pod 自己写这五项(`deploy/k8s/README.md`「Pod 级 safe sysctl」),节点上不用配。
 完整说明: [docs/ops/gate-kernel-tuning-runbook.md](./gate-kernel-tuning-runbook.md)
 
 #### A.4 服务 ulimit(gate / scene)

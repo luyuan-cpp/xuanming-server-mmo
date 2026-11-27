@@ -78,6 +78,11 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            # 向 data_service 查渠道身份(GetPlayerChannelIdentity)的调用证明,与 data-service 同值;部署维护这把(托管键表)。
+            # 接了平台而它缺失或不足 32 字节时进程拒启。
+            - name: MMORPG_ACCOUNT_DIRECTORY_SECRET_CONTENT_GUARD
+              valueFrom:
+                secretKeyRef: {name: domain-service-secrets, key: account-directory-content-guard, optional: false}
           args: ["-f", "/app/etc/content_guard.yaml"]
           ports:
             - containerPort: 50250

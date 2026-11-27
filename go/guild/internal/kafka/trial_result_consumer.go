@@ -223,7 +223,7 @@ func NewTrialResultConsumer(cfg TrialResultConsumerConfig, handle TrialResultHan
 		sleep:        sleepTrialResult,
 	}
 	if cfg.RelayAdmission != nil {
-		sink, err := kafkautil.NewKafkaDeadLetterSink(cfg.Brokers, kafkautil.DeadLetterTopic(cfg.GroupID))
+		sink, err := kafkautil.NewKafkaDeadLetterSink(cfg.Brokers, cfg.DeadLetterTopicSpec())
 		if err != nil {
 			return nil, err
 		}

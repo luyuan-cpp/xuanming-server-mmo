@@ -93,6 +93,8 @@ type TxLogConsumer struct {
 	sem chan struct{}
 	// commitMu 串行化 CommitMessages:各分区 worker 会并发提交,这里不依赖 kafka-go Reader 对并发提交的未写明承诺。
 	commitMu sync.Mutex
+	// deadLetter 是坏消息的死信出口(dead_letter.go),由 Start 装配;零值 = 不转死信(只有单测)。
+	deadLetter deadLetterTarget
 }
 
 // NewTxLogConsumer 组装消费者;Run 之前不做任何 IO。
@@ -145,13 +147,16 @@ func (c *TxLogConsumer) startWorker(runCtx context.Context, partition int, wg *s
 type txBatch struct {
 	msgs []kafkago.Message
 	rows []*store.TransactionLogRow
+	// bad 是这一批里的坏消息原件,提交之前先写进死信。
+	bad []badMessage
 }
 
 // reset 清空批、保留底层数组。先 clear 再截断:只截断时底层数组仍引用上一批的行,空闲分区会一直把它们钉在内存里。
 func (b *txBatch) reset() {
 	clear(b.msgs)
 	clear(b.rows)
-	b.msgs, b.rows = b.msgs[:0], b.rows[:0]
+	clear(b.bad)
+	b.msgs, b.rows, b.bad = b.msgs[:0], b.rows[:0], b.bad[:0]
 }
 
 // run 处理一个分区直到 ctx 结束 / 通道关闭(返回 nil)或停机(返回带 ErrConsumerStoppedOnDB 的错误)。
@@ -203,31 +208,35 @@ func (w *txLogPartitionWorker) run(ctx context.Context) error {
 }
 
 func (w *txLogPartitionWorker) add(b *txBatch, msg kafkago.Message) {
-	row, ok := decodeTxLog(msg)
+	row, reason := decodeTxLog(msg)
+	if reason != "" {
+		// 剥掉之前留一份原件:提交之前先写进死信(dead_letter.go)。
+		b.bad = append(b.bad, newBadMessage(msg, reason))
+	}
 	// 批里留着的 msgs 只用于提交与日志:kafka-go 提交只读 Topic / Partition / Offset(Topic 必须保留)。
 	// 好消息的字段已拷进 row,不剥掉 Value 的话每条流水在批里就有两份。
 	msg.Value, msg.Key, msg.Headers = nil, nil, nil
 	b.msgs = append(b.msgs, msg)
-	if ok {
+	if reason == "" {
 		b.rows = append(b.rows, row)
 	}
 }
 
-// decodeTxLog 把一条消息解成行;坏消息(解不出 / tx_id=0)返回 ok=false,调用方只提交不入库。
-func decodeTxLog(msg kafkago.Message) (*store.TransactionLogRow, bool) {
+// decodeTxLog 把一条消息解成行;坏消息(解不出 / tx_id=0)返回非空的原因,调用方不入库、先写死信再提交。
+func decodeTxLog(msg kafkago.Message) (*store.TransactionLogRow, string) {
 	entry := &rollbackpb.TransactionLogEntry{}
 	if err := proto.Unmarshal(msg.Value, entry); err != nil {
 		messageLogger(msg).Errorf("[%s] undecodable message skipped partition=%d offset=%d key=%s: %v",
 			ConsumerTxLog, msg.Partition, msg.Offset, string(msg.Key), err)
 		metrics.ObserveKafkaConsumerMessages(ConsumerTxLog, "decode_error", 1)
-		return nil, false
+		return nil, "decode_error: " + err.Error()
 	}
 	if entry.GetTxId() == 0 {
 		// 生产者对 tx_id=0 是 fail-closed 的,走到这里说明上游坏了;0 做主键会让所有坏行互撞。
 		messageLogger(msg).Errorf("[%s] tx_id=0 message skipped partition=%d offset=%d key=%s",
 			ConsumerTxLog, msg.Partition, msg.Offset, string(msg.Key))
 		metrics.ObserveKafkaConsumerMessages(ConsumerTxLog, "invalid", 1)
-		return nil, false
+		return nil, "invalid: tx_id=0"
 	}
 	return &store.TransactionLogRow{
 		TxID:          entry.GetTxId(),
@@ -245,15 +254,24 @@ func decodeTxLog(msg kafkago.Message) (*store.TransactionLogRow, bool) {
 		CorrelationID: entry.GetCorrelationId(),
 		Extra:         entry.GetExtra(), // 列是 MEDIUMTEXT,不截断
 		ZoneID:        entry.GetZoneId(),
-	}, true
+	}, ""
 }
 
-// flush 落库(有界重试)→ 成功后才提交本批本分区的最高 offset。
-//   - 0 行(全是坏消息):只提交;
+// flush 坏消息写死信 → 落库(有界重试)→ 都成功后才提交本批本分区的最高 offset。
+//   - 坏消息写不进死信(重试用尽):不落库、不提交,返回带 ErrConsumerStoppedOnDeadLetter 的错误,与 DB 停机同样续;
+//   - 0 行(全是坏消息):写完死信只提交;
 //   - 落库失败时 ctx 已取消(关停 / 兄弟分区停机):不提交、不计 db_error、不算停机,返回 nil 让 run 退出;
 //   - 重试用尽:不提交,返回带 ErrConsumerStoppedOnDB 的错误,整个 Run 停下,supervisor 冷却后从本分区上次提交处续。
 func (w *txLogPartitionWorker) flush(ctx context.Context, b *txBatch) error {
 	c := w.c
+	if err := c.deadLetter.write(ctx, ConsumerTxLog, b.bad); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		logx.Errorf("[%s] STOPPED: partition=%d %d bad message(s) of the batch (offsets %d..%d) could not be written to the dead-letter topic, offsets NOT committed (resumes from the last commit): %v",
+			ConsumerTxLog, w.partition, len(b.bad), b.msgs[0].Offset, b.msgs[len(b.msgs)-1].Offset, err)
+		return fmt.Errorf("%w: %w", ErrConsumerStoppedOnDeadLetter, err)
+	}
 	if len(b.rows) > 0 {
 		inserted, err := c.insertWithRetry(ctx, b.rows)
 		if err != nil {

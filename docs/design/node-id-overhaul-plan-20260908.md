@@ -128,7 +128,7 @@ T3   A 解冻,继续发号;它的 last_time_ 和 B 的 now 是同一秒 → 同 
 
 - `kind`:`scene-item`(C++ scene 的 item/tx/snapshot)、`login-player`(bwmarrin 毫秒布局)、`guild`、`scene-manager`、`match`。
 - `cluster`:第 5 节的集群号,默认 0。Phase 1/2 先按 c0 落,Phase 3 只是把常量接上。
-- 迁移:Go 现有 `<prefix>/snowflake_guard/<id>` 已经是"无 lease 持久水位",语义完全一样。Phase 1 保留旧 prefix 名(`/guild` 等)只改算法;Phase 3 统一搬到新 prefix 时,读水位取新旧两处的 max。
+- 迁移:Go 原有的 `<prefix>/snowflake_guard/<id>` 已经是"无 lease 持久水位",语义与新水位一样。原计划 Phase 1 保留旧 prefix 名(`/guild` 等)只改算法、Phase 3 搬到新 prefix 时读水位取新旧两处的 max;落码时一步到位用了新 prefix(3.5.1),旧布局只在过渡期按 3.2 末尾的规则兼容读、镜像写,2026-11-26 删除。
 - C++ 新增一个 `SnowflakeSlotClient`(与 `EtcdService` 的注册状态机分开),用同一套 key。
 
 ### 3.2 申领算法(替换"最小空闲")
@@ -147,9 +147,9 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 
 同主机亲和复用(Go 保留):**只在 `released/<host>` 存在时允许**(前任已优雅退出并已 fence),复用 Txn 同时删 released。lease 死了但没 released 标记(崩溃)→ 不复用,走正常申领(受隔离期约束),重启拿到不同 id,日志靠 incarnation 关联(3.6)。
 
-**滚动升级过渡规则(落码时发现的缺口,保留一个版本后删):** 灰度期间旧二进制仍在用"路由 node_id = worker"发号,而新命名空间里对应槽位的水位是 0,会被当成"从没用过"优先选中,与旧进程同 worker 位撞号。所以过渡期申领时:
-- C++:把 `<SceneNodeService>.rpc/allocated/node_type/<T>/node_id/<N>` 被任何节点持有视为槽 N 已占用;能连上分 zone Redis 时把旧 `snowflake_guard:<node_type>:<N>` 读作额外水位取 max。
-- Go:cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>` 与新水位取 max,隔离期自然把旧进程刚用过的槽挡住。login 原来另读 `/login/guard_ms/<slot>`,2026-11-12 随 login 的槽位申领删除。
+**滚动升级过渡规则(已全部删除):** 落码时发现,灰度期间改造前的旧二进制仍按旧方式发号(C++ 用"路由 node_id = worker",Go 用旧前缀 `<prefix>/snowflake_ids/`),而新命名空间里对应槽位的水位是 0,会被当成"从没用过"优先选中,与旧进程同 worker 位撞号。当时加过一层过渡规则:
+- C++:把 `<SceneNodeService>.rpc/allocated/node_type/<T>/node_id/<N>` 被任何节点持有视为槽 N 已占用;能连上分 zone Redis 时把旧 `snowflake_guard:<node_type>:<N>` 读作额外水位取 max。2026-09-08 晚随 scene 退出槽位协议、C++ 槽位客户端整体删除(§7.5 第 1 条)。
+- Go:cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>` 与新水位取 max,把旧 `snowflake_ids`/`snowflake_nodes` 算作占用;反方向再镜像(申领 Txn 占住旧 id 键、复用与 reclaim 改挂到新 lease、水位同一笔 Txn 写进旧 guard 键),让旧二进制也看得见新槽。login 另读的 `/login/guard_ms/<slot>` 2026-11-12 随 login 的槽位申领删除;scene_manager 剩下的这一层(`Options.LegacyPrefix`)2026-11-26 整批删除:项目未上线,改造前的二进制从没部署过,留着只有成本。问题、被否决的做法与边界(不能再与 09-08 之前的二进制混跑)见 [snowflake-id-allocation.md](./snowflake-id-allocation.md)「改造前旧布局的兼容层」。
 
 ### 3.3 水位契约(Go 已有,C++ 对齐)
 
@@ -181,9 +181,9 @@ CAS      = If CreateRev(slots/<i>)==0 Then Put slots/<i>=uuid (lease), Put affin
 
 ### 3.5.1 落码注记(2026-09-08,与上文设计的差异)
 
-- **Go**(`go/shared/snowflakealloc`):键前缀 `/snowflake/<kind>/c<cluster>/{slots,affinity,released,watermark}`;kind 现在只有 `scene-manager`(`login-player`、`guild`、`match` 已退役;login 专用的毫秒水位 `watermark_ms`、3/10 位布局与 `SyncWatermark` / `AttachFencer` / `FenceClock` 接口 2026-11-12 删除);水位 Put 是 `If Value(slots/<slot>)==uuid` 的 txn,写成功即所有权证明并推进 FenceClock;按水位年龄的自 fence 是**可恢复**的(`ErrWatermarkStale`,下一次水位写成功即恢复),永久 `Fence()` 只在确认被接管时;本地缓存文件 `snowflake-<kind>-<affinity>.json`,新增配置键 `SnowflakeCacheDir`(默认 `../../run/snowflake`,k8s 里由 ConfigMap 指到 emptyDir);cluster 0 兼容读旧 `snowflake_guard`(login 的 `guard_ms` 已随毫秒水位删除)并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用。
+- **Go**(`go/shared/snowflakealloc`):键前缀 `/snowflake/<kind>/c<cluster>/{slots,affinity,released,watermark}`;kind 现在只有 `scene-manager`(`login-player`、`guild`、`match` 已退役;login 专用的毫秒水位 `watermark_ms`、3/10 位布局与 `SyncWatermark` / `AttachFencer` / `FenceClock` 接口 2026-11-12 删除);水位 Put 是 `If Value(slots/<slot>)==uuid` 的 txn,写成功即所有权证明并推进 FenceClock;按水位年龄的自 fence 是**可恢复**的(`ErrWatermarkStale`,下一次水位写成功即恢复),永久 `Fence()` 只在确认被接管时;本地缓存文件 `snowflake-<kind>-<affinity>.json`,新增配置键 `SnowflakeCacheDir`(默认 `../../run/snowflake`,k8s 里由 ConfigMap 指到 emptyDir);cluster 0 对改造前旧布局的兼容读(旧 `snowflake_guard` 取 max、旧 `snowflake_ids`/`snowflake_nodes` 算作占用)与过渡镜像写 2026-11-26 删除(3.2 末尾;login 的 `guard_ms` 早在 11-12 随毫秒水位删除)。
 - **C++**(已删:scene-item 改走号段之后 C++ 不再申领槽位,这套客户端已删,`SnowFlakeManager` 2026-11-12 删除;下面是当时的实现,保留作历史)(`cpp/libs/engine/core/node/system/snowflake/`):不写 affinity/released;申领 txn = `If Create(slots)==0 Then [Put slots(lease), Put watermark]`(第一笔水位与申领原子);**没有单独的 watch**,每个 tick 的水位 txn 自带 `Value==uuid` 比较,失败即按"被删/被抢"分支处理(重挂或永久 fence),等价且少一条流;`CLUSTER_ID` 环境变量覆盖;`SNOWFLAKE_QUARANTINE_SEC` 仅供故障注入;缓存文件 `<SNOWFLAKE_CACHE_DIR or ./data>/snowflake-scene-item.json`,与 Go 不共享;顺手修了 LeaseGrant RPC 失败会永久卡住注册的老问题(10s 超时重试)。
-- 两端共用 `go/shared/snowflakealloc/testdata/selection_vectors.json`(15 例)做选号一致性测试,C++ 侧以 YAML 1.2 flow 方式读同一文件。
+- 选号向量 `go/shared/snowflakealloc/testdata/selection_vectors.json` 当年 15 例、两端共用(C++ 侧以 YAML 1.2 flow 方式读同一文件,随 C++ 客户端删除);2026-11-26 删掉只为旧布局水位合并而设的 3 例(`legacy_watermarks`),现剩 12 例,只有 Go 读。
 
 ### 3.6 观测:三字段
 

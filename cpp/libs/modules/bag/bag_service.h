@@ -120,10 +120,12 @@ public:
     // 物品数量预留(下面「物品数量预留」一段):「实际持有」= 可计数总量 - 别的预留;consumeFromHoldId 指的那一份预留
     // 不算在内,也就是说这一笔消耗可以动用它(战斗结算传 battle_id,扣的正是备战时为这一局占住的道具)。0 = 不动用任何预留。
     // 本函数不释放那份预留:调用方在本函数返回成功之后、同一帧里调 ReleaseHold(结算没有物品时不经过这里,释放点只能在调用方)。
+    // consumeTxType 是消耗那一侧的流水类型:缺省记成普通的道具销毁;有专门流水类型的玩法(角色改名 TX_ROLE_RENAME)传自己的。
     static uint32_t ConsumeInventoryAndGrant(entt::entity playerEntity,
         const ItemCountMap& consumed, const ItemCountMap& gained, uint64_t correlationId,
         const std::string& extra, const std::function<uint32_t()>& beforeCommit = {},
-        uint64_t consumeFromHoldId = 0, const GrantOverflowRoute* overflowRoute = nullptr);
+        uint64_t consumeFromHoldId = 0, const GrantOverflowRoute* overflowRoute = nullptr,
+        TransactionType consumeTxType = TX_ITEM_DESTROY);
 
     struct InstanceReplacement {
         BagType bagType{kInventory};

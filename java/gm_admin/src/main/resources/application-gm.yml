@@ -93,3 +93,8 @@ gm:
     # 这把密钥只挂给后台这个工作负载,不发给个人;任一项为空时交易人工处置页只读不可用。
     trade-target: ${GM_TRADE_TARGET:}
     trade-admin-secret: ${GM_TRADE_ADMIN_SECRET:}
+    # 商城管理入口(java/mall_game /internal/admin/*,运营处置页的商城部分):HTTPS 或本机回环 HTTP 的根地址(含商城的部署前缀),
+    # 与商城 commerce.admin-secret / commerce.admin-subject 同值。密钥只挂给后台这个工作负载;任一项为空时商城部分只读不可用。
+    mall-url: ${GM_MALL_URL:}
+    mall-admin-secret: ${GM_MALL_ADMIN_SECRET:}
+    mall-admin-subject: ${GM_MALL_ADMIN_SUBJECT:mall-admin}

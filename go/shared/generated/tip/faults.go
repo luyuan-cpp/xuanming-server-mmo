@@ -50,6 +50,7 @@ var Faults = []Fault{
 	{Code: 2036, Group: "login_error", Name: "LoginTokenIssueFailed"},
 	{Code: 2047, Group: "login_error", Name: "LoginRealNameServiceUnavailable"},
 	{Code: 2050, Group: "login_error", Name: "RoleNameCheckUnavailable"},
+	{Code: 2058, Group: "login_error", Name: "LoginEnterGameBusy"},
 	{Code: 3003, Group: "scene_error", Name: "EnterNodeUnavailable"},
 	{Code: 3010, Group: "scene_error", Name: "EnterSceneGsInfoNull"},
 	{Code: 3012, Group: "scene_error", Name: "EnterSceneYourSceneIsNull"},

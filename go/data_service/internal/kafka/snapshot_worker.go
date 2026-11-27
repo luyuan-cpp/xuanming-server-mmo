@@ -63,6 +63,8 @@ type snapshotBatch struct {
 	rows      []*store.SnapshotRow
 	rowMsgIdx []int
 	bytes     int
+	// bad 是这一批里的坏消息原件,任何提交之前先写进死信。
+	bad []badMessage
 }
 
 // reset 清空批、保留底层数组。先 clear 再截断:只截断时底层数组仍引用上一批的行(Data 最大约 1MB/条),
@@ -70,7 +72,8 @@ type snapshotBatch struct {
 func (b *snapshotBatch) reset() {
 	clear(b.msgs)
 	clear(b.rows)
-	b.msgs, b.rows, b.rowMsgIdx, b.bytes = b.msgs[:0], b.rows[:0], b.rowMsgIdx[:0], 0
+	clear(b.bad)
+	b.msgs, b.rows, b.rowMsgIdx, b.bytes, b.bad = b.msgs[:0], b.rows[:0], b.rowMsgIdx[:0], 0, b.bad[:0]
 }
 
 // run 处理一个分区直到 ctx 结束(返回 nil)或停机(返回带 ErrConsumerStoppedOnDB 的错误)。
@@ -147,25 +150,39 @@ func (w *snapshotPartitionWorker) add(b *snapshotBatch, msg kafkago.Message) {
 	// 计数与日志在进批时记,不等提交:批量模式下同批前面有行失败时这条坏消息不会被提交,重建重放会重复记
 	// (与 TxLogConsumer 同口径,见告警 DataServiceAuditMessagesSkipped 的说明)。默认配置(批 1 条)下坏消息
 	// 独占一批并立即提交,排在失败行后面的消息留在通道里不会被 decode,不受影响。
-	row, ok := w.c.decode(msg)
+	row, reason := w.c.decode(msg)
+	if reason != "" {
+		// 剥掉之前留一份原件:提交之前先写进死信(dead_letter.go)。
+		b.bad = append(b.bad, newBadMessage(msg, reason))
+	}
 	// 批里留着的 msgs 只用于提交与日志:kafka-go 提交只读 Topic / Partition / Offset(Topic 必须保留)。
 	// 不剥掉 Value,每条快照在批里就有两份(msg.Value + row.Data),内存翻倍。
 	msg.Value, msg.Key, msg.Headers = nil, nil, nil
 	b.msgs = append(b.msgs, msg)
-	if ok {
+	if reason == "" {
 		b.rows = append(b.rows, row)
 		b.rowMsgIdx = append(b.rowMsgIdx, len(b.msgs)-1)
 		b.bytes += len(row.Data)
 	}
 }
 
-// flush 落库 → 成功后才提交本批本分区的最高 offset。
-//   - 0 行(全是坏消息):只提交;
+// flush 坏消息写死信 → 落库 → 成功后才提交本批本分区的最高 offset。
+//   - 坏消息写不进死信(重试用尽):不落库、不提交,返回带 ErrConsumerStoppedOnDeadLetter 的错误。死信写在最前面,
+//     下面任何一处按前缀提交时,前缀里的坏消息都已经在死信里;
+//   - 0 行(全是坏消息):写完死信只提交;
 //   - 1 行:走单行接口 + 单行重试(逐条模式下与 2026-10-12 之前逐字相同,含 "already stored as id=%d" 日志);
 //   - >=2 行:批量接口 + 同样的有界重试;用尽后逐条兜底(isolate);
 //   - 失败时 ctx 已取消(关停 / 兄弟分区停机):不提交、不计 db_error、不算停机,返回 nil 让 run 退出。
 func (w *snapshotPartitionWorker) flush(ctx context.Context, b *snapshotBatch) error {
 	c := w.c
+	if err := c.deadLetter.write(ctx, ConsumerSnapshot, b.bad); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		logx.Errorf("[%s] STOPPED: partition=%d %d bad message(s) of the batch (offsets %d..%d) could not be written to the dead-letter topic, offsets NOT committed (resumes from the last commit): %v",
+			ConsumerSnapshot, w.partition, len(b.bad), b.msgs[0].Offset, b.msgs[len(b.msgs)-1].Offset, err)
+		return fmt.Errorf("%w: %w", ErrConsumerStoppedOnDeadLetter, err)
+	}
 	switch len(b.rows) {
 	case 0:
 	case 1:

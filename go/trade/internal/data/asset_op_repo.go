@@ -489,10 +489,12 @@ const (
 		" SET `status` = ?, `resolved_by` = ?, `resolve_reason` = ?, `lease_until_ms` = 0," +
 		" `next_attempt_ms` = ?, `updated_ms` = ?" +
 		" WHERE `op_id` = ? AND `status` = ?"
-	// assetopfix 的人工终结(ResolveManuallyIfQuiet):在上一条之外,要求租约与发送时刻仍是读证据时的值。
-	// 任何领取都会改 lease_until_ms(sqlClaimAssetOp),发过请求的重排会推进 last_send_ms:读证据之后只要有人领过、发过,就落空。
-	// 与 guild 的 sqlResolveAssetOpQuiet 同形。
-	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ?"
+	// assetopfix 的人工终结(ResolveManuallyIfQuiet):在上一条之外,要求租约、发送时刻与 attempts 仍是读证据时的值。
+	// 任何领取都会改 lease_until_ms(sqlClaimAssetOp),发过请求的重排会推进 last_send_ms,任何重排都给 attempts 加一
+	// (sqlRescheduleAssetOp):读证据之后只要有人领过、排过,就落空。attempts 那一条防的是钟慢的副本:它发过请求也推不动
+	// last_send_ms,重排又把租约清回 0(assetop.QuietWitness 的注释)。比对口径同 assetop.QuietWitness.Matches;
+	// guild 的 sqlResolveAssetOpQuiet 还只比前两列(2026-11-26 待补)。
+	sqlResolveAssetOpQuiet = sqlResolveAssetOp + " AND `lease_until_ms` = ? AND `last_send_ms` = ? AND `attempts` = ?"
 )
 
 // ListDue 扫全部片的到期行,即不带分片条件的 ListDueOwned。重投循环绑了按片分工(assetop.Loop.BindWorkOwner,
@@ -802,11 +804,11 @@ func (r *AssetOpRepo) ResolveManually(ctx context.Context, m assetop.ManualResol
 	return r.resolveManually(ctx, m, nowMs, sqlResolveAssetOp)
 }
 
-// ResolveManuallyIfQuiet 同 ResolveManually(同一份对侧账),另要求行上的 lease_until_ms / last_send_ms 仍是 witness。
-// 落空回 (false, nil):行已不是 PENDING,或读证据之后有人领过、发过它。人工终结工具只走这一条
+// ResolveManuallyIfQuiet 同 ResolveManually(同一份对侧账),另要求行上的 lease_until_ms / last_send_ms / attempts 仍是 witness。
+// 落空回 (false, nil):行已不是 PENDING,或读证据之后有人领过、排过它。人工终结工具只走这一条
 // (assetop.JudgeManual 的结论是按读证据那一刻的行下的,中间被领过就作废)。
 func (r *AssetOpRepo) ResolveManuallyIfQuiet(ctx context.Context, m assetop.ManualResolution, witness assetop.QuietWitness, nowMs uint64) (bool, error) {
-	return r.resolveManually(ctx, m, nowMs, sqlResolveAssetOpQuiet, witness.LeaseUntilMs, witness.LastSendMs)
+	return r.resolveManually(ctx, m, nowMs, sqlResolveAssetOpQuiet, witness.LeaseUntilMs, witness.LastSendMs, witness.Attempts)
 }
 
 // resolveManually 是两种人工终结的同一个事务体。query 是 sqlResolveAssetOp 或它加了见证条件的版本,

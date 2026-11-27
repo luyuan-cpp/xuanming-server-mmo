@@ -134,7 +134,7 @@ func TestPassportAdminDeleteUserAgainstSandboxMock(t *testing.T) {
 	}
 }
 
-// 刷新前的核对(official-passport-registration.md §3.6):mock 的 change_password / forbid_user 之后,
+// 登录与刷新前的核对(official-passport-registration.md §3.6):mock 的 change_password / forbid_user 之后,
 // login 的 PassportAdmin 按同一个种子的 sub 判出不再续期;之前照常续期。
 func TestPassportAdminCheckSessionAgainstSandboxMock(t *testing.T) {
 	base := newSandbox(t)
@@ -149,8 +149,8 @@ func TestPassportAdminCheckSessionAgainstSandboxMock(t *testing.T) {
 		"bob":   {"forbid_user", auth.PassportSessionUserForbidden},
 	} {
 		sub := passportSandboxSub(seed)
-		if reason, err := admin.CheckSession(ctx, sub, loginAt); err != nil || reason != "" {
-			t.Fatalf("%s before %s: CheckSession = (%q, %v), want valid", seed, want.event, reason, err)
+		if status, err := admin.LookupUser(ctx, sub); err != nil || status.SessionVerdict(loginAt) != "" {
+			t.Fatalf("%s before %s: LookupUser = (%+v, %v), want a valid session", seed, want.event, status, err)
 		}
 		resp, err := http.Post(base+"/mock/passport/"+want.event+"?user="+seed, "", nil)
 		if err != nil {
@@ -160,8 +160,8 @@ func TestPassportAdminCheckSessionAgainstSandboxMock(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("%s %s: status %d", seed, want.event, resp.StatusCode)
 		}
-		if reason, err := admin.CheckSession(ctx, sub, loginAt); err != nil || reason != want.reason {
-			t.Fatalf("%s after %s: CheckSession = (%q, %v), want %q", seed, want.event, reason, err, want.reason)
+		if status, err := admin.LookupUser(ctx, sub); err != nil || status.SessionVerdict(loginAt) != want.reason {
+			t.Fatalf("%s after %s: LookupUser = (%+v, %v), want %q", seed, want.event, status, err, want.reason)
 		}
 	}
 }

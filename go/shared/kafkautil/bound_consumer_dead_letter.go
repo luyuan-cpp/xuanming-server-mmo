@@ -69,7 +69,10 @@ const (
 	// deadLetterMaxMessageBytes:死信 topic 的 max.message.bytes 与写入端的单批上限。死信比原件多 dlq.* 头(原因文本上限
 	// 1024 字节,合计约 1.5KB);原 topic 沿用 broker 缺省上限(约 1MiB)时,贴着上限的原件加头之后写不进同样上限的死信 topic,
 	// 会一直留在原处、分区停在这一条。放到 2MiB:本组消费者单次拉取上限是 1MiB,读得到的原件都装得下。
+	// 原 topic 的上限更高时用 DeadLetterTopicSpecFor,按原件上限加 deadLetterHeaderHeadroom。
 	deadLetterMaxMessageBytes = 2 << 20
+	// deadLetterHeaderHeadroom:原件上限之上给 dlq.* 头留的余量(头实际约 1.5KB,留宽)。
+	deadLetterHeaderHeadroom = 64 << 10
 	// deadLetterWriteTimeout:单次写死信的上限;超时按一次写失败,退避后重写。
 	deadLetterWriteTimeout = 30 * time.Second
 	// maxDeadLetterReasonBytes:死信头里原因文本的上限(按 UTF-8 字符边界截断)。
@@ -112,7 +115,15 @@ func DeadLetterTopic(group string) string { return group + deadLetterTopicSuffix
 // 原 topic 要求严格耐久时死信同样三副本、minISR 2。
 // 调用方在启动 owner 之前与原 topic 一起 EnsureTopics(写死信的 writer 不自动建 topic)。
 func DeadLetterTopicSpec(group string, requireDurability bool) TopicSpec {
-	spec := TopicSpec{Name: DeadLetterTopic(group), Partitions: 1, RetentionMs: deadLetterRetentionMs, MaxMessageBytes: deadLetterMaxMessageBytes}
+	return DeadLetterTopicSpecFor(group, requireDurability, 0)
+}
+
+// DeadLetterTopicSpecFor 同 DeadLetterTopicSpec,原 topic 的单条上限是 originalMaxMessageBytes(0 = broker 缺省约 1MiB)。
+// 原件上限加头部余量超过 2MiB 时,死信的单条上限跟着抬高(data_service 的快照 topic 是 16MiB):死信放不下原件,
+// 这一条就永远越不过去。写入端用 NewKafkaDeadLetterSink 按同一份契约建,两边的上限不会对不上。
+func DeadLetterTopicSpecFor(group string, requireDurability bool, originalMaxMessageBytes int64) TopicSpec {
+	spec := TopicSpec{Name: DeadLetterTopic(group), Partitions: 1, RetentionMs: deadLetterRetentionMs,
+		MaxMessageBytes: max(deadLetterMaxMessageBytes, originalMaxMessageBytes+deadLetterHeaderHeadroom)}
 	if requireDurability {
 		spec.ReplicaFactor = 3
 		spec.RequireDurability = true
@@ -275,20 +286,25 @@ type KafkaDeadLetterSink struct {
 	writer *kafkago.Writer
 }
 
-// NewKafkaDeadLetterSink 建死信写入端,不拨号(第一次写时才连)。
-func NewKafkaDeadLetterSink(brokers []string, topic string) (*KafkaDeadLetterSink, error) {
-	if len(brokers) == 0 || strings.TrimSpace(topic) == "" {
+// NewKafkaDeadLetterSink 按死信 topic 的契约(DeadLetterTopicSpec / DeadLetterTopicSpecFor)建写入端,不拨号(第一次写时才连)。
+// 单批上限取契约里的单条上限:kafka-go 的缺省 1MiB 会在本地就拒掉加头之后超限的死信。
+func NewKafkaDeadLetterSink(brokers []string, spec TopicSpec) (*KafkaDeadLetterSink, error) {
+	if len(brokers) == 0 || strings.TrimSpace(spec.Name) == "" {
 		return nil, errors.New("Kafka 死信写入端缺 broker 或 topic")
+	}
+	batchBytes := spec.MaxMessageBytes
+	if batchBytes <= 0 {
+		batchBytes = deadLetterMaxMessageBytes
 	}
 	return &KafkaDeadLetterSink{writer: &kafkago.Writer{
 		Addr:                   kafkago.TCP(brokers...),
-		Topic:                  topic,
+		Topic:                  spec.Name,
 		Balancer:               &kafkago.Hash{},
 		RequiredAcks:           kafkago.RequireAll,
 		Async:                  false,
 		MaxAttempts:            1,
 		BatchSize:              1,
-		BatchBytes:             deadLetterMaxMessageBytes, // 缺省 1MiB 会在本地就拒掉加头之后超限的死信
+		BatchBytes:             batchBytes,
 		BatchTimeout:           10 * time.Millisecond,
 		WriteTimeout:           10 * time.Second,
 		AllowAutoTopicCreation: false,

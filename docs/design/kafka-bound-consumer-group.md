@@ -124,7 +124,7 @@ key、value 与原 headers 原样(原件里旧的 `dlq.*` 头先去掉),再追�
 |---|---|---|
 | `guild-trial` | 打开,20 次 | 毒丸以前会卡住本副本名下的分区;已登记的历练由巡检器在 ResultOverdue(420s)后从 match 的 SQL 终局兜底结算;20 次约 4–7.5 分钟(退避带抖动),与巡检器谁先谁后无关,重放走幂等闸门 |
 | `match-rating` | **不开** | 负责人 2026-11-06 定([cross-zone-matchmaking.md](cross-zone-matchmaking.md) §13.4):解码失败与同局原字节冲突保留位点、告警、人工处置,未处置前分区不前进,不新增丢弃或毒丸表路径 |
-| data_service 两个审计组 | 不适用(reader 模式) | 坏消息由批处理自己按既定口径跳过并提交,记 ERROR 与 `decode_error / invalid / oversize` 计数,告警 `DataServiceAuditMessagesSkipped` |
+| data_service 两个审计组 | 由批处理自己写(reader 模式的 owner 不支持死信,2026-11-26 起) | 坏消息(解不出、主键为 0、超列宽)不落库,原件先写进本组死信「消费组名-dlq」再提交,格式与重放工具同上,见 §15.6;记 ERROR 与 `decode_error / invalid / oversize` 计数,告警 `DataServiceAuditMessagesSkipped` |
 
 ### 5.6 人工重放
 
@@ -250,7 +250,7 @@ reader 模式连续自己结束代次时退避;owner 终止而代次还在时只
 - 依赖长时间不可用时会陆续转死信(§5.3 代价),恢复后人工重放;没有自动重放。
 - 所有副本同时终止且交还的记录没有新属主时收据 HOLD,按 ABORTED_CLOSED 重试同一 run(§6.2)。
 - match 的毒丸仍停在原位(负责人已定,§5.5),靠 `MatchResultConsumerLagging` 发现、人工处置。
-- data_service 的坏消息仍按既定口径跳过并提交(有日志与告警,原字节只在原 topic 保留期内可取);要保全原件需在两个 worker 的解码分支接死信写入端,未做。
+- (2026-11-26 已收)data_service 的坏消息原来只跳过并提交,原字节只在原 topic 保留期内可取;现在先写死信再提交(§15.6)。原记:要保全原件需在两个 worker 的解码分支接死信写入端,未做。
 
 ## 13. Java 版
 
@@ -329,3 +329,22 @@ Java 版(`D:\luyuan\xuanming-server-mmo`)的 match、guild、data 消费者用 K
   与「持续失败」不符。
 - **方案**:窗口改成 2 分钟,for 不变。重写死信的退避封顶 30 秒,持续失败时每个 2 分钟窗口里至少有几次。
 - **可复用的规则**:用 increase 表达「持续」时,统计窗口必须短于 for。契约用例钉住这条规则的窗口与 for。
+
+### 15.6 data_service 审计消费者的坏消息进死信
+
+- **问题**:两个审计消费者(流水、快照)遇到解不出、主键为 0 或超过列宽的消息,只记日志与计数就提交越过。原件只在原 topic 的保留期内
+  取得到,保留期一过,排查和补录都没有原件可用。
+- **方案**:批处理自己写死信(`go/data_service/internal/kafka/dead_letter.go`)。进批时给坏消息留一份原件的深拷贝(reader 会复用缓冲),
+  flush 的第一步把这一批的坏消息按顺序写进本组的死信「消费组名-dlq」(kafkautil 的死信格式,cause 记 unprocessable),写成功才落库、提交。
+  写不进有界重试(5 次、1 秒),仍不行就整批不提交、消费者停下(`ErrConsumerStoppedOnDeadLetter`),与落库失败同样按「确定未提交」交还、
+  冷却后续消费。
+- **为什么死信写在最前面**:快照的批量模式失败时只提交失败行之前的前缀。死信先写完,不管之后提交的是整批还是哪一段前缀,
+  前缀里的坏消息都已经在死信里,判据只有一条,不用逐段核对。
+- **为什么由批处理写、不给 reader 模式的 owner 加死信**:reader 模式下 owner 只交付消息、由调用方按批提交,
+  只有调用方知道哪条是坏消息、是哪种坏;让 owner 去判就得把业务解码搬进框架。
+- **死信放得下快照**:快照 topic 的单条上限是 16MiB。`DeadLetterTopicSpecFor` 按原 topic 的上限加 64KiB 头部余量定死信的上限,
+  写入端按同一份契约建(`NewKafkaDeadLetterSink(brokers, spec)`),两边不会对不上;重放工具读死信、写回原 topic 的单条上限一起放到 32MiB。
+- **被否决的做法**:坏消息写进 data_service 自己的库表,要多一张表、一套迁移与写者闸门,而且坏消息常常出现在库正出故障的时候;
+  只延长原 topic 的保留期,所有消息都多占盘,而要留的只是极少数坏消息。
+- **代价与边界**:死信写不进时这一批的好消息也暂停落库,直到 Kafka 恢复(与库故障时一样宁可积压)。重放走 `cmd/kafka_dlq` 并要带
+  `-allow-unprocessable`:原件本身处理不了,先修生产端或解码。停机重放时同一条坏消息可能写进死信两次,重放工具按原位置去重。

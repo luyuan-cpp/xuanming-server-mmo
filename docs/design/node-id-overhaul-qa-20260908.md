@@ -239,7 +239,7 @@ snowflake 本身保持 `[time32][node17][step15]`、只认一个 17 位的 worke
 - C++:`SetFenceDeadline(steady, wall)`,判定挪到 `SnowFlakeManager::GenerateItemGuid` 包装层
 
 **对应的验证用例**
-- Go 真 etcd 集成:`TestQuarantine_FailsClosedThenReleasesLeastRecentlyUsed`、`TestReclaimAfterLeaseBlip`、`TestLegacyKeysStillQuarantineAndOccupy`、`TestGuardWatermarkCoversMintingFromTheFirstID`
+- Go 真 etcd 集成:`TestQuarantine_FailsClosedThenReleasesLeastRecentlyUsed`、`TestReclaimAfterLeaseBlip`、`TestLegacyKeysStillQuarantineAndOccupy`(2026-11-26 随旧布局兼容层删除)、`TestGuardWatermarkCoversMintingFromTheFirstID`
 - Go 单测:`TestFenceClock_MonotonicAgeTrips`、`TestFenceClock_WallAgeTripsWhenMonotonicStalls`、`TestGenerate_RefusesWhenWatermarkStale`
 - C++:`SnowFlakeSelection.SharedVectorsAgreeWithGo`、`SnowFlakeFence.SteadyClockPastDeadlineRefusesToMint`、`SnowFlakeFence.WallClockPastDeadlineRefusesEvenIfSteadyClockStopped`、`SnowFlakeGuard.FirstIdLandsPastGuardSecondWithoutBorrowing`
 
@@ -406,10 +406,10 @@ CREATE TABLE id_segment (
 - 主机间时钟偏差 < 2 小时(NTP 正常远远满足)
 - 运维不会给两套独立集群填同一个 `ClusterId`
 
-### 过渡期逻辑(一个版本后必须删)
-- Go cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>`、`/login/guard_ms/<slot>` 取 max,并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用
-- C++ 把 `SceneNodeService.rpc/allocated/node_type/<T>/node_id/<N>` 被持有视为 slot N 占用,并读旧 Redis `snowflake_guard:<type>:<N>` 取 max
-- 原因:灰度期间旧二进制仍用"路由 node_id = worker"发号,而新命名空间里对应槽位的水位是 0,会被当成"从没用过"优先选中
+### 过渡期逻辑(已全部删除)
+- Go cluster 0 读旧 `<oldprefix>/snowflake_guard/<slot>`、`/login/guard_ms/<slot>` 取 max,并把旧 `snowflake_ids`/`snowflake_nodes` 算作占用:login 的 `guard_ms` 2026-11-12 随 login 槽位申领删除;scene_manager 剩下的兼容读与镜像写 2026-11-26 删除(项目未上线,没有改造前的二进制;见 [snowflake-id-allocation.md](./snowflake-id-allocation.md)「改造前旧布局的兼容层」)
+- C++ 把 `SceneNodeService.rpc/allocated/node_type/<T>/node_id/<N>` 被持有视为 slot N 占用,并读旧 Redis `snowflake_guard:<type>:<N>` 取 max:2026-09-08 晚随 C++ 槽位客户端删除(§9b)
+- 当时的原因:灰度期间旧二进制仍用"路由 node_id = worker"发号,而新命名空间里对应槽位的水位是 0,会被当成"从没用过"优先选中
 
 ### 未验证
 - **真集群故障注入未跑**:冻结进程再解冻、`etcdctl lease revoke`、强删 Pod。目前是本机真 etcd(3.6.1)与真 MySQL 上的集成测试

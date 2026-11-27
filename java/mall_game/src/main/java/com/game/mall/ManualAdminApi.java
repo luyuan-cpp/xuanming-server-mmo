@@ -104,7 +104,11 @@ public final class ManualAdminApi {
     /**
      * 处置人工寄售单(commerce_consignment.state = MANUAL)及冻结卖家收入。
      * action 取值:
-     * - RETURN_TO_SELLER: 仅限尚未生成卖家收入(未交付买家)，作废未完成交付待办，寄售 MANUAL -> RETURNING(由 trade 退还托管资产)，关联订单 7 -> 9；
+     * - RETRY_DELIVERY: 仅限绑定付款仍为 PAID、交付没有结局(交付待办 MANUAL 即 trade 转人工，或 REVOKED 即撤款时被商城拦下、之后撤款又被撤回)，
+     *   清除 trade 的 MANUAL 交付回执、交付待办 -> PENDING、寄售 MANUAL -> SOLD、关联订单 7 -> 1，由 trade 按合同现状重新回执
+     *   (DELIVERED 记卖家收入、REFUND_PENDING 建退款待办并退回托管、仍在人工则再回 MANUAL)；
+     * - RETURN_TO_SELLER: 仅限尚未生成卖家收入(未交付买家)且绑定付款已被渠道撤销(REVOKED，钱已回到买家)，作废未完成交付待办，
+     *   寄售 MANUAL -> RETURNING(由 trade 退还托管资产)，关联订单 7 -> 9；付款仍 PAID 时拒绝，改用 RETRY_DELIVERY；
      * - UNFREEZE_INCOME: 仅限已生成卖家收入且处于冻结(available_ms = Long.MAX_VALUE)且仍有未结余款，解冻为当前时刻可提现，寄售 MANUAL -> SOLD，关联订单 7 -> 2；
      * - FORFEIT_INCOME: 仅限已生成卖家收入且无在途提现预留(reserved_fen = 0)，将剩余未付净额计入 forfeited_fen 并永久冻结，寄售 MANUAL -> FORFEITED，关联订单 7 -> 9。
      */

@@ -132,5 +132,8 @@ func Tables() []proto.Message {
 		&pb.GuildJianghuGrudgeRecord{},
 		// 帮会全天帮战 V2.5 · 宿敌约战战书:锁序位置 22(单调追加在全序末尾)。
 		&pb.GuildWarFeudRecord{},
+		// 帮派恩怨墙入账闸门:锁序位置 23(单调追加在全序末尾)。入账事务写完 20、21 之后最后插本表,不回头取靠前的表;
+		// 一局一行、不裁剪,是恩怨墙唯一的去重键(数据覆写审计 r2 第 4 轮 r2-jh#3)。
+		&pb.GuildJianghuGrudgeAppliedRecord{},
 	}
 }

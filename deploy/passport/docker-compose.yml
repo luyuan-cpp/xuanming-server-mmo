@@ -18,9 +18,12 @@
 #   docker compose -f deploy/passport/docker-compose.yml down
 # ────────────────────────────────────────────────────────────────
 
+# 镜像按摘要固定(2026-11-26 向 registry-1.docker.io 查的 manifest index 摘要):标签可以被改写,摘要不会。
+# 升级时先查新摘要:curl -sI -H "Authorization: Bearer <token>" -H "Accept: application/vnd.oci.image.index.v1+json"
+#   https://registry-1.docker.io/v2/<repo>/manifests/<tag> 取 docker-content-digest;升级 Casdoor 前先按设计稿 §5.4 第 10 条重核。
 services:
   passport-db:
-    image: mysql:8.0
+    image: mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
     container_name: mmorpg-passport-db
     restart: unless-stopped
     environment:
@@ -41,7 +44,7 @@ services:
       start_period: 15s
 
   casdoor:
-    image: ${CASDOOR_IMAGE:-casbin/casdoor:v4.27.1}
+    image: ${CASDOOR_IMAGE:-casbin/casdoor:v4.27.1@sha256:a0499a9e1bc0c089af79f19b16b866432bc9519a495e286ac7c558181c302b2a}
     container_name: mmorpg-passport-casdoor
     restart: unless-stopped
     depends_on:

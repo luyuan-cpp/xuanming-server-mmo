@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	testOpID  uint64 = 70001
-	testEpoch uint64 = 1700000000000
-	testSeq   uint64 = 5
-	testGap          = 30 * time.Minute
+	testOpID   uint64 = 70001
+	testEpoch  uint64 = 1700000000000
+	testSeq    uint64 = 5
+	testGap           = 30 * time.Minute
+	testWindow        = 3 * time.Minute
 )
 
 // fakeStore 记下人工终结的调用。resolved 决定 CAS 结果。
@@ -60,6 +61,21 @@ type fakeLedger struct {
 func (f *fakeLedger) ReadStoreLedger(context.Context, uint64) (assetop.StoreLedger, error) {
 	f.reads++
 	return f.snapshot, f.err
+}
+
+// fakeSleep 是观察窗口等待的替身:记下每次要等多久,不真等;during 在「等待期间」改夹具(循环领走这一行、账本变了)。
+type fakeSleep struct {
+	waits  []time.Duration
+	during func()
+	err    error
+}
+
+func (f *fakeSleep) sleep(_ context.Context, d time.Duration) error {
+	f.waits = append(f.waits, d)
+	if f.during != nil {
+		f.during()
+	}
+	return f.err
 }
 
 // stuckRow 是一行满足全部行级前置的卡死托管扣款:PENDING、够老、反复 UNKNOWN,30 多分钟没人投递过。
@@ -126,8 +142,9 @@ func ledgerFor(row *tradepb.TradeAssetOpRecord, seen, applied, partial, released
 	}}
 }
 
+// deps 的观察窗口等待不真等,期间什么都不变;要看等待或改夹具的用例换上自己的 fakeSleep。
 func deps(store opStore, ledger assetop.StoreLedgerReader) toolDeps {
-	return toolDeps{store: store, ledger: ledger, quietGap: testGap}
+	return toolDeps{store: store, ledger: ledger, quietGap: testGap, observeWindow: testWindow, sleep: (&fakeSleep{}).sleep}
 }
 
 func applyOptions() resolveOptions {
@@ -156,7 +173,7 @@ func TestRunResolve_FinalizesAndPrintsAudit(t *testing.T) {
 	}
 }
 
-// 终结的 CAS 带的是读行时的租约与发送时刻:读完之后有人领过这一行,终结就落空。
+// 终结的 CAS 带的是读行时的租约、发送时刻与 attempts:读完之后有人领过、排过这一行,终结就落空。
 func TestRunResolve_PassesTheReadWitnessToTheCAS(t *testing.T) {
 	row := stuckRow()
 	row.LeaseUntilMs = uint64(time.Now().Add(-time.Hour).UnixMilli())
@@ -165,9 +182,140 @@ func TestRunResolve_PassesTheReadWitnessToTheCAS(t *testing.T) {
 	if code := runResolve(context.Background(), deps(store, ledgerFor(row, true, false, false, false, nil)), abortOptions(), &stdout, &stderr); code != exitOK {
 		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
 	}
-	want := assetop.QuietWitness{LeaseUntilMs: row.GetLeaseUntilMs(), LastSendMs: row.GetLastSendMs()}
+	want := assetop.QuietWitness{LeaseUntilMs: row.GetLeaseUntilMs(), LastSendMs: row.GetLastSendMs(), Attempts: row.GetAttempts()}
 	if len(store.witnesses) != 1 || store.witnesses[0] != want {
 		t.Fatalf("witnesses=%+v want %+v", store.witnesses, want)
+	}
+}
+
+// 「从未应用」先在本机等满观察窗口,再读一次行与账本:都没变才终结,CAS 带的仍是第一次读到的整份见证。
+func TestRunResolve_NeverAppliedWaitsTheObservationWindowThenFinalizes(t *testing.T) {
+	row := stuckRow()
+	store := &fakeStore{row: row, resolved: true}
+	ledger := ledgerFor(row, false, false, false, true, nil)
+	sleeper := &fakeSleep{}
+	d := deps(store, ledger)
+	d.sleep = sleeper.sleep
+	var stdout, stderr bytes.Buffer
+	if code := runResolve(context.Background(), d, abortOptions(), &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+	}
+	if len(sleeper.waits) != 1 || sleeper.waits[0] != testWindow {
+		t.Fatalf("waits=%v, want one wait of %v", sleeper.waits, testWindow)
+	}
+	if ledger.reads != 2 {
+		t.Fatalf("ledger reads=%d, want 2(读证据一次,观察窗口之后重判一次)", ledger.reads)
+	}
+	want := assetop.QuietWitness{LeaseUntilMs: row.GetLeaseUntilMs(), LastSendMs: row.GetLastSendMs(), Attempts: row.GetAttempts()}
+	if len(store.calls) != 1 || store.witnesses[0] != want {
+		t.Fatalf("calls=%+v witnesses=%+v want %+v", store.calls, store.witnesses, want)
+	}
+	if !strings.Contains(stderr.String(), "waiting 3m0s on the local monotonic clock") {
+		t.Fatalf("等待前要告诉操作员等多久、为什么: %s", stderr.String())
+	}
+}
+
+// 观察期间这一行被领过、排过或终结了:不终结,退出码 3,打审计行并提示重跑。「只有 attempts 变了」是钟慢的副本
+// 发过请求(last_send_ms 推不动)、结局不明重排(租约清回 0)之后的样子,也是只领没发的本地重排。
+func TestRunResolve_ObservationWindowRefusesWhenTheRowChanged(t *testing.T) {
+	cases := map[string]func(*tradepb.TradeAssetOpRecord){
+		"claimed": func(r *tradepb.TradeAssetOpRecord) {
+			r.LeaseUntilMs = uint64(time.Now().Add(10 * time.Second).UnixMilli())
+		},
+		"only attempts moved":  func(r *tradepb.TradeAssetOpRecord) { r.Attempts++ },
+		"sent and rescheduled": func(r *tradepb.TradeAssetOpRecord) { r.Attempts++; r.LastSendMs++ },
+		"finalized by the loop": func(r *tradepb.TradeAssetOpRecord) {
+			r.Status = tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED
+		},
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			row := stuckRow()
+			store := &fakeStore{row: row, resolved: true}
+			d := deps(store, ledgerFor(row, false, false, false, true, nil))
+			d.sleep = (&fakeSleep{during: func() {
+				changed := proto.Clone(store.row).(*tradepb.TradeAssetOpRecord)
+				change(changed)
+				store.row = changed
+			}}).sleep
+			var stdout, stderr bytes.Buffer
+			if code := runResolve(context.Background(), d, abortOptions(), &stdout, &stderr); code != exitNotPending {
+				t.Fatalf("exit=%d want %d stderr=%s", code, exitNotPending, stderr.String())
+			}
+			if len(store.calls) != 0 {
+				t.Fatalf("不得终结: %+v", store.calls)
+			}
+			if out := stdout.String(); !strings.Contains(out, "finalized=false") || !strings.Contains(out, "rerun") {
+				t.Fatalf("要打审计行并提示重跑: %s", out)
+			}
+		})
+	}
+}
+
+// 观察期间账本变了(scene 存盘见过了这个 seq,或玩家上线被 scene 持有):行没变也不终结。
+func TestRunResolve_ObservationWindowRefusesWhenTheLedgerChanged(t *testing.T) {
+	row := stuckRow()
+	cases := map[string]*fakeLedger{
+		"ledger has seen the seq":    ledgerFor(row, true, true, false, true, nil),
+		"player now held by a scene": ledgerFor(row, false, false, false, false, nil),
+	}
+	for name, after := range cases {
+		t.Run(name, func(t *testing.T) {
+			store := &fakeStore{row: row, resolved: true}
+			ledger := ledgerFor(row, false, false, false, true, nil)
+			d := deps(store, ledger)
+			d.sleep = (&fakeSleep{during: func() { ledger.snapshot = after.snapshot }}).sleep
+			var stdout, stderr bytes.Buffer
+			if code := runResolve(context.Background(), d, abortOptions(), &stdout, &stderr); code != exitNotPending {
+				t.Fatalf("exit=%d want %d stderr=%s", code, exitNotPending, stderr.String())
+			}
+			if len(store.calls) != 0 {
+				t.Fatalf("不得终结: %+v", store.calls)
+			}
+		})
+	}
+}
+
+// applied / rejected 有账本里的收据作证,不等观察窗口,账本只读一次。
+func TestRunResolve_ReceiptEvidenceDoesNotWait(t *testing.T) {
+	row := stuckRow()
+	cases := []struct {
+		name   string
+		ledger *fakeLedger
+		opts   resolveOptions
+	}{
+		{"applied", ledgerFor(row, true, true, false, false, nil), applyOptions()},
+		{"rejected", ledgerFor(row, true, false, false, false, nil), abortOptions()},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store := &fakeStore{row: row, resolved: true}
+			sleeper := &fakeSleep{}
+			d := deps(store, c.ledger)
+			d.sleep = sleeper.sleep
+			var stdout, stderr bytes.Buffer
+			if code := runResolve(context.Background(), d, c.opts, &stdout, &stderr); code != exitOK {
+				t.Fatalf("exit=%d stderr=%s", code, stderr.String())
+			}
+			if len(sleeper.waits) != 0 || c.ledger.reads != 1 {
+				t.Fatalf("waits=%v ledger reads=%d, want no wait and one read", sleeper.waits, c.ledger.reads)
+			}
+		})
+	}
+}
+
+// 观察窗口的等待被打断(整条命令的预算到期、被取消):执行出错,不改数据。
+func TestRunResolve_InterruptedObservationFinalizesNothing(t *testing.T) {
+	row := stuckRow()
+	store := &fakeStore{row: row, resolved: true}
+	d := deps(store, ledgerFor(row, false, false, false, true, nil))
+	d.sleep = (&fakeSleep{err: context.DeadlineExceeded}).sleep
+	var stdout, stderr bytes.Buffer
+	if code := runResolve(context.Background(), d, abortOptions(), &stdout, &stderr); code != exitError {
+		t.Fatalf("exit=%d want %d", code, exitError)
+	}
+	if len(store.calls) != 0 {
+		t.Fatalf("不得终结: %+v", store.calls)
 	}
 }
 

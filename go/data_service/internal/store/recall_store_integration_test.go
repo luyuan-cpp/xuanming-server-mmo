@@ -116,12 +116,12 @@ func (f *recallFixture) claim(t *testing.T, plan *store.RecallOpPlan) assetop.Op
 	return op
 }
 
-// witness 读一行此刻的租约与发送时刻,当作人工终结读证据时的见证(logic.ResolveRecallOp 的第一步)。
+// witness 读一行此刻的租约、发送时刻与 attempts,当作人工终结读证据时的见证(logic.ResolveRecallOp 的第一步)。
 func (f *recallFixture) witness(t *testing.T, opID uint64) assetop.QuietWitness {
 	t.Helper()
 	state, err := f.store.ReadOpState(f.ctx, opID)
 	require.NoError(t, err)
-	return assetop.QuietWitness{LeaseUntilMs: state.LeaseUntilMs, LastSendMs: state.Op.LastSendMs}
+	return assetop.QuietWitness{LeaseUntilMs: state.LeaseUntilMs, LastSendMs: state.Op.LastSendMs, Attempts: state.Op.Attempts}
 }
 
 func appliedResult(line *assetpb.AssetRecallLine) assetop.Result {
@@ -531,6 +531,39 @@ func TestRecallStore_ResolveManuallyIfQuiet_MissesAfterASend(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, resolved, "读证据之后发过请求,证据作废")
 	assert.Equal(t, recallPending, f.opStatus(t, 1)[ops[0].OpID])
+}
+
+// 读证据之后又领了一次、按本地 NOT_HERE 重排:租约回到 0、last_send_ms 不动,行上只有 attempts 变了。
+// 钟慢的副本发过请求(last_send_ms 推不动)、结局不明重排之后也是这个形状,所以见证要比 attempts,照样落空;按新读的值再来才终结。
+func TestRecallStore_ResolveManuallyIfQuiet_MissesWhenOnlyAttemptsMoved(t *testing.T) {
+	f := newRecallFixture(t)
+	ops := f.createBatch(t, 1, 5, 901)
+	f.claim(t, ops[0])
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: ops[0].OpID, LeaseToken: 77}, 3500,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, 3100))
+	witness := f.witness(t, ops[0].OpID)
+
+	_, claimed, err := f.store.Claim(f.ctx, ops[0].OpID, 4000, 5000, 6000, 78)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, f.store.Reschedule(f.ctx, assetop.Op{OpID: ops[0].OpID, LeaseToken: 78}, 9000,
+		assetop.Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, 4100))
+	after := f.witness(t, ops[0].OpID)
+	require.Equal(t, witness.LeaseUntilMs, after.LeaseUntilMs, "租约又回到读证据时的值")
+	require.Equal(t, witness.LastSendMs, after.LastSendMs, "本地重排不推进 last_send_ms")
+	require.Equal(t, witness.Attempts+1, after.Attempts)
+
+	manual := assetop.ManualResolution{OpID: ops[0].OpID, Final: assetop.StatusAborted, Operator: "tester", Reason: "账本证实从未应用"}
+	resolved, err := f.store.ResolveManuallyIfQuiet(f.ctx, manual, witness, 9500)
+	require.NoError(t, err)
+	assert.False(t, resolved, "读证据之后又排过一次,证据作废")
+	assert.Equal(t, recallPending, f.opStatus(t, 1)[ops[0].OpID])
+	assert.Zero(t, f.db.Count(t, "gm_recall_op", "op_id = ? AND resolved_by = 'tester'", ops[0].OpID))
+
+	resolved, err = f.store.ResolveManuallyIfQuiet(f.ctx, manual, after, 9600)
+	require.NoError(t, err)
+	assert.True(t, resolved, "见证与库里一致才终结")
+	assert.Equal(t, recallAborted, f.opStatus(t, 1)[ops[0].OpID])
 }
 
 // 人工终结读证据看到的请求,就是 Claim 下发的那一份(同一个 scanRecallOp),收据身份才对得上。没有这一行回 ErrRecallOpNotFound。

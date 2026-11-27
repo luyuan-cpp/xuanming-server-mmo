@@ -118,8 +118,46 @@ func TestManualQuietGapTakesTheLongerOfFloorAndLease(t *testing.T) {
 }
 
 func TestManualRowWitnessCarriesTheReadValues(t *testing.T) {
-	row := ManualRow{LeaseUntilMs: 11, LastSendMs: 22}
-	if w := row.Witness(); w.LeaseUntilMs != 11 || w.LastSendMs != 22 {
+	row := ManualRow{LeaseUntilMs: 11, LastSendMs: 22, Attempts: 33}
+	if w := row.Witness(); w.LeaseUntilMs != 11 || w.LastSendMs != 22 || w.Attempts != 33 {
 		t.Fatalf("witness = %+v", w)
+	}
+}
+
+// 见证三列任一变了都不算同一行。只有 attempts 变了的那一格是钟慢的副本发过请求(last_send_ms 推不动)、
+// 结局不明重排(租约清回 0)之后的样子,也是只领没发的本地重排:都要落空。Op 与 LastReason 不进见证。
+func TestQuietWitnessMatchesOnlyTheSameThreeColumns(t *testing.T) {
+	read := ManualRow{LeaseUntilMs: 0, LastSendMs: 5_000, Attempts: 12}
+	w := read.Witness()
+	if !w.Matches(read) {
+		t.Fatal("unchanged row must match its own witness")
+	}
+	unrelated := read
+	unrelated.Op, unrelated.LastReason = testOp(7), ReasonPartialApplied
+	if !w.Matches(unrelated) {
+		t.Fatal("Op and LastReason are not part of the witness")
+	}
+	cases := map[string]func(*ManualRow){
+		"claimed (lease changed)":                         func(r *ManualRow) { r.LeaseUntilMs = 9_000 },
+		"sent and rescheduled (last_send_ms advanced)":    func(r *ManualRow) { r.LastSendMs++ },
+		"rescheduled, lease back to 0, last_send_ms kept": func(r *ManualRow) { r.Attempts++ },
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			again := read
+			change(&again)
+			if w.Matches(again) {
+				t.Fatalf("witness %+v must not match %+v", w, again.Witness())
+			}
+		})
+	}
+}
+
+func TestManualObserveWindowTakesTheLongerOfFloorAndTwoLeases(t *testing.T) {
+	if got := ManualObserveWindow(10 * time.Second); got != ManualObserveFloor {
+		t.Fatalf("10s lease: got %v, want the floor %v", got, ManualObserveFloor)
+	}
+	if got := ManualObserveWindow(10 * time.Minute); got != 20*time.Minute {
+		t.Fatalf("10min lease: got %v, want two leases", got)
 	}
 }

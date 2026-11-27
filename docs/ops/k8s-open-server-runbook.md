@@ -61,7 +61,7 @@
   6. 回调入口:Service `payment-notify`(云上 LoadBalancer、裸机 NodePort)前面放负载均衡终结 HTTPS,证书与域名自备。把 `https://<支付域名>/notify/<渠道名>` 登记到各渠道后台,并写进配置文件的 `NotifyBaseURL`。
   7. 表:payment 的表由 `payment-migrate` Job 建,商城的闸门表与业务表由 `mall-schema` Job 建,都不用手工装。结构变了要清库重装(项目未上线)。
   8. 告警:`kubectl apply -n observability -f deploy/k8s/payment-alerts.yaml`。
-- **Secret `domain-service-secrets` 里的内部调用密钥由部署维护,运维不用预置**(2026-11-20 起)。zone 的工作负载以 `optional: false` 引用的 16 把 HMAC 密钥都在 `k8s_deploy.ps1` 的托管键表 `$script:ManagedDomainServiceSecrets` 里,部署替运维补齐,并保证全集群每把一个值。它们只用于集群内服务之间互相签名,集群外没有人需要知道值,也不要手工改。环境变量名按键名推:`role-fence-<x>` → `MMORPG_ROLE_FENCE_SECRET_<X>`,`account-directory-<x>` → `MMORPG_ACCOUNT_DIRECTORY_SECRET_<X>`,`player-store-scene` → `MMORPG_PLAYER_STORE_SECRET_SCENE`,`mail-producer-battle` → `MAIL_PRODUCER_SECRET_BATTLE`。
+- **Secret `domain-service-secrets` 里的内部调用密钥由部署维护,运维不用预置**(2026-11-20 起)。zone 的工作负载以 `optional: false` 引用的 17 把 HMAC 密钥都在 `k8s_deploy.ps1` 的托管键表 `$script:ManagedDomainServiceSecrets` 里,部署替运维补齐,并保证全集群每把一个值。它们只用于集群内服务之间互相签名,集群外没有人需要知道值,也不要手工改。环境变量名按键名推:`role-fence-<x>` → `MMORPG_ROLE_FENCE_SECRET_<X>`,`account-directory-<x>` → `MMORPG_ACCOUNT_DIRECTORY_SECRET_<X>`,`player-store-scene` → `MMORPG_PLAYER_STORE_SECRET_SCENE`,`mail-producer-battle` → `MAIL_PRODUCER_SECRET_BATTLE`。
 
   | key | zone 里读它的 | infra 里读它的 | 用途 |
   |---|---|---|---|
@@ -73,6 +73,7 @@
   | `account-directory-trade` | scene、data-service | trade | 同上 |
   | `account-directory-login` | login、data-service | — | 同上 |
   | `account-directory-scene-manager` | scene-manager、data-service | — | 同上 |
+  | `account-directory-content-guard` | data-service | content-guard | content-guard 按玩家或账号查渠道身份(`GetPlayerChannelIdentity`,平台审核要 openid,[rename-and-content-safety.md](../design/rename-and-content-safety.md) §6.5)。chat 查同一个接口用 `role-fence-chat` |
   | `account-directory-payment` | data-service | payment | payment 按玩家查实名(`GetAccountRealName`,未成年人充值限额用,[real-name-anti-addiction.md](../design/real-name-anti-addiction.md) §5.6),不开防沉迷的部署也要有 |
   | `player-store-scene` | scene、db | — | scene 调 go/db 存盘,go/db 验 |
   | `mail-producer-battle` | scene | mail | scene 寄两包都放不下的战斗掉落([battle-overflow-mail.md](../design/battle-overflow-mail.md)),mail 验 |
@@ -96,6 +97,7 @@
   | `asset-data-service` | `MMORPG_ASSET_OP_SECRET_DATA_SERVICE` | 每个 zone namespace | GM 批量回收的资产指令签名,data-service 签、scene 验,两边同值。`optional: true`:`-AssetOps off` 时用不到;`-AssetOps on` 时 data-service 缺它拒启 |
   | `login-admin-token` | `MMORPG_LOGIN_ADMIN_TOKEN` | 每个 zone namespace | `LoginAdmin` 的运维口令(`x-admin-token`),至少 16 字节。`optional: true`:没有这个 key 时运维面整体停用 |
   | `match-internal-guild` | `MMORPG_MATCH_INTERNAL_SECRET_GUILD` | infra namespace | guild 和 match 同值:开局、占用、读终局都验它 |
+  | `mail-producer-match` | `MAIL_PRODUCER_SECRET_MATCH` | infra namespace | 2026-11-26 起:match 签、mail 验,群仙问道赛领奖邮件([season-team-tournament-v1.md](../planning/season-team-tournament-v1.md) 第七节)。两边都 `optional: false`,缺键 mail 与 match 都起不来;只在 infra 用,所以不进上面的托管键表 |
 
 - 参与者经 infra namespace 的 K8s Service 直连(`guild.<infra>:50300`、`trade.<infra>:50800`、`mail.<infra>:50900`、`match.<infra>:50500`、`player-inbox.<infra>:50950`、`friend.<infra>:50400`),`k8s_deploy.ps1` 按 `-InfraNamespace` 渲染。`-NetworkPolicies on` 时 guild、match 的放行名单已含 data-service。任何一个参与者不可达,过户和删角一律拒绝,其余功能不受影响。
 - 告警装 `deploy/k8s/logical-db-alerts.yaml`,安装方式和抓取前提写在文件头。闸门冻结时长没有指标,要查库。
@@ -301,6 +303,14 @@ kubectl get svc -n mmorpg-zone-yesterday
   - 金丝雀收尾:`-CanaryServices` 不再列出某个写者时,部署脚本删掉 `<svc>-canary`,当场跑一轮它的收尾(不看门禁,要等结果),`pending=0` 之后自己删 `sql-writer-slot-retirer-<svc>-canary` 的 CronJob、ServiceAccount、Role、RoleBinding;没做完就留着它,CronJob 接着做,下一次部署再来一遍。删金丝雀的目录条目与 Secret 之前,确认这份 CronJob 已经不在(`kubectl -n <namespace> get cronjob sql-writer-slot-retirer-<svc>-canary` 找不到),否则它引用的 Secret 没了,每一轮都起不来。
   - 部署脚本手工起的 Job 不算进 CronJob 的历史上限,结束一天后由 `ttlSecondsAfterFinished` 自动删。
 - **节点失联**:StatefulSet 不会在别的节点自动重建同序号的 Pod,要等节点对象被删,或者人工 `kubectl -n <namespace> delete pod <pod> --force --grace-period=0`。强删是安全的:新 Pod 换代之后,旧节点上的进程就算还活着,下一笔写也会被闸门拒绝(写不进去,不会写坏数据)。
+- **某个 SQL 集群失联**(只影响写多个逻辑库的 data-service 和 db;[启动期故障隔离](../design/data-service-startup-isolation.md)):
+  - 已经在跑的副本照常服务落在健康集群上的库,落在失联集群上的调用回不可用。
+  - 这期间新起的 Pod(被回收重建的、扩出来的、发布换上的)照样起得来。注册器跳过连不上的库(init 日志 `skipped=<库> reason=unreachable`),主容器启动日志打「no writer grant」。这些库这一代一直关着,Pod 照常经 etcd 被发现、服务健康库,但 `/readyz` 不就绪(`READY 0/1`),告警 `SqlWriterGrantsIncomplete`。
+  - 例外:data-service 的目录第 0 片(合服映射在那里)连不上时照旧拒启,反复重启,直到它恢复。
+  - **故障期间别滚动重启、别发布**:新 Pod 一样缺这些库,发布会停在第一个不就绪的 Pod 上(这是有意的保护)。
+  - **集群恢复之后要重建不就绪的 Pod**:缺写资格的 Pod 不会自己补齐。一次删一个 `kubectl -n <namespace> delete pod <pod>`,等新 Pod 就绪(`/readyz` 200、告警消失)再删下一个。新的一代在全部库注册,并在换代事务里退休被跳过那些库上留着的上一代。
+  - 恢复之前就要开排空的,被跳过的库上那一代没有进程,要按上面「没有进程的写者」人工退休,或者先重建 Pod。
+  - 只写一个库的服务不受影响:唯一的库连不上就没有写资格,照旧卡在 init。
 - **Job 或 CronJob 起不来**:`sql-writer-pod-reaper` 的镜像拉不到时只是这一分钟没回收,不影响别的 Pod。`sql-writer-slot-retirer-<StatefulSet>` 用 registrar 的镜像,拉不到时这一轮不结束,下一轮再来。看 `kubectl -n <namespace> describe job <job>`。
 
 C++ node business logs are **not** on stdout. Apart from gRPC / abseil / librdkafka's own

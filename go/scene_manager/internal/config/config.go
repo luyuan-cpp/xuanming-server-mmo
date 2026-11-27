@@ -64,6 +64,7 @@ func (c *Config) ResolveGateTokenSecret(lookup func(string) (string, bool)) erro
 type OwnerAuthorityConfig struct {
 	// Mode selects runtime integration: ""/"shadow" (dual-write + divergence check, non-blocking)
 	// or "enforce" (fail-closed linearizable SQL gate before Kafka route commit).
+	// enforce 在准入屏障做实之前启动即拒(ResolveDSN;docs/design/linearizable-owner-authority.md §7)。
 	Mode         string `json:",optional"`
 	DSN          string `json:",optional"`
 	DSNEnv       string `json:",optional"`
@@ -96,6 +97,14 @@ func (c OwnerAuthorityConfig) ResolveDSN(lookup func(string) (string, bool)) (st
 	}
 	if c.Mode != "" && c.Mode != "shadow" && c.Mode != "enforce" {
 		return "", fmt.Errorf("OwnerAuthority.Mode must be empty, shadow, or enforce, got %q", c.Mode)
+	}
+	// enforce 的价值是 BeginTransition 设下的准入屏障(旧节点最晚可玩 < 新节点最早准入)。眼下没有任何进程续
+	// owner_instance_lease,目标身份又是会被复用的 node_id 加恒为 1 的纪元,屏障恒等于当前时刻:开着它只多一个 SQL 依赖与否决点,
+	// 给不出它承诺的时间保护,还容易让人据此下线 Redis 围栏。所以屏障做实之前拒启(数据覆写审计 r2 第 4 轮 r2-oa#1)。
+	if c.Mode == "enforce" {
+		return "", errors.New("OwnerAuthority.Mode=enforce is refused until the admit barrier is implemented: no process renews owner_instance_lease " +
+			"and the scene target identity is a reusable node id with a constant instance epoch, so admit_not_before is always now " +
+			"(docs/design/linearizable-owner-authority.md section 7); use shadow")
 	}
 	if _, err := authoritysql.ParseBackend(c.Backend); err != nil {
 		return "", fmt.Errorf("OwnerAuthority.Backend: %w", err)

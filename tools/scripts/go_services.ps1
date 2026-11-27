@@ -1131,8 +1131,8 @@ function Start-ServiceInstance {
     # lib 函数同样只在分支里调用,理由同上一段。
     $matchDevSecretService = if ($Name -in @('match','rank','player_inbox','guild')) { $Name.Replace('_','-') } else { '' }
     $prevMatchDevSecrets = $null
-    # mail、rank 的生产者签名密钥,同样只在分支里调用、finally 里还原;部署链从不调用这里。
-    $producerDevSecretService = if ($Name -in @('mail','rank')) { $Name } else { '' }
+    # mail、rank、match 的生产者签名密钥(match 只拿群仙问道赛领奖邮件那一把),同样只在分支里调用、finally 里还原;部署链从不调用这里。
+    $producerDevSecretService = if ($Name -in @('mail','rank','match')) { $Name } else { '' }
     $prevProducerDevSecrets = $null
     # 角色护栏的密钥:data_service 拿全部,参与者拿自己和协调者那把,chat、go/db 只拿自己那把。同样只在分支里调用、finally 里还原;部署链从不调用这里。
     $roleFenceDevSecretService = if ($Name -in @('data_service','guild','trade','mail','match','player_inbox','friend','chat','db')) { $Name.Replace('_','-') } else { '' }
@@ -1161,7 +1161,7 @@ function Start-ServiceInstance {
         # 聊天SQL账号仅交给chat；其它本机服务不得顺带继承此能力。
         if ($Name -ne 'chat') { [Environment]::SetEnvironmentVariable('CHAT_AUTHORITY_DSN', $null, 'Process') }
         $accountDirectoryService = $Name.Replace('_','-')
-        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db','player-inbox','payment')) {
+        if ($accountDirectoryService -in @('data-service','login','trade','match','scene-manager','db','player-inbox','payment','content-guard')) {
             $previousAccountDirectorySecrets = Backup-AccountDirectoryDevSecrets -Service $accountDirectoryService
             Initialize-AccountDirectoryDevSecrets -RepoRoot $RepoRoot -Service $accountDirectoryService
         }

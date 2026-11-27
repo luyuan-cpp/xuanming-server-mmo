@@ -3,17 +3,17 @@
 // gate 客户端连接存活检查的装配层(docs/design/gate-client-heartbeat.md):握手期限、应用层心跳、空闲超时。
 //
 // 纯逻辑(参数、心跳准入、判死、检查点堆)在 core 的 network/client_liveness.h,与 battle 直连共用;本文件只做副作用:
-// 回包、通告参数、关连接、计数与日志。两道期限到了都只调 forceClose(),断线通知、断线保留、login 断线租约都由既有的
+// 回包、通告参数、关连接、计数与日志。各道期限到了都只调 forceClose(),断线通知、断线保留、login 断线租约都由既有的
 // 断开回调(GateClientSessionHandler::HandleConnectionDisconnection)处理,这里不加任何业务逻辑。
 //
 // 一条连接的生命周期:
-//   建连(未验签)──ExpectHandshake──▶ 10s 内要验签,否则关
-//   验签成功 ──OnTokenVerified──▶ 回包通告心跳参数,从此按空闲超时判死:30s 收不到任何一帧就关;
-//                                 并且 60s 内要登录成功一次(kLoginDeadlineAfterVerify),否则关
+//   建连(未验签,只有一条未验签记录,准入设计 P2-4)──▶ 10s 内要验签,否则 SweepLiveness 从未验签表头扫到它就关
+//   验签成功(这时才有会话)──OnTokenVerified──▶ 回包通告心跳参数,从此按空闲超时判死:30s 收不到任何一帧就关;
+//                                           并且 60s 内要登录成功一次(kLoginDeadlineAfterVerify),否则关
 //   客户端每 10s 一条心跳 ──HandleHeartbeat──▶ 回一条;任何一帧(NoteInboundFrame)都重新计时
 //
 // 状态是 gate loop 线程上的 thread_local(与路由 lane 同一做法);定时器与派发回调都不捕获任何对象,
-// 也不持有连接(AGENTS.md §11.7:只经会话表里的 weak_ptr lock)。只能在 gate 的 EventLoop 线程上调用。
+// 也不持有连接(AGENTS.md §11.7:只经会话表与未验签表里的 weak_ptr lock)。只能在 gate 的 EventLoop 线程上调用。
 
 #include <chrono>
 #include <cstddef>
@@ -48,9 +48,6 @@ inline void NoteInboundFrame(SessionInfo &session)
 	}
 }
 
-// 新连接还没验签:登记握手期限。HandleConnectionEstablished 插入会话之后调用;dev 免验签的会话建连即已验证,不调。
-void ExpectHandshake(SessionId sessionId, const SessionInfo &session, client_liveness::SteadyTime now);
-
 // 验签成功、即将回 ClientTokenVerifyResponse{success = true}:回包填心跳参数,并从这一刻起按空闲超时判死这条连接,
 // 同时登记登录期限(kLoginDeadlineAfterVerify)。
 // 两条成功路径(正常验签、dev 免验签)都调;dev 下每条验签请求都答,重复调用只填参数,不重复登记。
@@ -63,13 +60,14 @@ void OnHeartbeatRequest(const muduo::net::TcpConnectionPtr &conn, const std::sha
 						muduo::Timestamp receiveTime);
 
 // 收到一条心跳,时刻由调用方给(单测接缝)。处置见设计 §5.2:
-//   找不到会话 / 未验签:forceClose;本窗口已应答满:不回、计一次非法包,到阈值 forceClose;
+//   还没验签(连接只有未验签记录)/ 找不到会话:forceClose;本窗口已应答满:不回、计一次非法包,到阈值 forceClose;
 //   其余回 ClientHeartbeatResponse{seq}。
 void HandleHeartbeat(const muduo::net::TcpConnectionPtr &conn, const ClientHeartbeatRequest &request,
 					 client_liveness::SteadyTime now);
 
-// 扫描:定时器每个节拍调一次;单测直接传时刻。握手超时、静默满阈值、到了登录期限仍未登录成功的连接 forceClose,之后照常走断开回调。
-// 顺带每 30s 检查一次汇总行,累计计数有变化才打。
+// 扫描:定时器每个节拍调一次;单测直接传时刻。静默满阈值、到了登录期限仍未登录成功的会话 forceClose,之后照常走断开回调;
+// 握手期限扫的是未验签表(SessionManager::preAuthConnections,按建连先后有序):建连满 10s 还在表里的,摘掉记录再 forceClose。
+// 本端 loop 卡过的那一轮三道期限都只推迟。顺带每 30s 检查一次汇总行,累计计数有变化才打。
 void SweepLiveness(client_liveness::SteadyTime now);
 
 // 进程级累计计数(gate loop 线程,单调不减)。供汇总日志与单测读增量。
@@ -88,7 +86,7 @@ struct Counters
 };
 const Counters &GetCounters();
 
-// 检查点堆的大小(含已关闭会话、已验签连接尚未到期的检查点),只作观测。
+// 检查点堆的大小(含已关闭会话尚未到期的检查点;未验签连接不进堆),只作观测。
 std::size_t PendingChecks();
 
 // 本端 loop 是否刚卡过(client_liveness.h LoopStallWatch;节拍就是 SweepLiveness 每秒一次的扫描,还没扫过也算卡过)。

@@ -248,8 +248,9 @@ namespace
 			{
 				const ItemCountMap consumed{{op.card_item_id(), op.card_count()}};
 				const ItemCountMap gained;
+				// 流水记成专门的改名类型,correlation_id = 这次改名的流水号(transaction_log.proto 的 TX_ROLE_RENAME 注释)。
 				const uint32_t consumeErr = BagService::ConsumeInventoryAndGrant(
-					entity, consumed, gained, op.hold_id(), "player_rename", {}, op.hold_id());
+					entity, consumed, gained, seq, "player_rename", {}, op.hold_id(), nullptr, TX_ROLE_RENAME);
 				if (consumeErr != kSuccess)
 				{
 					// 角色在 data_service 已经改了名,卡却没扣成:不能就这样落结局(等于白改一次)。记录和占用都留着,

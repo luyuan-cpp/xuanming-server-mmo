@@ -189,7 +189,7 @@
 | # | 严重度 | 问题 | 处置 |
 |---|---|---|---|
 | 1 | medium | match、guild 的对局结果消费者遇到一次失败或一次在途再均衡,就永久停止取消息,不重建(`go/shared/kafkautil/group_lag.go` 出错即 `StopFetching`,`Hold()` 只进排空证明);match 评分消费组没有 lag 告警。topic 保留 7 天,停超过 7 天永久丢评分和榜单更新。即第二轮的 r2-kc#1 | 「数据覆写审计 R2 交接」会话 11-06 已修:消费者跨代次存活,只有控制面真的维护排空才停取;告警改按分区已提交位点停滞判。去向与验证见 [第二轮审计](data-overwrite-rollback-audit-r2-20261019.md) §5.0、§6 |
-| 2 | medium(要运维操作) | trade、guild 的人工终结工具 `cmd/assetopfix` 让值班凭「流水里有这条 correlation_id」判 applied,流水却是内存改动当下发的、早于存盘提交,发送失败也只打日志;工具不读已提交账本,`-force` 能终结任何超过 30 分钟的待定行。判错就一物两得,或卖家物品凭空消失 | 根治:流水改成提交后才发(6.3 第 1 条)。共享判据 `go/shared/assetop/manual_evidence.go`(`JudgeManual`、`RowQuiet`、`QuietWitness`)和 trade 工具已改(6.3 第 4 条);guild 工具 11-06 已改调同一份判据(未编译) |
+| 2 | medium(要运维操作) | trade、guild 的人工终结工具 `cmd/assetopfix` 让值班凭「流水里有这条 correlation_id」判 applied,流水却是内存改动当下发的、早于存盘提交,发送失败也只打日志;工具不读已提交账本,`-force` 能终结任何超过 30 分钟的待定行。判错就一物两得,或卖家物品凭空消失 | 根治:流水改成提交后才发(6.3 第 1 条)。共享判据 `go/shared/assetop/manual_evidence.go`(`JudgeManual`、`RowQuiet`、`QuietWitness`)和 trade 工具已改(6.3 第 4 条);guild 工具 11-06 已改调同一份判据(未编译)。11-26 补:见证加 `attempts`、「从未应用」先等观察窗口(未编译),见表后「第 2 条补记」 |
 | 3 | medium(要运维操作) | GM 回收按流水汇总金额、只按 tx_id 去重:同一指令崩溃后重投再应用,会多出一条同 correlation_id 的流水,金额算两遍,扣不够的挂成永不过期的欠款。`exploit_loss_prevention_zh.md` 把窗口写成「单次存盘间隔」,确定性拒存时其实是整段会话 | 根治同第 2 条;`recall_plan.go` 以已提交账本为证据、按 correlation_id 去重和文档更正由 R2 交接会话 11-06 修完(第一轮 §4 第 7 条下游);`ResolveRecallOp` 人工终结 11-06 改为查已提交账本(6.3 第 4 条) |
 | 4 | medium(只丢不盖) | 节点和 etcd 单边失联时不冻结、不疏散,租约到期再过再入屏障之后被判死;之后正常换图或重登就会铸新代次派到别的节点,老节点的存盘被拒,丢最后一次存盘之后的进度,最多 60 秒。即 §2.3 的 handover-single-writer-v#1,新增的事实是正常换图也会触发;`reentry_barrier.go` 和 `enterscenelogic.go` 里「失租后 15 秒紧急疏散」的注释与代码不符 | 11-12 本会话加持有者存活租约(6.3 第 6 条):只和 etcd 失联、进程还活着的节点不再被接管,这种情形不丢。租约失效时由 11-05 加的每 5 秒补存兜底(6.3 第 2 条),丢失上限约 5 秒;更正 `reentry_barrier.go` 注释。`enterscenelogic.go` 那句 R2 交接会话 11-05 已改为「失租不疏散,15 秒疏散只在身份冲突时」 |
 | 5 | medium(只在灾难恢复时) | 一个地域的逻辑库分在多个集群时,PITR 各集群恢复到同一个 T 却没有统一时间点,贴着 T 的建角留下半截:角色不在列表里、名字能被别人再注册、认领回 NO_OWNER 永远进不了场。手册 §4.1a 的核账表只列了过户和删角 | R2 交接会话 11-06 已修:建角残留核账与修复工具,同日评审修正(先查已提交证据、起服之前核账);见第二轮审计 §6 |
@@ -198,6 +198,33 @@
 | 8 | low | 判死释放(`ReleaseDeadPlayerStoreHolder`)只比代次,交易判死比(代次、持有者、认领序号)三列。误判死与同落点重连认领凑在一次释放 RPC 的窗口里时,认领之后的进度丢 | R2 交接会话 11-06 已修:判死释放比(代次、持有者、认领序号)三列并复核注册表(handover-single-writer-v#1 的 scene_manager 侧);见第二轮审计 §6 |
 | 9 | low | rank 封榜奖励被邮件服务拒收时永远重试、没有终态;30 天后邮件一律按过期拒收 | R2 交接会话 11-06 已修(r2-mail#2):发件取 min(封榜 +30 天, now + mail 当前 TTL),收件箱满与超出可投窗口设终态并计指标。目前没有生产调用方触发封榜发奖 |
 | 10 | low | `ReleasePlayerName` 非管理员路径不核调用方,只限登记年龄窗口;出 bug 或被越权调用时一名两角 | 2026-11-06 已落码,未编译,待 Gemini 验证。名字行改成「预留 → 绑定」状态机(`player_name.bound_ms`):建角提交之后复核角色再绑定;已绑定的 `ReleasePlayerName` 一律拒绝,只有删角写完墓碑之后的收尾能释放;预留态释放之前在玩家片证明角色永远不会提交(必要时写墓碑);不带 token 时只认 login 的签名。核账工具加 `name_unbound`。设计与残余见 [名字设计](guild-phase2/03-names.md) §3.4a |
+
+**第 2 条补记(2026-11-26):人工终结的见证加 `attempts`,「从未应用」先等观察窗口。** 数据覆写审计 r2 早期遗留第 1 条([第二轮审计](data-overwrite-rollback-audit-r2-20261019.md) §6「2026-11-26 清点」);代码见 `go/shared/assetop/manual_evidence.go`(`QuietWitness.Matches`、`ManualObserveWindow`),未编译,待 Gemini 验证。
+
+1. **问题**:
+   - 「从未应用」的安静判据 `RowQuiet` 拿工具自己的墙钟,去比重投副本写下的 `lease_until_ms` / `last_send_ms`,副本各用各的钟。两个 `cmd/assetopfix` 都不跑 `clockcheck.MustPass`,可能在集群外的机器上跑。工具的钟快了、或某个副本的钟慢了超过 30 分钟,一次正在进行的投递会被判成安静,工具按 aborted 终结,scene 随后应用了它:资产重复,或补偿重复。
+   - 终结的条件写只比 `lease_until_ms`、`last_send_ms`。钟慢的副本发送时 `last_send_ms = GREATEST(last_send_ms, 它的 now)` 推不动,结局不明的重排又把 `lease_until_ms` 清回 0,行上两列和读证据时一样,条件写照样通过,这一次发送被漏掉。
+2. **方案**:
+   - 见证加 `attempts`:`assetop.ManualRow`、`QuietWitness` 各加一列,比对只走 `QuietWitness.Matches` 一处。trade 的 `sqlResolveAssetOpQuiet` 加 `AND attempts = ?`;data_service 回收的 `settle` 在行锁读里多取 `attempts`,用 `Matches` 比。guild 的 SQL(`go/guild/internal/data/asset_store.go` 的 `sqlResolveAssetOpQuiet` 与 `ResolveManuallyIfQuiet` 的实参)当时被另一批改动占着,待补;guild 工具观察窗口里的复核已在 Go 里比 `attempts`,SQL 暂不比只是少一道兜底。
+   - trade、guild 两个工具只在结论是 `never_applied`(唯一依赖 `RowQuiet` 的结论)时,终结之前在本机单调时钟上等满观察窗口 `ManualObserveWindow(租约) = max(1 分钟, 2 × 重投租约)`:trade 租约 10 秒,窗口 1 分钟;guild 按 `AssetOp.LeaseMs`,默认 10 秒即 1 分钟,上限 600 秒即 20 分钟。等完再读一次行与账本:行仍是 PENDING、见证对得上、账本重判仍是 `never_applied` 才终结,条件写照旧带第一次读到的见证;否则退出码 3,打审计行与原因,提示重跑。等待前打一行英文提示(等多久、为什么),等待可被 ctx 取消(被打断退出码 1,不改数据),整条命令的预算从 15 秒放宽到 15 秒加窗口。`applied` / `rejected` 有账本里的收据作证,不等。
+   - data_service 的 `ResolveRecallOp` 只做见证加 `attempts`,不加观察窗口。
+   - `RowQuiet` 本身不改,仍是第一道筛选。
+3. **为什么这样选**:
+   - 读证据那一刻在途的投递,都落在一个已经领到的租约里,处理预算短于租约,所以至迟在读证据之后一个租约内收尾:成功,行被终结;结局不明,重排(`attempts` 加一、租约清零);进程崩溃,行不变,但 scene 若已应用,要么还持有玩家(账本 `Released=false`,判 none),要么已存盘(账本见过这个 seq,判 applied / rejected,`-as aborted` 不许)。所以两次读之间行没变、账本仍判 `never_applied`,就说明读证据之后没有在途投递。这个结论只用到本机的单调时钟,和任何一台机器的墙钟都无关。两倍租约和一分钟下限,是给收尾那次写库的锁等待与事务重试留的余量。
+   - 观察窗口管的是「读证据那一刻已经在途」;`attempts` 管的是「读证据之后又排过」,包括复核之后到条件写之间、以及 data_service 这条不等的路径。重排每次必给它加一,和时钟无关。
+   - data_service 的人工终结在它自己进程的 RPC 里做:进程启动跑过 `clockcheck`(偏差 ≤ 30 秒,运行期靠 NTP 与超过 1 秒的节点时钟告警),写这些列的重投副本也是 data_service,钟差远小于 30 分钟的安静间隔;RPC 里也不能挂几分钟。
+4. **被否决的做法**:
+   - 只加 `attempts`:挡不住读证据那一刻已经在途的投递。那一次还没重排,`attempts` 没变,条件写照样通过。
+   - 工具里跑 `clockcheck`:集群外读不到参照(没有 API server 地址和集群 CA),按现有规则只告警、照常运行;就算在集群里,也只核了工具自己的钟,核不到写下那些时刻的副本。
+   - 新增「发送计数」列:trade、guild、回收三张表要改结构、写迁移,为一个人工工具不值;`attempts` 已经满足「每次重排必变」。
+   - 拿数据库服务器的钟当 now:库的钟同样不在核对范围内,也核不到写下时刻的那几个副本。
+5. **代价与边界**:
+   - 只领没发的重排(玩家不在线,本地 NOT_HERE)也加 `attempts`:读证据之后碰上一次,终结就落空(工具退出码 3,`ResolveRecallOp` 回 40),要重跑。有意如此:宁可让操作员重跑,也不放过一次发送。离线行默认进停放档,约 30 分钟(±20%)才本地重排一次,一分钟的窗口碰上的机会约 1/30。停放档关掉(`OfflineAfterAttempts = 0`)时离线行按退避封顶约 60 秒重排一次,窗口里几乎必然碰上,这类行用工具终结不了,要先打开停放档;guild 把 `AssetOp.LeaseMs` 调大时窗口跟着变长(上限 20 分钟),和停放间隔可比时多数次会落空。
+   - 窗口的前提与 `ManualQuietFloor` 相同:一次投递请求的生命期以秒计,不会在网络或 scene 的队列里滞留到窗口之外。
+   - 进程被冻结(虚拟机暂停、SIGSTOP)超过租约再恢复的重投副本,不在「处理预算短于租约」的前提之内;这和自动放弃的 `last_send_ms` 契约(`assetop/abandon.go` 文件头)是同一个前提。
+   - guild 的终结 SQL 补上 `attempts` 之前,复核之后到条件写之间(毫秒级)若恰好有一次「钟慢的副本发了请求、结局不明重排」,条件写仍会通过;补上 `AND attempts = ?` 之后关掉。
+   - guild 工具在等待期间一直占着维护排空的准入(`drainproof` 的 SOURCE 会话),期间开始的排空要等它结束;`tools/scripts/maintenance_drain.ps1` 把它当有限 NORMAL 工具跑时,`normalTool.timeoutSeconds` 要不小于 15 秒加窗口。
+   - data_service 一侧:`clockcheck` 读不到参照、或开了 `MMORPG_CLOCK_CHECK_MODE=warn` 时只告警照常启动,那台副本的钟就没核过,与工具加观察窗口之前是同一个残余,靠时钟告警发现。
 
 核实成立的保证(各路复核过):写权判定先判代次、再判持有者、最后才比序号;认领在同一个事务里抬代次再读全部行;交接标记只在最终存盘提交、且没有排队快照之后才写,写了标记就不再存盘;判死释放用 location 记的那一代,库里更新就不动;发号器两套 etcd 都写成功才发号;外部腿只认已提交账本才终结,自动放弃的「已释放」和「账本未见」出自同一次读、按租约令牌提交;写者闸门冻结之后旧位置的写提交不了;搬库翻转结局未知时绝不解冻;过户、删角之后旧会话写不进存档。
 

@@ -49,20 +49,31 @@ net.core.somaxconn               = 65535
 net.ipv4.tcp_max_syn_backlog     = 65535
 net.ipv4.tcp_syncookies          = 1
 
-# === 连接 buffer ===
+# === 连接 buffer(2026-11-26 改:只压自动调整的上限,见下方说明) ===
 net.core.rmem_max                = 16777216
 net.core.wmem_max                = 16777216
-net.ipv4.tcp_rmem                = 4096 87380 16777216
-net.ipv4.tcp_wmem                = 4096 65536 16777216
+net.ipv4.tcp_rmem                = 4096 131072 524288
+net.ipv4.tcp_wmem                = 4096 16384 524288
 
 # === conntrack(如启用 nf) ===
 net.netfilter.nf_conntrack_max   = 1048576
 
-# === keepalive(防 NAT 踢长连) ===
-net.ipv4.tcp_keepalive_time      = 300
-net.ipv4.tcp_keepalive_intvl     = 30
-net.ipv4.tcp_keepalive_probes    = 3
+# === keepalive(2026-11-26 改;防 NAT / LB 踢长连,真死的对端约 3 分钟回收) ===
+net.ipv4.tcp_keepalive_time      = 120
+net.ipv4.tcp_keepalive_intvl     = 10
+net.ipv4.tcp_keepalive_probes    = 6
 ```
+
+**2026-11-26 更正(keepalive 与 `tcp_rmem` / `tcp_wmem` 四行)**:与 [gate 准入设计](../design/gate-connection-admission-control.md) P1-5「safe sysctl」对齐,取值与推导以那里为准。
+
+- 原值 keepalive 300 / 30 / 3:起探 300 秒高于 Azure LB 缺省 4 分钟的空闲回收,空闲长连接可能先被中间设备静默丢掉;改成 120 / 10 / 6。
+- 原值收发缓冲上限 16MB:不是实测得来的(上面那张实测表只关端口范围与 TIME_WAIT 复用),却让单连接内核缓冲最坏到 32MB,乘上 2 万条连接没法预算。
+  改成只压上限到 512KB、初始值照内核缺省;客户端 200ms 往返时单连接仍有约 1.3MB/s,集群内单连接百 MB/s 以上。
+- `net.core.rmem_max` / `wmem_max` 只限制进程用 `setsockopt` 显式设的 `SO_RCVBUF` / `SO_SNDBUF`,不限制自动调整;C++ 节点不显式设,这两行留着不影响结果。
+- **K8s 上这一段不管 Pod**:每个 Pod 有自己的网络命名空间。keepalive 三项在新命名空间里从内核缺省(7200 / 75 / 9)起步,不继承节点值;
+  `tcp_rmem` / `tcp_wmem` 只在 Pod 建网络命名空间时从节点复制一次。gate、battle 的 Pod 模板自己写这五项(`securityContext.sysctls`,
+  `tools/scripts/lib/k8s_client_entry.ps1` 的 `Get-ClientFacingPodSysctlsYaml`),要求集群 ≥ 1.32、节点内核 ≥ 4.15,见 `deploy/k8s/README.md`。
+  所以这一段只对直接在主机网络里跑 gate 的裸机 / VM 生效。
 
 加载:
 ```bash
@@ -93,13 +104,12 @@ LimitNOFILE=1048576
 LimitNPROC=65535
 ```
 
-K8s pod:
-```yaml
-securityContext:
-  sysctls:
-    - name: net.core.somaxconn
-      value: "65535"
-```
+K8s pod:不要照上面的 limits.d / systemd 写,见下面 §3.1。
+
+**2026-11-26 更正**:这里原来有一段 K8s Pod 的 `securityContext.sysctls` 示例,设的是 `net.core.somaxconn = 65535`,已删。
+`net.core.somaxconn` 不在 Kubernetes 的 safe sysctl 名单里,照抄会被 kubelet 以 `SysctlForbidden` 拒收 Pod;
+要放行就得给每个节点的 kubelet 加 `--allowed-unsafe-sysctls`,设计稿已否决(为一个不紧的约束开节点级的口子,
+见 [gate 准入设计](../design/gate-connection-admission-control.md)「不要做的事」表)。gate、battle 的 Pod 现在只写 keepalive 与收发缓冲五项 safe sysctl(§二末尾)。
 
 ### 3.1 K8s / 容器:进程自抬软限、硬限不够就拒启(2026-10-18 补充)
 

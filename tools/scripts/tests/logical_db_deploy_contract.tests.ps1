@@ -668,7 +668,7 @@ Test-Case 'TiDB 档(目录 64 片、存档库 64 个)峰值不超 TiDB 预算,My
 Test-Case '告警:规则名单和形状,指标名与取值从 Go 源码核对,闸门冻结时长有规则' {
     $alerts = Read-RepoText 'deploy/k8s/logical-db-alerts.yaml'
     $names = @([regex]::Matches($alerts, '(?m)^\s+- alert: (\S+)') | ForEach-Object { $_.Groups[1].Value })
-    Assert-Equal -Expected 'DbPlacementRejected,DbPlacementSyncFailing,DbPlacementVersionLagging,RoleFencePrepareStale,RoleFencePrepareUnreachable,RoleFencePushFailing,SqlWriterRegistrarFailing,SqlWriterSlotRetirerFailing,WriterGateFrozenTooLong' -Actual (($names | Sort-Object) -join ',') -Because '规则名单'
+    Assert-Equal -Expected 'DbPlacementRejected,DbPlacementSyncFailing,DbPlacementVersionLagging,RoleFencePrepareStale,RoleFencePrepareUnreachable,RoleFencePushFailing,SqlWriterGrantsIncomplete,SqlWriterRegistrarFailing,SqlWriterSlotRetirerFailing,WriterGateFrozenTooLong' -Actual (($names | Sort-Object) -join ',') -Because '规则名单'
     # 缩容收尾 CronJob 的名字前缀与 k8s_deploy.ps1 起的名字一致,告警才对得上(docs/design/writer-roster-exhaustion-20261106.md §5.8)。
     Assert-Match -Text $alerts -Pattern 'kube_cronjob_status_last_successful_time\{cronjob=~"sql-writer-slot-retirer-\.\+"\}' -Because '缩容收尾一直失败要靠这条发现'
     Assert-Match -Text $alerts -Pattern 'kube_cronjob_created\{cronjob=~"sql-writer-slot-retirer-\.\+"\}' -Because '从没成功过的 CronJob 也要报'
@@ -688,7 +688,7 @@ Test-Case '告警:规则名单和形状,指标名与取值从 Go 源码核对,�
     $subsystem = [regex]::Match((Read-RepoText 'go/data_service/internal/metrics/metrics.go'), 'const subsystem = "([^"]+)"').Groups[1].Value
     Assert-Equal -Expected 'data_service' -Actual $subsystem -Because '指标前缀(前提)'
     $known = @(@([regex]::Matches($placementSource + $gateSource, 'Name:\s+"([a-z_]+)"') | ForEach-Object { $_.Groups[1].Value }) + @([regex]::Matches($fenceSource, 'Name:\s+"([a-z_]+)"') | ForEach-Object { "${subsystem}_$($_.Groups[1].Value)" }))
-    $used = @([regex]::Matches(($alerts -replace '(?m)^\s*#.*$', ''), '\b(db_placement_[a-z_]+|data_service_role_fence_[a-z_]+|writer_frozen_seconds)\b') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    $used = @([regex]::Matches(($alerts -replace '(?m)^\s*#.*$', ''), '\b(db_placement_[a-z_]+|data_service_role_fence_[a-z_]+|writer_frozen_seconds|writer_grants_missing)\b') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
     Assert-True -Condition ($used.Count -ge 5) -Because "规则确实用到这些指标(前提): $($used -join ',')"
     foreach ($metric in $used) { Assert-True -Condition ($metric -cin $known) -Because "$metric 不是代码里的指标,规则永远不响" }
     foreach ($value in @('unreachable', 'stale', 'failed')) {
@@ -696,6 +696,7 @@ Test-Case '告警:规则名单和形状,指标名与取值从 Go 源码核对,�
         Assert-Match -Text $alerts -Pattern "result=`"$value`"" -Because "规则用 result=`"$value`""
     }
     Assert-True -Condition ('writer_frozen_seconds' -cin $used) -Because '冻结时长有规则,工具被杀靠它发现'
+    Assert-True -Condition ('writer_grants_missing' -cin $used) -Because '缺写资格的 Pod 有规则,集群恢复之后要重建哪些 Pod 靠它发现'
     Assert-Match -Text $alerts -Pattern 'db-move-runbook\.md §6' -Because '冻结告警指向处置步骤'
 }
 
@@ -1173,7 +1174,7 @@ Test-Case '手册:开新地域的手册写清地域码的约束,docs/README 登�
     }
     Assert-Match -Text (Read-RepoText 'docs/README.md') -Pattern 'ops/open-new-region-runbook\.md' -Because '文档总索引登记'
     $openServer = Read-RepoText 'docs/ops/k8s-open-server-runbook.md'
-    foreach ($key in @('role-fence-coordinator', 'role-fence-guild', 'role-fence-trade', 'role-fence-mail', 'role-fence-match', 'role-fence-player-inbox', 'role-fence-friend', 'role-fence-chat', 'role-fence-db', 'match-internal-guild', 'mail-producer-battle')) {
+    foreach ($key in @('role-fence-coordinator', 'role-fence-guild', 'role-fence-trade', 'role-fence-mail', 'role-fence-match', 'role-fence-player-inbox', 'role-fence-friend', 'role-fence-chat', 'role-fence-db', 'match-internal-guild', 'mail-producer-battle', 'mail-producer-match')) {
         Assert-True -Condition ($openServer.Contains($key)) -Because "预置清单要有 $key"
     }
     Assert-Match -Text $openServer -Pattern 'DirectoryLogicalShards = 64' -Because '部署参数示例'

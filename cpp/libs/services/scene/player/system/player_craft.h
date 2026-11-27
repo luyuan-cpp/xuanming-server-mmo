@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <optional>
 #include <string>
 #include <entt/src/entt/entity/entity.hpp>
 
@@ -97,7 +99,31 @@ public:
     static void SyncPlayerProxyStall(entt::entity player);
     static void RecordProxyOrderReputation(uint64_t masterPlayerId, uint32_t supremeDelta, uint32_t rareDelta,
                                            uint64_t netGoldEarned, const std::string& buyerName);
+    // 宗师在线且可改时发起一次回账:从共享台账原子取走他的待回账再记进存档(r2-craft#4)。回 true = 已发起,
+    // 入账在取走的应答里完成(单测的内存台账同步应答);本节点镜像只用来判断「可能有待回账」,不当数额用。
     static bool DrainPendingProxyReputation(entt::entity player);
+
+    // 口碑待回账台账(docs/design/craft-proxy-reputation-digest-and-hot-ranking.md §2.3)。生产 = 控制集群 Redis Hash
+    // ProxyReputationLedgerKey;单测经 SetProxyReputationLedgerForTest 换成内存实现。只在 scene loop 线程调用。
+    struct TakenProxyReputation {
+        uint32_t orders{0};
+        uint32_t supreme{0};
+        uint32_t rare{0};
+        uint64_t netGold{0};
+        std::string lastBuyer;
+    };
+    // taken 为空 = 结果未知(断连、应答畸形):可能已取走也可能没有,不得据此入账。
+    using ProxyReputationTakeDone = std::function<void(std::optional<TakenProxyReputation> taken)>;
+    struct ProxyReputationLedger {
+        // 一名宗师的一项计数原子加 delta(HINCRBY);suffix 是 ":o" 这类字段后缀。
+        std::function<void(uint64_t masterId, const char* suffix, int64_t delta)> add;
+        // 覆盖写最近一位买家名(HSET)。
+        std::function<void(uint64_t masterId, const std::string& buyerName)> setLastBuyer;
+        // 原子取走一名宗师的待回账(同一段脚本里读出并删除 o/s/r/g/b 五项)。回 true 时 done 恰好调用一次;回 false = 没发出去。
+        std::function<bool(uint64_t masterId, ProxyReputationTakeDone done)> take;
+    };
+    // 没填的成员用生产实现补齐,传 {} 全部恢复生产实现。生产代码不调用。
+    static void SetProxyReputationLedgerForTest(ProxyReputationLedger ledger);
     static bool ResolveSharedProxyStall(uint64_t buyerPlayerId, uint64_t masterPlayerId,
                                         bool requireForge, bool requireScroll,
                                         CraftProxyStallInfo& out);

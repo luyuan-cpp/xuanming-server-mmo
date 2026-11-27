@@ -1378,3 +1378,13 @@ Java `DomainClientDispatch.withSession` 将完整不可变 `SessionContext` 送�
   - `MailAdmin` 的回包没有签名,scene 信的是发现到的 mail 节点(rank 发奖同此);
   - 判重记录随邮件一起被过期清理删除。清理开了删除模式之后,若邮件已建、scene 侧条目的删除一直没落盘、之后又连续 37 天以上(有效期 30 天 + 保留 7 天)寄不到,重寄会新建一封。现行默认是只报告不删,不会发生。
 - **Java 版**:只登记待做(Java 仓 `PARITY.md` 2026-11-12 同名条目)。
+
+### 2026-11-26 match 以 match 身份发个人邮件:群仙问道赛领奖接上线(数据覆写审计 r2 第 4 轮;未编译、未运行)
+
+- **`match`(sender_kind 6)第一次有了可用的调用方**。角色号随群仙问道赛一期就在 `SenderKind` 里,可 mail 的 `Producers` 没有 match、部署也不给任何一端注入 `MAIL_PRODUCER_SECRET_MATCH`,match 的领奖在发件没装配时还把奖励直接标成已领取、附件不发(r2-tn#1)。现在 go/match 只在玩家领取群仙问道赛奖励时,以 `match` 身份调 `MailAdmin.SendPersonalMail` 投附件;领取侧的一致性论证见 [群仙问道赛设计 V1](../planning/season-team-tournament-v1.md) 第七节。
+- **mail 的代码只多了计数取值**:`go/mail/etc/mail.yaml` 的 `Producers` 加 `match: MAIL_PRODUCER_SECRET_MATCH`;`deploy/k8s/manifests/go-svc/mail.yaml` 注入同名变量(Secret `domain-service-secrets` 的 key `mail-producer-match`,`optional: false`,运维在 infra 预置;它只在 infra 用,不进部署托管的键表)。`mail_admin_send_total` 的 `sender` 多一个 `match`,原来这类调用会记成 `unknown`。mail 的 gRPC 准入名单(`-NetworkPolicies on`)加 match。
+- **用到的现成契约**:判重键 `(sender_kind, request_id)`、判重先于一切依赖当前时间的校验(§2.4、`Repo.Send`)。match 的请求只由奖励行构造:`request_id = reward_id`,标题正文在赛季结算时冻结进奖励行,不带 `expire_ms`(有效期由 mail 首次落库时按 `MaxPersonalMailTtlDays` 算)。同一条奖励每次重领逐字节相同,邮件已建而领取没落定时重领拿回原 `mail_id`,不会撞成 `MailRequestConflict`(r2-tn#2)。match 只在拿到 `mail_id` 之后才把奖励落成已领取,超时、断连、被拒、冲突一律不落。
+- **match 不再用邮件退生死状战书银两**:原来 gather 失败时 match 以 `request_id = duel_invite_id` 发退费邮件,结果不明就删标记、再让 scene 在线退,邮件其实已建时双退(r2-jh#2)。退费改为只由 scene 按存档里的待退标记退,match 侧的退费邮件与退费标记表 `match_jianghu_refund` 一并删掉。match 发信只剩群仙问道赛领奖一处,`go/match/internal/logic/jianghu_refund_single_channel_test.go` 的 AST 守卫钉住。
+- **身份常量两边各写一份**:发件角色号、调用方名、密钥环境变量名在 go/match 与 go/mail 各有一份,`go/mail/internal/data/match_sender_identity_test.go` 的 `TestMatchSenderIdentityMatchesTournamentClaim` 逐字比对。
+- **残余**:判重记录随邮件一起被过期清理删除。清理开了删除模式之后,邮件已建而 match 的已领取一直没落定、玩家又 37 天以上没重领,再领会新建一封(与 battle 溢出邮件同一类,现行缺省只报告不删,不会发生)。
+- **Java 版**:只登记待做(Java 仓 `PARITY.md`)。

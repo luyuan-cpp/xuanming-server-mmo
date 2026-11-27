@@ -250,7 +250,7 @@ data-service 照常运行,不停:它同时管路由读与号段,停了玩家就�
 | `DataServiceAuditConsumerStalled` | warning | 有积压的分区上(组内已提交位点低于日志末端),已提交位点 15 分钟没动(`data_service_kafka_consumer_commit_stall_seconds` ≥ 900,lag 探针按分区算),且消费循环报 up:专抓「活着但不前进」(2026-11-05,r2-kc#1;2026-11-12 改判据)。不依赖新消息到达,收不到新消息的分区卡住也看得见。2026-11-06 到 11-12 曾只认「位点停下之后新到的消息」,因为 reader 模式提交失败交还的已落库记录当时会在安静分区上一直挂着积压;现在消费组 owner 交还时结束本代次、由下一代次立即重投并提交,不再有这种积压(设计 [kafka-bound-consumer-group.md](../design/kafka-bound-consumer-group.md) §8)。消费组 owner 遇再均衡与暂时失败不停,日志 `[kafka-bound]` 是它在原地重试(等不到代次 / 打开分区 / 拉取 / 提交),`kafka_bound_consumer_retry_total{stage}` 看卡在哪一步;Kafka 侧修好后自动追上。按分区判,单个实例卡住也会响 |
 | `DataServiceAuditLagProbeBlind` | warning | 按实例触发:该实例的探针 15 分钟没成功过,它的 lag / retention_gap 是陈值(照样参与积压类告警的 max,先按 instance 展开指标排除);所有实例都在报时积压类告警都不可信;日志 `lag probe failed` |
 | `DataServiceAuditFlushSlow` | warning | 全局库排队;见 §6 |
-| `DataServiceAuditMessagesSkipped` | warning | 坏消息被跳过(未落库);日志 `undecodable` / `invalid snapshot` / `oversize snapshot`。计数在解码时记:`ConsumerStopped` 同时在响时会随每次重放重复累加,条数以日志里去重后的 partition / offset 为准 |
+| `DataServiceAuditMessagesSkipped` | warning | 坏消息没落库,2026-11-26 起原件先写进本组死信「消费组名-dlq」再提交(重放见 `kafka-bound-consumer-runbook.md` §1,要带 `-allow-unprocessable`);日志 `undecodable` / `invalid snapshot` / `oversize snapshot`。计数在解码时记:`ConsumerStopped` 同时在响时会随每次重放重复累加,条数以日志里去重后的 partition / offset 为准 |
 | `DataServiceAuditBatchIsolated` | info | 批量失败、逐条兜底成功;多半是包 / 事务大小,调小批字节或批行数 |
 
 - 生产端是 go/db 的审计发件箱转发(2026-11-12 起;此前 C++ scene 直接发 Kafka,这里原来的 Loki 查询 `[SnapshotSystem] Kafka send failed` 已经没有对应日志)。

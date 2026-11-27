@@ -23,6 +23,8 @@ const (
 //   - 按 (player_id, owner_revision, peer_player_id) 隔离：官方角色过户换手后旧恩怨自动清空。
 //   - 单向「一笔勾销」后，若再次交手自动重新显现(dismissed=false)。
 //   - 上限控制：每名玩家保留最近 50 位宿敌，每位宿敌保留最近 20 条交手战报摘要。
+//   - 幂等只认 match_grudge_applied(一局一行、不裁剪):事务第一步插它,撞主键就是这局入过账,整笔不做。
+//     战报行会被上面两条上限裁掉,主键还带处理时刻取的 owner_revision,当不了去重键(数据覆写审计 r2 第 4 轮 r2-jh#3)。
 func (s *Store) ApplyJianghuDuelBattleResult(
 	ctx context.Context,
 	event *kafkapb.BattleResultEvent,
@@ -71,6 +73,17 @@ func (s *Store) ApplyJianghuDuelBattleResult(
 	}
 	defer tx.Rollback()
 
+	// 0. 入账闸门:本事务的第一把锁。同一局并发的两笔在这一行主键上排队,后到的等前一笔提交后撞 1062。
+	if _, err = tx.ExecContext(ctx,
+		"INSERT INTO match_grudge_applied(battle_id,applied_ms) VALUES(?,"+fenceNowMsSQL+")", event.GetBattleId(),
+	); err != nil {
+		var dup *mysql.MySQLError
+		if errors.As(err, &dup) && dup.Number == 1062 {
+			return summary, false, nil
+		}
+		return summary, false, err
+	}
+
 	type sideUpdate struct {
 		playerID    uint64
 		ownerRev    uint64
@@ -88,7 +101,8 @@ func (s *Store) ApplyJianghuDuelBattleResult(
 	}
 
 	for _, side := range sides {
-		// 1. 先按主键插入日志表作为严格幂等锚点。
+		// 1. 插本局战报行(展示用,会被裁剪,不是去重键;幂等由第 0 步的入账闸门保证)。
+		//    闸门之后仍撞主键,只可能是闸门表建立之前写下、还没被裁掉的同一局旧行,按已入账处理、整笔回滚。
 		if _, err = tx.ExecContext(ctx,
 			`INSERT INTO match_grudge_log(player_id,owner_revision,peer_player_id,battle_id,outcome_for_self,total_rounds,writ_tier,team_size,finished_ms)
 			 VALUES(?,?,?,?,?,?,?,?,?)`,
