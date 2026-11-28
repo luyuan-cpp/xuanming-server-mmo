@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": -154.0,
+    "y": -154.0,
+    "width": 308.0,
+    "height": 308.0
+  },
+  "effectiveWorldRect": {
+    "x": -154.0,
+    "y": -95.197265625,
+    "width": 308.0,
+    "height": 190.39453125
+  },
+  "cellSize": 1.0,
+  "imageRect": {
+    "x": 0.0,
+    "y": 782.0,
+    "width": 4096.0,
+    "height": 2532.0
+  },
+  "referenceWidth": 1595,
+  "referenceHeight": 986,
+  "walkmaskColumns": 308,
+  "walkmaskRows": 308,
+  "spawnWorld": {
+    "x": -83.6923828125,
+    "y": 0.0,
+    "z": -65.1943359375
+  },
+  "schemaVersion": 2,
+  "key": "qinglan-town",
+  "sceneId": 4,
+  "name": "青岚镇",
+  "revision": "qinglan-20261127-v002",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/qinglan-town/qinglan-20261127-v002/spring/6956d36f92ec80de9330439da782ebe4c7b2153c971110f261d6987faecf0d89/",
+  "clientOnly": false,
+  "authoritativeServerRegistered": true,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 4096,
+    "height": 4096
+  },
+  "layoutSha256": "6956d36f92ec80de9330439da782ebe4c7b2153c971110f261d6987faecf0d89",
+  "sourceSelectionPath": "Docs/VerificationEvidence/qinglan-20261127-v002/selection.json",
+  "sourceSelectionSha256": "bfc51743af5c2cf79cda0e3ec5f53f0b7ab92446bf303402401a44f5fd98f09c",
+  "sourceEvidencePath": "Docs/VerificationEvidence/qinglan-20261127-v002/source-evidence/qinglan-town/spring/delivery.json",
+  "sourceEvidenceSha256": "829fd4c59ef272383df88b45627111244e625b6431151b2b1769061c542d7b4b",
+  "navigationPlanPath": "Docs/VerificationEvidence/qinglan-20261127-v002/navigation-plan.json",
+  "navigationPlanSha256": "27b85de21c75eaa75a2e3668d2887e4d1b4f9e343230e75bb715c4ebc940eb67",
+  "navigationSha256": "3d83fcba7aa022db365c160c1ac6497a58670ab99bcc2576255c93d05419a29d",
+  "walkmaskSha256": "22bc2e3a38ee36ac1479c573477b4e0bba5609bbc3e0af62a49b9d31a738a6ef",
+  "walkmaskPackedSha256": "109f8eb4d2dc756de5d440498ac5bce999548a3e1c46c282c1b08f7ff1494977",
+  "navigationStatus": "conservative_visible_ground",
+  "runtimeEngineAcceptance": false
+}

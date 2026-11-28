@@ -1,0 +1,539 @@
+{
+  "schemaVersion": 1,
+  "key": "qinglan-town",
+  "sceneId": 4,
+  "revision": "qinglan-20261127-v002",
+  "navigationPlanPath": "Docs/VerificationEvidence/qinglan-20261127-v002/navigation-plan.json",
+  "navigationPlanSha256": "27b85de21c75eaa75a2e3668d2887e4d1b4f9e343230e75bb715c4ebc940eb67",
+  "source": {
+    "worldRect": {
+      "x": -154.0,
+      "y": -154.0,
+      "width": 308.0,
+      "height": 308.0
+    },
+    "effectiveWorldRect": {
+      "x": -154.0,
+      "y": -95.197265625,
+      "width": 308.0,
+      "height": 190.39453125
+    },
+    "cellSize": 1.0,
+    "imageRect": {
+      "x": 0.0,
+      "y": 782.0,
+      "width": 4096.0,
+      "height": 2532.0
+    },
+    "referenceWidth": 1595,
+    "referenceHeight": 986,
+    "walkmaskColumns": 308,
+    "walkmaskRows": 308,
+    "spawnWorld": {
+      "x": -83.6923828125,
+      "y": 0.0,
+      "z": -65.1943359375
+    }
+  },
+  "stats": {
+    "walkableCells": 6389,
+    "totalCells": 94864,
+    "componentCount": 1,
+    "componentSizes": [
+      6389
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          935,
+          2915
+        ],
+        "world": {
+          "x": -83.6923828125,
+          "y": 0.0,
+          "z": -65.1943359375
+        },
+        "component": 0
+      },
+      "swArchway": {
+        "pixel": [
+          590,
+          3085
+        ],
+        "world": {
+          "x": -109.634765625,
+          "y": 0.0,
+          "z": -77.9775390625
+        },
+        "component": 0
+      },
+      "westOuterRoad": {
+        "pixel": [
+          435,
+          2530
+        ],
+        "world": {
+          "x": -121.2900390625,
+          "y": 0.0,
+          "z": -36.244140625
+        },
+        "component": 0
+      },
+      "westMarket": {
+        "pixel": [
+          1335,
+          2265
+        ],
+        "world": {
+          "x": -53.6142578125,
+          "y": 0.0,
+          "z": -16.3173828125
+        },
+        "component": 0
+      },
+      "centralStoneBridge": {
+        "pixel": [
+          1745,
+          2235
+        ],
+        "world": {
+          "x": -22.7841796875,
+          "y": 0.0,
+          "z": -14.0615234375
+        },
+        "component": 0
+      },
+      "eastBankCrossroads": {
+        "pixel": [
+          1915,
+          1785
+        ],
+        "world": {
+          "x": -10.0009765625,
+          "y": 0.0,
+          "z": 19.7763671875
+        },
+        "component": 0
+      },
+      "northStepsMid": {
+        "pixel": [
+          1705,
+          1520
+        ],
+        "world": {
+          "x": -25.7919921875,
+          "y": 0.0,
+          "z": 39.703125
+        },
+        "component": 0
+      },
+      "northTerraceWest": {
+        "pixel": [
+          1440,
+          1330
+        ],
+        "world": {
+          "x": -45.71875,
+          "y": 0.0,
+          "z": 53.990234375
+        },
+        "component": 0
+      },
+      "northTerraceEast": {
+        "pixel": [
+          2130,
+          1275
+        ],
+        "world": {
+          "x": 6.166015625,
+          "y": 0.0,
+          "z": 58.1259765625
+        },
+        "component": 0
+      },
+      "northGentleSlope": {
+        "pixel": [
+          2145,
+          1490
+        ],
+        "world": {
+          "x": 7.2939453125,
+          "y": 0.0,
+          "z": 41.958984375
+        },
+        "component": 0
+      },
+      "nwWoodBridge": {
+        "pixel": [
+          965,
+          1515
+        ],
+        "world": {
+          "x": -81.4365234375,
+          "y": 0.0,
+          "z": 40.0791015625
+        },
+        "component": 0
+      },
+      "nwWaterfallTrail": {
+        "pixel": [
+          755,
+          1155
+        ],
+        "world": {
+          "x": -97.2275390625,
+          "y": 0.0,
+          "z": 67.1494140625
+        },
+        "component": 0
+      },
+      "nwBridgeWestTrail": {
+        "pixel": [
+          615,
+          1665
+        ],
+        "world": {
+          "x": -107.7548828125,
+          "y": 0.0,
+          "z": 28.7998046875
+        },
+        "component": 0
+      },
+      "neCourtyardStairs": {
+        "pixel": [
+          2918,
+          1630
+        ],
+        "world": {
+          "x": 65.419921875,
+          "y": 0.0,
+          "z": 31.431640625
+        },
+        "component": 0
+      },
+      "neCourtyard": {
+        "pixel": [
+          3150,
+          1510
+        ],
+        "world": {
+          "x": 82.865234375,
+          "y": 0.0,
+          "z": 40.455078125
+        },
+        "component": 0
+      },
+      "eastMarketPlaza": {
+        "pixel": [
+          2520,
+          2380
+        ],
+        "world": {
+          "x": 35.4921875,
+          "y": 0.0,
+          "z": -24.96484375
+        },
+        "component": 0
+      },
+      "blacksmithForecourt": {
+        "pixel": [
+          3240,
+          2495
+        ],
+        "world": {
+          "x": 89.6328125,
+          "y": 0.0,
+          "z": -33.6123046875
+        },
+        "component": 0
+      },
+      "eastOuterTrail": {
+        "pixel": [
+          3845,
+          2260
+        ],
+        "world": {
+          "x": 135.1259765625,
+          "y": 0.0,
+          "z": -15.94140625
+        },
+        "component": 0
+      },
+      "eastExitTrail": {
+        "pixel": [
+          4005,
+          1470
+        ],
+        "world": {
+          "x": 147.1572265625,
+          "y": 0.0,
+          "z": 43.462890625
+        },
+        "component": 0
+      },
+      "seWoodBridge": {
+        "pixel": [
+          2905,
+          2885
+        ],
+        "world": {
+          "x": 64.4423828125,
+          "y": 0.0,
+          "z": -62.9384765625
+        },
+        "component": 0
+      },
+      "southPavilionApproach": {
+        "pixel": [
+          1860,
+          2985
+        ],
+        "world": {
+          "x": -14.13671875,
+          "y": 0.0,
+          "z": -70.4580078125
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "topTransparentPadding",
+      "bottomTransparentPadding",
+      "waterfallPool",
+      "riverMidUpper",
+      "centralBridgeNorthRailing",
+      "riverBelowStoneBridge",
+      "riverLowerCenter",
+      "riverSeExit",
+      "swArchwayWestPillar",
+      "swArchwayEastPillar",
+      "swArchwayRoof",
+      "westMarketTable",
+      "westMarketShopRoof",
+      "swCottageRoof",
+      "riversidePavilion",
+      "northWestCottage",
+      "northEastCottage",
+      "northVegetableGarden",
+      "neGrandHallRoof",
+      "neArmillarySphere",
+      "neCourtyardSeasonalBench",
+      "eastInnRoof",
+      "eastMarketTable",
+      "blacksmithAnvil",
+      "blacksmithFurnace",
+      "eastSouthTree"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "swArchway"
+      ],
+      [
+        "spawn",
+        "westOuterRoad"
+      ],
+      [
+        "westOuterRoad",
+        "westMarket"
+      ],
+      [
+        "westMarket",
+        "centralStoneBridge"
+      ],
+      [
+        "centralStoneBridge",
+        "eastMarketPlaza"
+      ],
+      [
+        "centralStoneBridge",
+        "eastBankCrossroads"
+      ],
+      [
+        "eastBankCrossroads",
+        "northStepsMid"
+      ],
+      [
+        "northStepsMid",
+        "northTerraceWest"
+      ],
+      [
+        "northTerraceWest",
+        "northTerraceEast"
+      ],
+      [
+        "northTerraceEast",
+        "northGentleSlope"
+      ],
+      [
+        "northGentleSlope",
+        "eastBankCrossroads"
+      ],
+      [
+        "northTerraceWest",
+        "nwWoodBridge"
+      ],
+      [
+        "nwWoodBridge",
+        "nwWaterfallTrail"
+      ],
+      [
+        "nwWoodBridge",
+        "nwBridgeWestTrail"
+      ],
+      [
+        "eastBankCrossroads",
+        "neCourtyardStairs"
+      ],
+      [
+        "neCourtyardStairs",
+        "neCourtyard"
+      ],
+      [
+        "eastMarketPlaza",
+        "blacksmithForecourt"
+      ],
+      [
+        "blacksmithForecourt",
+        "eastOuterTrail"
+      ],
+      [
+        "eastOuterTrail",
+        "eastExitTrail"
+      ],
+      [
+        "blacksmithForecourt",
+        "seWoodBridge"
+      ],
+      [
+        "seWoodBridge",
+        "southPavilionApproach"
+      ],
+      [
+        "southPavilionApproach",
+        "spawn"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "swArchway",
+        "gridDistanceWorldUnits": 30.970562748477146
+      },
+      {
+        "from": "spawn",
+        "to": "westOuterRoad",
+        "gridDistanceWorldUnits": 51.76955262170045
+      },
+      {
+        "from": "westOuterRoad",
+        "to": "westMarket",
+        "gridDistanceWorldUnits": 78.0416305603426
+      },
+      {
+        "from": "westMarket",
+        "to": "centralStoneBridge",
+        "gridDistanceWorldUnits": 31.82842712474619
+      },
+      {
+        "from": "centralStoneBridge",
+        "to": "eastMarketPlaza",
+        "gridDistanceWorldUnits": 62.14213562373094
+      },
+      {
+        "from": "centralStoneBridge",
+        "to": "eastBankCrossroads",
+        "gridDistanceWorldUnits": 69.45584412271567
+      },
+      {
+        "from": "eastBankCrossroads",
+        "to": "northStepsMid",
+        "gridDistanceWorldUnits": 26.213203435596434
+      },
+      {
+        "from": "northStepsMid",
+        "to": "northTerraceWest",
+        "gridDistanceWorldUnits": 26.384776310850242
+      },
+      {
+        "from": "northTerraceWest",
+        "to": "northTerraceEast",
+        "gridDistanceWorldUnits": 56.55634918610402
+      },
+      {
+        "from": "northTerraceEast",
+        "to": "northGentleSlope",
+        "gridDistanceWorldUnits": 27.89949493661167
+      },
+      {
+        "from": "northGentleSlope",
+        "to": "eastBankCrossroads",
+        "gridDistanceWorldUnits": 34.14213562373095
+      },
+      {
+        "from": "northTerraceWest",
+        "to": "nwWoodBridge",
+        "gridDistanceWorldUnits": 43.14213562373094
+      },
+      {
+        "from": "nwWoodBridge",
+        "to": "nwWaterfallTrail",
+        "gridDistanceWorldUnits": 43.52691193458117
+      },
+      {
+        "from": "nwWoodBridge",
+        "to": "nwBridgeWestTrail",
+        "gridDistanceWorldUnits": 30.970562748477146
+      },
+      {
+        "from": "eastBankCrossroads",
+        "to": "neCourtyardStairs",
+        "gridDistanceWorldUnits": 81.55634918610403
+      },
+      {
+        "from": "neCourtyardStairs",
+        "to": "neCourtyard",
+        "gridDistanceWorldUnits": 21.313708498984763
+      },
+      {
+        "from": "eastMarketPlaza",
+        "to": "blacksmithForecourt",
+        "gridDistanceWorldUnits": 57.72792206135784
+      },
+      {
+        "from": "blacksmithForecourt",
+        "to": "eastOuterTrail",
+        "gridDistanceWorldUnits": 54.62741699796948
+      },
+      {
+        "from": "eastOuterTrail",
+        "to": "eastExitTrail",
+        "gridDistanceWorldUnits": 82.63961030678921
+      },
+      {
+        "from": "blacksmithForecourt",
+        "to": "seWoodBridge",
+        "gridDistanceWorldUnits": 45.79898987322332
+      },
+      {
+        "from": "seWoodBridge",
+        "to": "southPavilionApproach",
+        "gridDistanceWorldUnits": 82.31370849898475
+      },
+      {
+        "from": "southPavilionApproach",
+        "to": "spawn",
+        "gridDistanceWorldUnits": 71.89949493661165
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 4.59108946148829,
+    "separatedRoutes": [],
+    "maskSha256": "109f8eb4d2dc756de5d440498ac5bce999548a3e1c46c282c1b08f7ff1494977",
+    "maskBytes": 11858,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": true
+}

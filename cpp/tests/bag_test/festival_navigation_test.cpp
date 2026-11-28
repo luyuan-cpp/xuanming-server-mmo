@@ -290,6 +290,151 @@ TEST_F(CurrentBajingNavigationTest, MissingChecksumRejectsBajingBeforeEntry) {
     fs::remove(folder / "scene.bin.sha256");
     LoadAndExpectRejected();
 }
+
+class CurrentQinglanNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 4; }
+    std::string MapPath() const override {
+        return "data/scene_nav_bin/current_maps/qinglan-town/qinglan-20261127-v002";
+    }
+    fs::path SourceFolder() const override {
+        return fs::path(GetDataRootDir()) / MapPath();
+    }
+};
+
+TEST_F(CurrentQinglanNavigationTest, VersionedQinglanTownRegistersExactMaskAndBlocksPaddingAndRiver) {
+    NavigationSystem::LoadNavBins();
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_TRUE(nav->strictMask);
+    EXPECT_TRUE(nav->versionedMask);
+    EXPECT_EQ(308, nav->mask.columns);
+    EXPECT_EQ(308, nav->mask.rows);
+    EXPECT_DOUBLE_EQ(-95.197265625, nav->mask.effectiveZ);
+    EXPECT_DOUBLE_EQ(190.39453125, nav->mask.effectiveHeight);
+    int count = 0;
+    for (int row = 0; row < nav->mask.rows; ++row) {
+        for (int col = 0; col < nav->mask.columns; ++col) {
+            count += nav->mask.Cell(col, row) ? 1 : 0;
+        }
+    }
+    EXPECT_EQ(6389, count);
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::SnapToMesh(*nav, spawn, accepted));
+    Location topPadding;
+    topPadding.set_x(123.921875); topPadding.set_y(0.0); topPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, topPadding, accepted));
+    Location bottomPadding;
+    bottomPadding.set_x(-124.22265625); bottomPadding.set_y(0.0); bottomPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, bottomPadding, accepted));
+    Location river;
+    river.set_x(-27.97265625); river.set_y(-17.14453125); river.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, river, accepted));
+}
+
+TEST_F(CurrentQinglanNavigationTest, MissingChecksumRejectsQinglanBeforeEntry) {
+    fs::remove(folder / "scene.bin.sha256");
+    LoadAndExpectRejected();
+}
+
+class CurrentWaterwheelNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 20000; }
+    std::string MapPath() const override {
+        return "data/scene_nav_bin/current_maps/waterwheel-courtyard/waterwheel-hd8-20261128";
+    }
+    fs::path SourceFolder() const override {
+        return fs::path(GetDataRootDir()) / MapPath();
+    }
+};
+
+TEST_F(CurrentWaterwheelNavigationTest, VersionedWaterwheelCourtyardRegistersExactMaskAndBlocksPaddingAndWaterfall) {
+    NavigationSystem::LoadNavBins();
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_TRUE(nav->strictMask);
+    EXPECT_TRUE(nav->versionedMask);
+    EXPECT_EQ(320, nav->mask.columns);
+    EXPECT_EQ(320, nav->mask.rows);
+    EXPECT_DOUBLE_EQ(0.0, nav->mask.effectiveX);
+    EXPECT_DOUBLE_EQ(32.578125, nav->mask.effectiveZ);
+    EXPECT_DOUBLE_EQ(297.1484375, nav->mask.effectiveWidth);
+    EXPECT_DOUBLE_EQ(287.421875, nav->mask.effectiveHeight);
+    int count = 0;
+    for (int row = 0; row < nav->mask.rows; ++row) {
+        for (int col = 0; col < nav->mask.columns; ++col) {
+            count += nav->mask.Cell(col, row) ? 1 : 0;
+        }
+    }
+    EXPECT_EQ(15357, count);
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::SnapToMesh(*nav, spawn, accepted));
+    Location rightPadding;
+    rightPadding.set_x(160.0); rightPadding.set_y(308.0); rightPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, rightPadding, accepted));
+    Location bottomPadding;
+    bottomPadding.set_x(16.0); bottomPadding.set_y(160.0); bottomPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, bottomPadding, accepted));
+    Location waterfall;
+    waterfall.set_x(273.125); waterfall.set_y(22.65625); waterfall.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, waterfall, accepted));
+}
+
+TEST_F(CurrentWaterwheelNavigationTest, MissingChecksumRejectsWaterwheelBeforeEntry) {
+    fs::remove(folder / "scene.bin.sha256");
+    LoadAndExpectRejected();
+}
+
+class CurrentCanglanHarborNavigationTest : public FestivalNavigationTest {
+protected:
+    uint32_t SceneId() const override { return 6; }
+    std::string MapPath() const override {
+        return "data/scene_nav_bin/current_maps/canglan-harbor/canglan-harbor-20261128-v001";
+    }
+    fs::path SourceFolder() const override {
+        return fs::path(GetDataRootDir()) / MapPath();
+    }
+};
+
+TEST_F(CurrentCanglanHarborNavigationTest, VersionedCanglanHarborRegistersExactMaskAndBlocksPaddingAndWater) {
+    NavigationSystem::LoadNavBins();
+    ASSERT_TRUE(NavQuerySystem::RequiresNavigation(SceneId()));
+    auto* nav = SceneNavManager::Instance().Get(SceneId());
+    ASSERT_NE(nullptr, nav);
+    EXPECT_TRUE(nav->strictMask);
+    EXPECT_TRUE(nav->versionedMask);
+    EXPECT_EQ(247, nav->mask.columns);
+    EXPECT_EQ(247, nav->mask.rows);
+    EXPECT_DOUBLE_EQ(0.0, nav->mask.effectiveX);
+    EXPECT_GE(nav->mask.effectiveZ, 0.0);
+    EXPECT_LE(nav->mask.effectiveWidth, 320.0);
+    EXPECT_LE(nav->mask.effectiveHeight, 320.0);
+    int count = 0;
+    for (int row = 0; row < nav->mask.rows; ++row) {
+        for (int col = 0; col < nav->mask.columns; ++col) {
+            count += nav->mask.Cell(col, row) ? 1 : 0;
+        }
+    }
+    EXPECT_EQ(2429, count);
+    Location accepted;
+    EXPECT_TRUE(NavQuerySystem::SnapToMesh(*nav, spawn, accepted));
+    Location rightPadding;
+    rightPadding.set_x(256.84799844026566); rightPadding.set_y(331.99881315231323); rightPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, rightPadding, accepted));
+    Location bottomPadding;
+    bottomPadding.set_x(-15.60754930973053); bottomPadding.set_y(72.17365503311157); bottomPadding.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, bottomPadding, accepted));
+    Location lagoonWater;
+    lagoonWater.set_x(159.99997509270906); lagoonWater.set_y(270.22177312672136); lagoonWater.set_z(0.0);
+    EXPECT_FALSE(NavQuerySystem::SnapToMesh(*nav, lagoonWater, accepted));
+}
+
+TEST_F(CurrentCanglanHarborNavigationTest, MissingChecksumRejectsCanglanHarborBeforeEntry) {
+    fs::remove(folder / "scene.bin.sha256");
+    LoadAndExpectRejected();
+}
 TEST_F(FestivalNavigationTest, MissingChecksumsRejectsRegistrationAndEntry) {
     fs::remove(folder / "scene.bin.sha256"); LoadAndExpectRejected();
 }

@@ -13,4 +13,4 @@ b5百宝阁购「排面装饰券」解锁（80灵石）jr纯视觉脚底阵纹�
 chat_bubble_skin_02"鎏金云纹气泡*/UI/Ugui/ShowcaseCosmeticsV1/chat_bubble_skin_028�@H�PXdb5百宝阁购「排面装饰券」解锁（80灵石）jr纯视觉聊天气泡：世界、帮会与私聊发言呈现鎏金卷云边饰，由服务端权威校验透传。
 �share_card_skin_01"墨韵宣纸战报帖*.UI/Ugui/ShowcaseCosmeticsV1/share_card_skin_018�@H�PXnb5百宝阁购「排面装饰券」解锁（80灵石）jl纯视觉分享卡片底纹：在聊天发送 #TJC 约战帖与 #PUZ 残局卡时呈现墨韵宣纸帖面。
 �share_card_skin_02"赤金卷轴战报帖*.UI/Ugui/ShowcaseCosmeticsV1/share_card_skin_028�@H�PXxb5百宝阁购「排面装饰券」解锁（80灵石）jl纯视觉分享卡片底纹：在聊天发送 #TJC 约战帖与 #PUZ 残局卡时呈现赤金卷轴帖面。
-�formation_skin_starlight"星河初启阵纹*0UI/Ugui/ShowcaseCosmeticsV1/formation_skin_metalPX�b'留灯院创始支持者典藏包限定jc创始支持者纪念脚底阵纹：星河初启纯视觉特效，零数值加成，永久收藏。
+�formation_skin_starlight"星河初启阵纹*4UI/Ugui/ShowcaseCosmeticsV1/formation_skin_starlightPX�b'留灯院创始支持者典藏包限定jc创始支持者纪念脚底阵纹：星河初启纯视觉特效，零数值加成，永久收藏。

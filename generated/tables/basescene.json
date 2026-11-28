@@ -23,9 +23,9 @@
   },
   {
    "id": 4,
-   "nav_bin_file": "data/scene_nav_bin/lanxian_scene.bin",
-   "spawn_x": 180.0,
-   "spawn_y": 200.0,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/qinglan-town/qinglan-20261127-v002/scene.bin",
+   "spawn_x": -65.1943359375,
+   "spawn_y": -83.6923828125,
    "spawn_z": 0.0
   },
   {
@@ -37,9 +37,9 @@
   },
   {
    "id": 6,
-   "nav_bin_file": "data/scene_nav_bin/current_maps/biyuan-water-palace/biyuan-body-20261123/scene.bin",
-   "spawn_x": 58.5,
-   "spawn_y": 222.5,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/canglan-harbor/canglan-harbor-20261128-v001/scene.bin",
+   "spawn_x": 129.4218017965555,
+   "spawn_y": 23.11090651229024,
    "spawn_z": 0.0
   },
   {
@@ -145,6 +145,13 @@
    "nav_bin_file": "data/scene_nav_bin/mirror_scene.bin",
    "spawn_x": 180.0,
    "spawn_y": 200.0,
+   "spawn_z": 0.0
+  },
+  {
+   "id": 20000,
+   "nav_bin_file": "data/scene_nav_bin/current_maps/waterwheel-courtyard/waterwheel-hd8-20261128/scene.bin",
+   "spawn_x": 140.0,
+   "spawn_y": 160.0,
    "spawn_z": 0.0
   }
  ]

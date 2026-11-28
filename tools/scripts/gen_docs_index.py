@@ -126,7 +126,7 @@ DESIGN_RULES = [
         "enter-scene-zone-routing.md", "cross_scene_player_messaging*", "nav-spawn-fix-*",
         "broadcast-message-size-analysis.md", "afk-detection-design.md",
         "team-follow-server-trail.md", "minigame-remote-map-streaming-*",
-        "biyuan-water-palace-*", "replace-legacy-current-maps-*",
+        "biyuan-water-palace-*", "qinglan-town-*", "replace-legacy-current-maps-*",
         "pc-original-static-backgrounds-*",
     ]),
     ("业务服务与后台技术设计", [

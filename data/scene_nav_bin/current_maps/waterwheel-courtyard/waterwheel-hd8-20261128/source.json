@@ -1,0 +1,60 @@
+{
+  "worldRect": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 320.0,
+    "height": 320.0
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 32.578125,
+    "width": 297.1484375,
+    "height": 287.421875
+  },
+  "cellSize": 1.0,
+  "imageRect": {
+    "x": 0.0,
+    "y": 0.0,
+    "width": 7607.0,
+    "height": 7358.0
+  },
+  "referenceWidth": 7607,
+  "referenceHeight": 7358,
+  "walkmaskColumns": 320,
+  "walkmaskRows": 320,
+  "spawnWorld": {
+    "x": 160.0,
+    "y": 0.0,
+    "z": 140.0
+  },
+  "schemaVersion": 2,
+  "key": "waterwheel-courtyard",
+  "sceneId": 20000,
+  "name": "水车庭院",
+  "revision": "waterwheel-hd8-20261128",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/waterwheel-courtyard/waterwheel-hd8-20261128/spring/3b20918c9ddf8815d250e88ed6a9bc8478ab72921aac03e3df4bb156e6d6aa98/",
+  "clientOnly": false,
+  "authoritativeServerRegistered": true,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 4096,
+    "height": 4096
+  },
+  "layoutSha256": "3b20918c9ddf8815d250e88ed6a9bc8478ab72921aac03e3df4bb156e6d6aa98",
+  "layoutDerivation": "uniform-lanczos-long-edge-4096",
+  "sourceImageCommit": "b36c0513f9b162919e7d2847bad81a08a03eec9c",
+  "sourceMasterPath": "designs/pc-20000-waterwheel-hd8-festivals-v001/full/spring.png",
+  "sourceMasterSha256": "04f8d9eb17edae6ae73335dca159250c349de70618c12f0e82be269db517df11",
+  "sourceMasterBytes": 77523735,
+  "sourceMasterRgbSha256": "0343ba5f4057b1938b0cbf98a5c95c04d14234fb6cbe62efe7b3d4985df996fa",
+  "sourceTilesManifestSha256": "976af2e773bdcd4f07e5716d143a1adfbabff13921087325d331d3ab7b62a5a5",
+  "runtimeAssemblyRgbSha256": "0ee4f468aea12a972b3c539e1545b226247ecf744adff79732f7a4bda1b92621",
+  "navigationPlanPath": "Docs/VerificationEvidence/waterwheel-hd8-20261128/navigation-plan.json",
+  "navigationPlanSha256": "6675b0bf38474b60b0a6ecccb98406236d94ab8056400e55c4c94a9816f94d7f",
+  "navigationSha256": "c1f1f30db557ad9d616cbef7f9647fac126fb84062fbcdf8afc1fe5705076c0c",
+  "walkmaskSha256": "f81634666a4d0e91e8436851a10a6264e1a76e52cd49b74577c6049d9d5e00c7",
+  "walkmaskPackedSha256": "b3f75e1f84cfdcee468f168eabb27d14c4cb780e7f08e601ef0b12dd96a112dd",
+  "navigationStatus": "conservative_visible_ground",
+  "runtimeEngineAcceptance": true
+}

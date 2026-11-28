@@ -1,0 +1,361 @@
+{
+  "schemaVersion": 1,
+  "key": "canglan-harbor",
+  "sceneId": 6,
+  "revision": "canglan-harbor-20261128-v001",
+  "navigationPlanPath": "Docs/VerificationEvidence/canglan-harbor-20261128-v001/navigation-plan.json",
+  "navigationPlanSha256": "ba4590dc17300cf628bdd8bb10b75f2aa72db5065d77ca4daa0efb04b5a04a34",
+  "source": {
+    "worldRect": {
+      "x": 0.0,
+      "y": -49.52916717529297,
+      "width": 369.52911376953125,
+      "height": 369.52911376953125
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 3.591179847717285e-06,
+      "width": 319.99994300305843,
+      "height": 319.99994300305843
+    },
+    "cellSize": 1.5,
+    "imageRect": {
+      "x": 0,
+      "y": 0,
+      "width": 3547,
+      "height": 3547
+    },
+    "referenceWidth": 1254,
+    "referenceHeight": 1254,
+    "walkmaskColumns": 247,
+    "walkmaskRows": 247,
+    "spawnWorld": {
+      "x": 23.110906512290242,
+      "y": 0.0,
+      "z": 129.4218017965555
+    }
+  },
+  "stats": {
+    "walkableCells": 2429,
+    "totalCells": 61009,
+    "componentCount": 1,
+    "componentSizes": [
+      2429
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "west_entry": {
+        "pixel": [
+          94.59,
+          2096.67
+        ],
+        "world": {
+          "x": 8.53363253697753,
+          "y": 0.0,
+          "z": 130.8445249713957
+        },
+        "component": 0
+      },
+      "west_village": {
+        "pixel": [
+          685.75,
+          1718.32
+        ],
+        "world": {
+          "x": 61.866354923695326,
+          "y": 0.0,
+          "z": 164.97815294861797
+        },
+        "component": 0
+      },
+      "west_south": {
+        "pixel": [
+          472.93,
+          2821.84
+        ],
+        "world": {
+          "x": 42.66635834351182,
+          "y": 0.0,
+          "z": 65.42181319594381
+        },
+        "component": 0
+      },
+      "inland_junction": {
+        "pixel": [
+          1036.51,
+          1280.86
+        ],
+        "world": {
+          "x": 93.51089397296309,
+          "y": 0.0,
+          "z": 204.4445118620992
+        },
+        "component": 0
+      },
+      "upper_quay": {
+        "pixel": [
+          1773.5,
+          965.57
+        ],
+        "world": {
+          "x": 159.99997150152922,
+          "y": 0.0,
+          "z": 232.88905148133637
+        },
+        "component": 0
+      },
+      "north_market": {
+        "pixel": [
+          2656.31,
+          855.22
+        ],
+        "world": {
+          "x": 239.64450200125574,
+          "y": 0.0,
+          "z": 242.84450502246614
+        },
+        "component": 0
+      },
+      "north_pier": {
+        "pixel": [
+          3200.18,
+          803.99
+        ],
+        "world": {
+          "x": 288.71085920482875,
+          "y": 0.0,
+          "z": 247.4663254566491
+        },
+        "component": 0
+      },
+      "office_pinch": {
+        "pixel": [
+          1785.32,
+          1225.69
+        ],
+        "world": {
+          "x": 161.06633725464343,
+          "y": 0.0,
+          "z": 209.42178754732015
+        },
+        "component": 0
+      },
+      "middle_quay": {
+        "pixel": [
+          1454.27,
+          1741.97
+        ],
+        "world": {
+          "x": 131.19997663125395,
+          "y": 0.0,
+          "z": 162.84451927170156
+        },
+        "component": 0
+      },
+      "middle_steps": {
+        "pixel": [
+          1339.98,
+          2147.91
+        ],
+        "world": {
+          "x": 120.88906783908605,
+          "y": 0.0,
+          "z": 126.22180236652494
+        },
+        "component": 0
+      },
+      "middle_pier": {
+        "pixel": [
+          1643.44,
+          2210.96
+        ],
+        "world": {
+          "x": 148.2663395345211,
+          "y": 0.0,
+          "z": 120.53361617922783
+        },
+        "component": 0
+      },
+      "south_quay_bend": {
+        "pixel": [
+          1040.45,
+          2435.61
+        ],
+        "world": {
+          "x": 93.86634922400117,
+          "y": 0.0,
+          "z": 100.26635167524216
+        },
+        "component": 0
+      },
+      "shipyard_forecourt": {
+        "pixel": [
+          2175.49,
+          3054.36
+        ],
+        "world": {
+          "x": 196.26633098497985,
+          "y": 0.0,
+          "z": 44.444540360569945
+        },
+        "component": 0
+      },
+      "shipyard_east": {
+        "pixel": [
+          2372.55,
+          2979.48
+        ],
+        "world": {
+          "x": 214.0445065610111,
+          "y": 0.0,
+          "z": 51.1999944716692
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "lagoon_water",
+      "upper_harbor_water",
+      "lower_harbor_water",
+      "north_stall_goods",
+      "north_wall_pillar",
+      "warehouse_crates",
+      "office_interior",
+      "shipyard_hull",
+      "south_launch_water",
+      "west_fence",
+      "right_padding",
+      "bottom_padding",
+      "office_bollard"
+    ],
+    "connectedRoutes": [
+      [
+        "west_entry",
+        "west_village"
+      ],
+      [
+        "west_village",
+        "west_south"
+      ],
+      [
+        "west_village",
+        "inland_junction"
+      ],
+      [
+        "inland_junction",
+        "upper_quay"
+      ],
+      [
+        "upper_quay",
+        "north_market"
+      ],
+      [
+        "north_market",
+        "north_pier"
+      ],
+      [
+        "upper_quay",
+        "office_pinch"
+      ],
+      [
+        "middle_quay",
+        "middle_steps"
+      ],
+      [
+        "middle_steps",
+        "middle_pier"
+      ],
+      [
+        "middle_quay",
+        "south_quay_bend"
+      ],
+      [
+        "south_quay_bend",
+        "shipyard_forecourt"
+      ],
+      [
+        "shipyard_forecourt",
+        "shipyard_east"
+      ],
+      [
+        "west_entry",
+        "shipyard_east"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "west_entry",
+        "to": "west_village",
+        "gridDistanceWorldUnits": 70.04772721475254
+      },
+      {
+        "from": "west_village",
+        "to": "west_south",
+        "gridDistanceWorldUnits": 121.00357133746824
+      },
+      {
+        "from": "west_village",
+        "to": "inland_junction",
+        "gridDistanceWorldUnits": 54.68376618407358
+      },
+      {
+        "from": "inland_junction",
+        "to": "upper_quay",
+        "gridDistanceWorldUnits": 77.80508652763324
+      },
+      {
+        "from": "upper_quay",
+        "to": "north_market",
+        "gridDistanceWorldUnits": 83.22792206135784
+      },
+      {
+        "from": "north_market",
+        "to": "north_pier",
+        "gridDistanceWorldUnits": 52.60660171779821
+      },
+      {
+        "from": "upper_quay",
+        "to": "office_pinch",
+        "gridDistanceWorldUnits": 25.5
+      },
+      {
+        "from": "middle_quay",
+        "to": "middle_steps",
+        "gridDistanceWorldUnits": 41.59188309203678
+      },
+      {
+        "from": "middle_steps",
+        "to": "middle_pier",
+        "gridDistanceWorldUnits": 29.48528137423857
+      },
+      {
+        "from": "middle_quay",
+        "to": "south_quay_bend",
+        "gridDistanceWorldUnits": 78.53300858899108
+      },
+      {
+        "from": "south_quay_bend",
+        "to": "shipyard_forecourt",
+        "gridDistanceWorldUnits": 131.1396103067893
+      },
+      {
+        "from": "shipyard_forecourt",
+        "to": "shipyard_east",
+        "gridDistanceWorldUnits": 21.10660171779821
+      },
+      {
+        "from": "west_entry",
+        "to": "shipyard_east",
+        "gridDistanceWorldUnits": 500.9848480983508
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 27.83249156101949,
+    "separatedRoutes": [],
+    "maskSha256": "f45e7619bfc17f88352aa1040030cbd60a1518d80b2a5505fb8c097883ab7c90",
+    "maskBytes": 7627,
+    "engineAccepted": false,
+    "serverNavigationPublished": false
+  },
+  "runtimeEngineAcceptance": false,
+  "authoritativeServerRegistered": true
+}

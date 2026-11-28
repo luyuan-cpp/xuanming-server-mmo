@@ -1,0 +1,56 @@
+{
+  "worldRect": {
+    "x": 0.0,
+    "y": -49.52916717529297,
+    "width": 369.52911376953125,
+    "height": 369.52911376953125
+  },
+  "effectiveWorldRect": {
+    "x": 0.0,
+    "y": 3.591179847717285e-06,
+    "width": 319.99994300305843,
+    "height": 319.99994300305843
+  },
+  "cellSize": 1.5,
+  "imageRect": {
+    "x": 0,
+    "y": 0,
+    "width": 3547,
+    "height": 3547
+  },
+  "referenceWidth": 1254,
+  "referenceHeight": 1254,
+  "walkmaskColumns": 247,
+  "walkmaskRows": 247,
+  "spawnWorld": {
+    "x": 23.110906512290242,
+    "y": 0.0,
+    "z": 129.4218017965555
+  },
+  "schemaVersion": 2,
+  "key": "canglan-harbor",
+  "sceneId": 6,
+  "name": "沧澜港",
+  "revision": "canglan-harbor-20261128-v001",
+  "appearance": "spring",
+  "resourceRoot": "World/QdaoMaps20261102/canglan-harbor/canglan-harbor-20261128-v001/spring/ac60977706a2119809d0988b80b3a3d4ef09096e8bcd38063b4d853b8fdbd985/",
+  "clientOnly": false,
+  "authoritativeServerRegistered": true,
+  "artStatus": "formal_tiles_overview",
+  "layoutPixels": {
+    "width": 4096,
+    "height": 4096
+  },
+  "layoutSha256": "ac60977706a2119809d0988b80b3a3d4ef09096e8bcd38063b4d853b8fdbd985",
+  "sourceSelectionPath": "Docs/VerificationEvidence/canglan-harbor-20261128-v001/selection.json",
+  "sourceSelectionSha256": "e0c0fa72009bf927ee61a2f2152810a21dbfb3b60a7e414413b0eb9c432cdf5b",
+  "sourceEvidencePath": "Docs/VerificationEvidence/canglan-harbor-20261128-v001/source-evidence/canglan-harbor/spring/delivery.json",
+  "sourceEvidenceSha256": "419afa02d70b3062d368f6598f37c32b9c29fe9d70b019cf57adff30f17cc1dc",
+  "navigationPlanPath": "Docs/VerificationEvidence/canglan-harbor-20261128-v001/navigation-plan.json",
+  "navigationPlanSha256": "ba4590dc17300cf628bdd8bb10b75f2aa72db5065d77ca4daa0efb04b5a04a34",
+  "navigationSha256": "e6b16d31a2315d3b9ffbe221ffb99e7f1dc91bb9b9a545f6b7505f84835bb559",
+  "walkmaskSha256": "ca85948e7d88eb926497bec136146f53203ab65cd590645ffb37b3bf4f65466a",
+  "walkmaskPackedSha256": "f45e7619bfc17f88352aa1040030cbd60a1518d80b2a5505fb8c097883ab7c90",
+  "navigationStatus": "conservative_visible_ground",
+  "runtimeEngineAcceptance": false
+}

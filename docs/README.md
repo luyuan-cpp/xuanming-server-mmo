@@ -164,6 +164,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
 - [equipment-craft-v2-v5-ui-handoff.md](planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md) — 《五行奇谈》装备品相与典籍制书 V2–V5 增量图标纯功能交接单
 - [equipment-loadout-presets-ui-handoff.md](planning/ui-handoff/equipment-loadout-presets-ui-handoff.md) — 装备流派方案预设（一键多套换装）UI 纯功能需求清单
+- [fair-monetization-b3-scrolls89-and-voucher-icons-handoff.md](planning/ui-handoff/fair-monetization-b3-scrolls89-and-voucher-icons-handoff.md) — 不肝不氪增收体系 V2（B3 第 8/9 卷技能卷宗与排面装饰券补图）异机 Codex 纯功能作图交接单
 - [fair-monetization-b5-steam-dlc-ui-handoff.md](planning/ui-handoff/fair-monetization-b5-steam-dlc-ui-handoff.md) — 不肝不氪增收体系 V2（B5 · Steam 创始支持者纪念包）异机 Codex 纯功能作图交接单
 - [fair-monetization-expansion-v2-ui-handoff.md](planning/ui-handoff/fair-monetization-expansion-v2-ui-handoff.md) — 不肝不氪增收体系 V2（B1–B4）异机 Codex 纯功能作图交接单
 - [growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md) — 率土式叠加成长战法 V2（《兵法叠势卷》）纯功能图标交接单
@@ -255,6 +256,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [minigame-remote-map-streaming-and-scene-gating.md](design/minigame-remote-map-streaming-and-scene-gating.md) — 小游戏与 App 双形态远程地图流式加载、CDN 分发与服务端切图门禁设计
 - [nav-spawn-fix-2026-09-05.md](design/nav-spawn-fix-2026-09-05.md) — 客户端/服务端导航数据、出生点与位置纠正契约
 - [pc-original-static-backgrounds-20261123.md](design/pc-original-static-backgrounds-20261123.md) — 端游原图静态背景服务端核实与双端 ID 对账设计（2026-11-23）
+- [qinglan-town-scene4-nav-20261128.md](design/qinglan-town-scene4-nav-20261128.md) — 青岚镇（`qinglan-town` / 场景 4）双版服务端导航与联机配表接入设计方案
 - [replace-legacy-current-maps-with-qdao-nav-20261124.md](design/replace-legacy-current-maps-with-qdao-nav-20261124.md) — 退役旧版 12.5 GB 三图（`CurrentMaps20261009`）、接通八景岛/月汐湾双端导航与主城临时替代方案
 - [scene-actor-state-sync-and-client-hfsm-boundary.md](design/scene-actor-state-sync-and-client-hfsm-boundary.md) — 主角状态互斥即时同步与客户端 UnityHFSM 接入边界
 - [scene-creation-architecture.md](design/scene-creation-architecture.md) — Scene Creation Architecture
@@ -477,6 +479,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [ranked-play-production-architecture.md](design/ranked-play-production-architecture.md) — 《论剑 / 人宠会武》生产级强一致性与水平扩展架构设计
 - [rewarded-ad-system.md](design/rewarded-ad-system.md) — 激励视频广告与绑定银两（`CURRENCY_TYPE_BIND_GOLD`）全端技术与零拒审工程设计
 - [skill-book-wanted-order-trade-escrow.md](design/skill-book-wanted-order-trade-escrow.md) — 悬赏求书迁 go/trade 托管合同与未学书架上限(数据覆写审计 r2 第 4 轮 craft#1、#2)
+- [waterwheel-courtyard-scene20000-nav-20261128.md](design/waterwheel-courtyard-scene20000-nav-20261128.md) — 水车庭院（`waterwheel-courtyard` / 场景 20000）双版服务端导航与联机配表接入设计方案
 
 #### 成套技术设计
 

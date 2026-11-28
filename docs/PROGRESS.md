@@ -8583,3 +8583,23 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
 - **问题**:热榜桶写入原先分开发 `HINCRBY`(单数、极品数)与 `EXPIRE`(续 25 小时)。C++ 是三条独立命令,Python 是 pipeline 里的几条。两步之间断连,或续期那条没发出去,就会留下没设过期的桶;它出窗后没人再读,但永远不会被回收,内存一点点漏。
 - **改法**:三步放进一段写脚本,一次执行:C++ `kAddProxyHotLua`(`RedisHIncrByHotBucket` 只发一条 `EVAL`),Python `ADD_PROXY_HOT_LUA`,两边同文。Python 单测钉文本,`FakeRedis` 注册了这段脚本的双生体。设计稿 §2.6「写」与 §4 表、Python 仓 `craft-proxy-shared-ledger-redis.md` §2.1 / §2.2 / §4 已改。
 - **已跑**:`test_cpp_no_raw_pointer_member.py`、`test_cpp_async_callback_capture.py` 两个只读预检,各 13 项 OK。其余未编译、未运行;交 Gemini 的命令不变,按「热榜读取改走台账接缝」一条执行。真实 Redis 7.2 / 8.x 上的验证要连这段写脚本一起跑。
+
+
+## 2026-11-28 Antigravity：青岚镇（场景 4）C++/Go 与 Java 双版服务端严格导航、BaseScene 配表与客户端联机接入
+
+- **范围**：将图仓 `d36d5575a8905f9a6d9381c0be2e875b2463edb0` 的青岚镇（`original:legacy-lanxian-town`）春节/中秋双节正式资源与共享 `308×308` 走图掩码全链路接入 C++/Go 权威服、Java 独立服与 Unity 客户端，替代旧 `data/scene_nav_bin/lanxian_scene.bin`（已退役删除）。
+- **设计落盘**：[docs/design/qinglan-town-scene4-nav-20261128.md](design/qinglan-town-scene4-nav-20261128.md)。
+- **核心改动**：
+  - **C++/Go 权威服**：新增 `tools/navmesh_baker/prepare_qinglan_town.py`（`--cs 0.125` 覆盖 `0.197m` 南有效边界窄条），烘焙 `data/scene_nav_bin/current_maps/qinglan-town/qinglan-20261127-v002/scene.bin`（103 tile、206,024 字节，`94,864` 格 `mismatches=0`，单连通分量 `6,389` 格，21 地标探针全通）；更新 `data/BaseScene.xlsx` 行 `id=4`（`spawn=(-65.1943359375, -83.6923828125, 0)`）并经官方导表器同步 `basescene.{json,pb}`、`client_tables/basescene.pb` 与 `manifest.json`；在 `festival_navigation_test.cpp` 与 `scene_spawn_test.cpp` 新增场景 4 严格导航、寻路、阻挡、老坐标回落与缺失校验和拒绝用例。
+  - **Java 独立服（`xuanming-server-mmo`）**：通过 `ContractSync --scope current-maps` 同步 `basescene.pb`、`manifest.json`、`config-data/navmesh/current_maps/qinglan-town/qinglan-20261127-v002/{source.json,walkmask.txt}` 与 `SOURCE.properties`；补充 `CurrentMapNavigation.QINGLAN_FOLDER`、`ConfigSceneTablesTest`、`CurrentMapNavigationTest` 及 `PARITY.md`。
+  - **Unity 客户端（`mmorpg-client`）**：将 `qinglan-town` 批次切为 `clientOnly: false, authoritativeServerRegistered: true`，同步 `Assets/StreamingAssets/Tables/basescene.pb`，更新 `CityTravelUiRoot` / `CityTravelWindow.WorldMapV2` 文案与 `CurrentMapTests` / `CityTravelWindowTests` / `FestivalRegionMapTests`。
+
+
+## 2026-11-28 Antigravity：水车庭院（场景 20000）C++/Go 与 Java 双版服务端严格导航、BaseScene/World 配表与客户端联机接入
+
+- **范围**：将图仓 `b36c0513f9b162919e7d2847bad81a08a03eec9c` 的水车庭院（`pc:20000` / `waterwheel-courtyard`）春节/中秋双节正式交付与共享 `320×320` 走图掩码全链路接入 C++/Go 权威服、Java 独立服与 Unity 客户端，升级为正式联机主世界场景（`sceneId = 20000`）。
+- **设计落盘**：[docs/design/waterwheel-courtyard-scene20000-nav-20261128.md](design/waterwheel-courtyard-scene20000-nav-20261128.md)。
+- **核心改动**：
+  - **C++/Go 权威服**：新增 `tools/navmesh_baker/prepare_waterwheel_courtyard.py`（`--cs 0.125`），烘焙 `data/scene_nav_bin/current_maps/waterwheel-courtyard/waterwheel-hd8-20261128/scene.bin`（106 tile、148,832 字节，`102,400` 格 `mismatches=0`，单连通分量 `15,357` 格，20 地标探针全通）；在 `data/BaseScene.xlsx`（`id=20000`, `spawn=(140.0, 160.0, 0)`）与 `data/World.xlsx`（`id=20000, scene_id=20000`）新增行并经官方导表器同步 `basescene.{json,pb}`、`world.{json,pb}`、`client_tables/{basescene,world}.pb` 与 `manifest.json`；在 `festival_navigation_test.cpp` 与 `scene_spawn_test.cpp` 新增场景 20000 严格导航、寻路、阻挡、越界回落与缺失校验和拒绝用例。
+  - **Java 独立服（`xuanming-server-mmo`）**：扩展 `ContractSync --scope current-maps` 同步 `world.pb`，同步 `basescene.pb`、`world.pb`、`manifest.json`、`config-data/navmesh/current_maps/waterwheel-courtyard/waterwheel-hd8-20261128/{source.json,walkmask.txt}` 与 `SOURCE.properties`；补充 `CurrentMapNavigation.WATERWHEEL_FOLDER`、`ConfigSceneTablesTest`、`CurrentMapNavigationTest` 及 `PARITY.md`。
+  - **Unity 客户端（`mmorpg-client`）**：将 `waterwheel-courtyard` 切为 `clientOnly: false, authoritativeServerRegistered: true`，同步 `Assets/StreamingAssets/Tables/{basescene,world}.pb`，更新 `CityTravelWindow.WorldMapV2` 与 `CurrentMapTests` / `CityTravelWindowTests` / `FestivalRegionMapTests`。

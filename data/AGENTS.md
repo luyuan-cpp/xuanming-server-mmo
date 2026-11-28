@@ -169,7 +169,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **AttributeDimension** | `AttributeDimension.xlsx` | `attributedimension_table.proto` | 12 | 12 | 8 | — | — | `pool_id` | `pool_id→AttributePool.id` | — | — | — |
 | **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 2 | — | — | `owner_type` | — | — | — | — |
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
-| **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
+| **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 22 | — | — | — | — | — | — | — |
 | **BattleProgressionReward** | `BattleProgressionReward.xlsx` | `battleprogressionreward_table.proto` | 6 | 6 | 20 | — | — | — | — | — | — | — |
 | **BattleProgressionRule** | `BattleProgressionRule.xlsx` | `battleprogressionrule_table.proto` | 4 | 4 | 1 | — | — | — | — | — | — | — |
 | **Buff** | `Buff.xlsx` | `buff_table.proto` | 64 | 54 | 216 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
@@ -238,7 +238,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TrialJournalEntry** | `TrialJournalEntry.xlsx` | `trialjournalentry_table.proto` | 16 | 16 | 42 | — | — | `chapter_id` | — | — | — | — |
 | **TrialJournalMilestone** | `TrialJournalMilestone.xlsx` | `trialjournalmilestone_table.proto` | 17 | 17 | 31 | — | — | `scope_chapter_id` | — | `id` | — | — |
 | **TrialJournalSeal** | `TrialJournalSeal.xlsx` | `trialjournalseal_table.proto` | 8 | 8 | 96 | — | — | `entry_id` | `entry_id→TrialJournalEntry.id` | `id` | — | — |
-| **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
+| **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 17 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 | **ZoneGroup** | `ZoneGroup.xlsx` | `zonegroup_table.proto` | 5 | 4 | 2 | — | — | — | — | — | — | — |
 
 合计 **84** 张表、**1098** 个物理列、**945** 个进产物的字段。

@@ -1,0 +1,491 @@
+{
+  "schemaVersion": 1,
+  "key": "waterwheel-courtyard",
+  "sceneId": 20000,
+  "revision": "waterwheel-hd8-20261128",
+  "navigationPlanPath": "Docs/VerificationEvidence/waterwheel-hd8-20261128/navigation-plan.json",
+  "navigationPlanSha256": "6675b0bf38474b60b0a6ecccb98406236d94ab8056400e55c4c94a9816f94d7f",
+  "source": {
+    "worldRect": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 320.0,
+      "height": 320.0
+    },
+    "effectiveWorldRect": {
+      "x": 0.0,
+      "y": 32.578125,
+      "width": 297.1484375,
+      "height": 287.421875
+    },
+    "cellSize": 1.0,
+    "imageRect": {
+      "x": 0.0,
+      "y": 0.0,
+      "width": 7607.0,
+      "height": 7358.0
+    },
+    "referenceWidth": 7607,
+    "referenceHeight": 7358,
+    "walkmaskColumns": 320,
+    "walkmaskRows": 320,
+    "spawnWorld": {
+      "x": 160.0,
+      "y": 0.0,
+      "z": 140.0
+    }
+  },
+  "stats": {
+    "walkableCells": 15357,
+    "totalCells": 102400,
+    "componentCount": 1,
+    "componentSizes": [
+      15357
+    ],
+    "spawnComponent": 0,
+    "landmarks": {
+      "spawn": {
+        "pixel": [
+          4096,
+          4608
+        ],
+        "world": {
+          "x": 160.0,
+          "y": 0.0,
+          "z": 140.0
+        },
+        "component": 0
+      },
+      "centralTaiji": {
+        "pixel": [
+          4096,
+          4050
+        ],
+        "world": {
+          "x": 160.0,
+          "y": 0.0,
+          "z": 161.796875
+        },
+        "component": 0
+      },
+      "northRoad": {
+        "pixel": [
+          2880,
+          2320
+        ],
+        "world": {
+          "x": 112.5,
+          "y": 0.0,
+          "z": 229.375
+        },
+        "component": 0
+      },
+      "upperStairsMid": {
+        "pixel": [
+          2960,
+          880
+        ],
+        "world": {
+          "x": 115.625,
+          "y": 0.0,
+          "z": 285.625
+        },
+        "component": 0
+      },
+      "upperStairsTop": {
+        "pixel": [
+          3240,
+          140
+        ],
+        "world": {
+          "x": 126.5625,
+          "y": 0.0,
+          "z": 314.53125
+        },
+        "component": 0
+      },
+      "mainHallStairsFoot": {
+        "pixel": [
+          4780,
+          3020
+        ],
+        "world": {
+          "x": 186.71875,
+          "y": 0.0,
+          "z": 202.03125
+        },
+        "component": 0
+      },
+      "mainHallStairsMid": {
+        "pixel": [
+          4900,
+          2560
+        ],
+        "world": {
+          "x": 191.40625,
+          "y": 0.0,
+          "z": 220.0
+        },
+        "component": 0
+      },
+      "mainHallTerrace": {
+        "pixel": [
+          5020,
+          2120
+        ],
+        "world": {
+          "x": 196.09375,
+          "y": 0.0,
+          "z": 237.1875
+        },
+        "component": 0
+      },
+      "westRoad": {
+        "pixel": [
+          2580,
+          3760
+        ],
+        "world": {
+          "x": 100.78125,
+          "y": 0.0,
+          "z": 173.125
+        },
+        "component": 0
+      },
+      "westShopStairs": {
+        "pixel": [
+          2040,
+          3680
+        ],
+        "world": {
+          "x": 79.6875,
+          "y": 0.0,
+          "z": 176.25
+        },
+        "component": 0
+      },
+      "eastRoad": {
+        "pixel": [
+          5780,
+          4800
+        ],
+        "world": {
+          "x": 225.78125,
+          "y": 0.0,
+          "z": 132.5
+        },
+        "component": 0
+      },
+      "southPlaza": {
+        "pixel": [
+          3960,
+          5360
+        ],
+        "world": {
+          "x": 154.6875,
+          "y": 0.0,
+          "z": 110.625
+        },
+        "component": 0
+      },
+      "shrineApproach": {
+        "pixel": [
+          4980,
+          6280
+        ],
+        "world": {
+          "x": 194.53125,
+          "y": 0.0,
+          "z": 74.6875
+        },
+        "component": 0
+      },
+      "shrineStairs": {
+        "pixel": [
+          5680,
+          6080
+        ],
+        "world": {
+          "x": 221.875,
+          "y": 0.0,
+          "z": 82.5
+        },
+        "component": 0
+      },
+      "shrineTerrace": {
+        "pixel": [
+          6060,
+          5940
+        ],
+        "world": {
+          "x": 236.71875,
+          "y": 0.0,
+          "z": 87.96875
+        },
+        "component": 0
+      },
+      "bridgeEastEntry": {
+        "pixel": [
+          4580,
+          6220
+        ],
+        "world": {
+          "x": 178.90625,
+          "y": 0.0,
+          "z": 77.03125
+        },
+        "component": 0
+      },
+      "bridgeCrown": {
+        "pixel": [
+          3800,
+          5960
+        ],
+        "world": {
+          "x": 148.4375,
+          "y": 0.0,
+          "z": 87.1875
+        },
+        "component": 0
+      },
+      "bridgeWestEntry": {
+        "pixel": [
+          3160,
+          6180
+        ],
+        "world": {
+          "x": 123.4375,
+          "y": 0.0,
+          "z": 78.59375
+        },
+        "component": 0
+      },
+      "pavilionWalkway": {
+        "pixel": [
+          2060,
+          6130
+        ],
+        "world": {
+          "x": 80.46875,
+          "y": 0.0,
+          "z": 80.546875
+        },
+        "component": 0
+      },
+      "westBalcony": {
+        "pixel": [
+          1080,
+          6140
+        ],
+        "world": {
+          "x": 42.1875,
+          "y": 0.0,
+          "z": 80.15625
+        },
+        "component": 0
+      }
+    },
+    "blockedLandmarks": [
+      "rightPadding",
+      "bottomPadding",
+      "waterfall",
+      "waterwheel",
+      "westRiver",
+      "southLotusPond",
+      "mainHallRoof",
+      "mainHallLeftColumn",
+      "mainHallRightColumn",
+      "westShopRoof",
+      "eastShopRoof",
+      "lowerEastShrineRoof",
+      "bridgeNorthParapet",
+      "bridgeSouthArchWater",
+      "shrineStoneLantern",
+      "pavilionMidAutumnRabbit",
+      "mainHallWestPlanter"
+    ],
+    "connectedRoutes": [
+      [
+        "spawn",
+        "centralTaiji"
+      ],
+      [
+        "centralTaiji",
+        "mainHallStairsFoot"
+      ],
+      [
+        "mainHallStairsFoot",
+        "mainHallStairsMid"
+      ],
+      [
+        "mainHallStairsMid",
+        "mainHallTerrace"
+      ],
+      [
+        "centralTaiji",
+        "northRoad"
+      ],
+      [
+        "northRoad",
+        "upperStairsMid"
+      ],
+      [
+        "upperStairsMid",
+        "upperStairsTop"
+      ],
+      [
+        "centralTaiji",
+        "westRoad"
+      ],
+      [
+        "westRoad",
+        "westShopStairs"
+      ],
+      [
+        "centralTaiji",
+        "eastRoad"
+      ],
+      [
+        "spawn",
+        "southPlaza"
+      ],
+      [
+        "spawn",
+        "shrineApproach"
+      ],
+      [
+        "shrineApproach",
+        "shrineStairs"
+      ],
+      [
+        "shrineStairs",
+        "shrineTerrace"
+      ],
+      [
+        "shrineApproach",
+        "bridgeEastEntry"
+      ],
+      [
+        "bridgeEastEntry",
+        "bridgeCrown"
+      ],
+      [
+        "bridgeCrown",
+        "bridgeWestEntry"
+      ],
+      [
+        "bridgeWestEntry",
+        "pavilionWalkway"
+      ],
+      [
+        "pavilionWalkway",
+        "westBalcony"
+      ]
+    ],
+    "routeMeasurements": [
+      {
+        "from": "spawn",
+        "to": "centralTaiji",
+        "gridDistanceWorldUnits": 21.0
+      },
+      {
+        "from": "centralTaiji",
+        "to": "mainHallStairsFoot",
+        "gridDistanceWorldUnits": 51.76955262170044
+      },
+      {
+        "from": "mainHallStairsFoot",
+        "to": "mainHallStairsMid",
+        "gridDistanceWorldUnits": 20.071067811865476
+      },
+      {
+        "from": "mainHallStairsMid",
+        "to": "mainHallTerrace",
+        "gridDistanceWorldUnits": 19.071067811865476
+      },
+      {
+        "from": "centralTaiji",
+        "to": "northRoad",
+        "gridDistanceWorldUnits": 87.8822509939085
+      },
+      {
+        "from": "northRoad",
+        "to": "upperStairsMid",
+        "gridDistanceWorldUnits": 62.213203435596405
+      },
+      {
+        "from": "upperStairsMid",
+        "to": "upperStairsTop",
+        "gridDistanceWorldUnits": 33.55634918610404
+      },
+      {
+        "from": "centralTaiji",
+        "to": "westRoad",
+        "gridDistanceWorldUnits": 64.97056274847711
+      },
+      {
+        "from": "westRoad",
+        "to": "westShopStairs",
+        "gridDistanceWorldUnits": 22.242640687119287
+      },
+      {
+        "from": "centralTaiji",
+        "to": "eastRoad",
+        "gridDistanceWorldUnits": 77.01219330881968
+      },
+      {
+        "from": "spawn",
+        "to": "southPlaza",
+        "gridDistanceWorldUnits": 32.48528137423857
+      },
+      {
+        "from": "spawn",
+        "to": "shrineApproach",
+        "gridDistanceWorldUnits": 80.08326112068514
+      },
+      {
+        "from": "shrineApproach",
+        "to": "shrineStairs",
+        "gridDistanceWorldUnits": 30.313708498984766
+      },
+      {
+        "from": "shrineStairs",
+        "to": "shrineTerrace",
+        "gridDistanceWorldUnits": 17.071067811865476
+      },
+      {
+        "from": "shrineApproach",
+        "to": "bridgeEastEntry",
+        "gridDistanceWorldUnits": 17.242640687119284
+      },
+      {
+        "from": "bridgeEastEntry",
+        "to": "bridgeCrown",
+        "gridDistanceWorldUnits": 34.14213562373095
+      },
+      {
+        "from": "bridgeCrown",
+        "to": "bridgeWestEntry",
+        "gridDistanceWorldUnits": 29.313708498984763
+      },
+      {
+        "from": "bridgeWestEntry",
+        "to": "pavilionWalkway",
+        "gridDistanceWorldUnits": 43.828427124746185
+      },
+      {
+        "from": "pavilionWalkway",
+        "to": "westBalcony",
+        "gridDistanceWorldUnits": 38.0
+      }
+    ],
+    "maximumListedRouteSecondsAt18": 4.8823472774393615,
+    "separatedRoutes": [],
+    "maskSha256": "b3f75e1f84cfdcee468f168eabb27d14c4cb780e7f08e601ef0b12dd96a112dd",
+    "maskBytes": 12800,
+    "engineAccepted": true,
+    "serverNavigationPublished": true
+  },
+  "runtimeEngineAcceptance": true,
+  "authoritativeServerRegistered": true
+}

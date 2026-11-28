@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "schema_digest": "0fbe086829d8fe21",
-  "version": 112,
-  "content_digest": "444727dc5bfa017e69d27cb84e4899c34f2d90d4d9b51d8230d81ca966c8b1e5",
-  "generated_at": "2026-11-27T21:25:40Z",
+  "version": 116,
+  "content_digest": "dac98807cd1d413eb1f409bedc8b96b0cf27e48b38d9030ba6361877436f281e",
+  "generated_at": "2026-11-28T10:30:59Z",
   "source_rev": {
-    "commit": "5e5bc546859a25c0fc7c80ceb59d403c9c368c7a",
+    "commit": "347a211ef62620a9c96d69eba8efac3254d54e39",
     "data_dirty": true
   },
   "table_count": 84,
@@ -339,24 +339,24 @@
       "name": "BaseScene",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 21,
+      "rows": 22,
       "source": {
         "file": "BaseScene.xlsx",
-        "size": 5619,
-        "sha256": "03e79b19cb1dd236f0c08418f20b95a658a2789b2815c95fed455de38e7984af"
+        "size": 5746,
+        "sha256": "1e7232c34325b9aa5231e4c706e6e060e62e0462aa7fd9e55ccf6d177bcd1a36"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "basescene.json",
-          "size": 3632,
-          "sha256": "5cf830247ba7c214d3cb3b601c0f3385e673b480cf319ba9b410aa40c3ada569"
+          "size": 3912,
+          "sha256": "1fcfa1e05ce7c20a02c3ffb14bf390fc1e55ebb8c68da62cb409327486dfe428"
         },
         {
           "kind": "binary",
           "file": "basescene.pb",
-          "size": 1919,
-          "sha256": "b2557d23f1cfb32b0c72d11d241728f11e98c3a8d7f8e38aa7d0cc52d20d6f22"
+          "size": 2074,
+          "sha256": "1a364337d7a7f57a365470f4705ea42ccf279d6a784ec223326bea233e153544"
         }
       ]
     },
@@ -542,21 +542,21 @@
       "rows": 13,
       "source": {
         "file": "CosmeticShowcase.xlsx",
-        "size": 7240,
-        "sha256": "8671b608928b40afbe7040ec75d7f230f6e94a277c5085e97087f75873d03939"
+        "size": 7253,
+        "sha256": "9008290d6687a3ebe444de9bb661de8c3042708929918605d5bcb0de83b77ec1"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "cosmeticshowcase.json",
-          "size": 6600,
-          "sha256": "2cc67f188ca5dfa9e52731dabded888fdff8478efc209d09cf3981c0f82baa61"
+          "size": 6604,
+          "sha256": "e8aa5b076a253cabb69068ff7b8b8d66ec1a6cc2b7881288ca1a270ced62e17d"
         },
         {
           "kind": "binary",
           "file": "cosmeticshowcase.pb",
-          "size": 3636,
-          "sha256": "b1e2ab6516fd27d6a7fb7e01aee31fb5e7ae6f7d4e643918846f1b3d2cd7c090"
+          "size": 3640,
+          "sha256": "335aff5a9a1f08e7fc838153deba1e9459dcde04eb985606527feaa479145b97"
         }
       ]
     },
@@ -2064,24 +2064,24 @@
       "name": "World",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 16,
+      "rows": 17,
       "source": {
         "file": "World.xlsx",
-        "size": 5100,
-        "sha256": "3a40c7f27a1cffb26d1e243e21ebc8abd584a424bfd642bd6159027a73a039cc"
+        "size": 5092,
+        "sha256": "30ce290102b7b96e6b8d3a5192772c2a19f60e96095e0ed6b04df0ebf19ad19f"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "world.json",
-          "size": 638,
-          "sha256": "6fa232e2cf85588ef813c29c947e494e3a59a092da2cf4757fd48b2a3f61b74b"
+          "size": 684,
+          "sha256": "088c249e607d3b49ab3a7ecf693206fa548cc341ff2c865ff7d3e97f477a521a"
         },
         {
           "kind": "binary",
           "file": "world.pb",
-          "size": 96,
-          "sha256": "d107e92a1a1767083ef043760e5eadebdd34f278885d72a17fc08e76651de8c4"
+          "size": 106,
+          "sha256": "0ac37965eb4b1e5e429d547362e7261fc59338d53fcde5d91c1943cd88a3e9ef"
         }
       ]
     },
