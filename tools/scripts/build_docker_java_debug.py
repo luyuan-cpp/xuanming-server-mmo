@@ -38,6 +38,7 @@ OPTIONAL_GATEWAY_TESTS = {
     ("com.game.gateway.repository.ZoneWhitelistUpsertLockOrderMySqlTest", "upsertBehindPendingDeleteOnlyQueues"),
     ("com.game.gateway.repository.ZoneWhitelistUpsertLockOrderMySqlTest", "legacyPlainInsertBehindPendingDeleteLosesOneWriter"),
     ("com.game.gateway.repository.GatewaySchemaContractTest", "formalSchemaValidatesOnRealTiDbAndRoundTripsUnsignedZoneRange"),
+    ("com.game.gateway.repository.GatewaySchemaContractTest", "lockedReadBackSeesARowCommittedAfterTheTransactionBeganOnRealTiDb"),
     ("com.game.gateway.ratelimit.RedisRateLimitStoreIntegrationTest", "freshBucketIsFull"),
     ("com.game.gateway.ratelimit.RedisRateLimitStoreIntegrationTest", "emptyBucket_refillsAtRps"),
     ("com.game.gateway.ratelimit.RedisRateLimitStoreIntegrationTest", "take_writesRemainingTokensAndTime_rejectionWritesNothing"),
