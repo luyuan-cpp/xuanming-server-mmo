@@ -49,6 +49,8 @@ func fenceLabel(query string) string {
 	switch {
 	case q == "BEGIN" || q == "COMMIT" || q == "ROLLBACK":
 		return q
+	case strings.Contains(q, "FROM trade_commerce WHERE seller_player_id=") && strings.HasSuffix(q, "FOR UPDATE"):
+		return "countListings"
 	case strings.Contains(q, "FROM trade_commerce WHERE request_key="):
 		return "byRequest"
 	case strings.Contains(q, "FROM trade_commerce WHERE commerce_id=") && strings.HasSuffix(q, "FOR UPDATE"):
@@ -350,9 +352,10 @@ func commerceWriteCases() []commerceWriteCase {
 		{
 			name:      "CreateConsignment",
 			write:     "insert",
-			committed: []string{"byRequest", "BEGIN", "insert", "COMMIT"},
+			committed: []string{"byRequest", "BEGIN", "countListings", "insert", "COMMIT"},
 			arrange: func(_ *testing.T, f *fenceDB) {
 				f.rows["byRequest"] = fenceNoRows
+				f.rows["countListings"] = fenceNoRows
 			},
 			call: func(ctx context.Context, e *Engine) (*tradepb.TradeCommerceRecord, error) {
 				return e.CreateConsignment(ctx, fenceSeller, fenceConsignmentRequest())

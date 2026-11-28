@@ -68,6 +68,8 @@ enum afk_pass_error : int {
   kAfkPassStackLimit = 32002,
   kAfkPassFrozen = 32003,
   kAfkPassUnavailable = 32004,
+  kAfkPassBagFull = 32005,
+  kAfkPassPlanInvalid = 32006,
   afk_pass_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   afk_pass_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -78,11 +80,11 @@ extern const uint32_t afk_pass_error_internal_data_[];
 inline constexpr afk_pass_error afk_pass_error_MIN =
     static_cast<afk_pass_error>(0);
 inline constexpr afk_pass_error afk_pass_error_MAX =
-    static_cast<afk_pass_error>(32004);
+    static_cast<afk_pass_error>(32006);
 [[nodiscard]] inline bool afk_pass_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, afk_pass_error_internal_data_);
 }
-inline constexpr int afk_pass_error_ARRAYSIZE = 32004 + 1;
+inline constexpr int afk_pass_error_ARRAYSIZE = 32006 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 afk_pass_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(afk_pass_error) {

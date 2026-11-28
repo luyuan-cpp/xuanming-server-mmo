@@ -917,6 +917,9 @@ message GetPlayerChannelIdentityResponse {
   uint64 account_created_ms = 5;
   uint32 player_level = 6;
   bool retry = 7;
+  // 玩家权威穿戴的聊天气泡与分享卡底纹 ID（CosmeticShowcase.id；供 chat 权威覆写防伪造）。
+  uint32 chat_bubble_skin_id = 8;
+  uint32 share_card_skin_id = 9;
 }
 
 // ── 角色永久外观同步(docs/design/character-appearance-switch.md)──
@@ -924,6 +927,10 @@ message UpdateRoleAppearanceRequest {
   uint64 player_id = 1;
   string appearance_id = 2;
   common.base.ServiceCallAuth auth = 3;
+  // sync_showcase_skins = true 时同步更新聊天气泡与分享卡底纹（appearance_id 可空）。
+  uint32 chat_bubble_skin_id = 4;
+  uint32 share_card_skin_id = 5;
+  bool sync_showcase_skins = 6;
 }
 
 message UpdateRoleAppearanceResponse {

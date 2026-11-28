@@ -57,4 +57,52 @@ public interface AfkPassRuleTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 bonus_item_id = 8;</code>
+   * @return The bonusItemId.
+   */
+  int getBonusItemId();
+
+  /**
+   * <code>uint32 bonus_item_count = 9;</code>
+   * @return The bonusItemCount.
+   */
+  int getBonusItemCount();
+
+  /**
+   * <code>string bonus_frame_key = 10;</code>
+   * @return The bonusFrameKey.
+   */
+  java.lang.String getBonusFrameKey();
+  /**
+   * <code>string bonus_frame_key = 10;</code>
+   * @return The bytes for bonusFrameKey.
+   */
+  com.google.protobuf.ByteString
+      getBonusFrameKeyBytes();
+
+  /**
+   * <code>string plan_name = 11;</code>
+   * @return The planName.
+   */
+  java.lang.String getPlanName();
+  /**
+   * <code>string plan_name = 11;</code>
+   * @return The bytes for planName.
+   */
+  com.google.protobuf.ByteString
+      getPlanNameBytes();
+
+  /**
+   * <code>string icon_key = 12;</code>
+   * @return The iconKey.
+   */
+  java.lang.String getIconKey();
+  /**
+   * <code>string icon_key = 12;</code>
+   * @return The bytes for iconKey.
+   */
+  com.google.protobuf.ByteString
+      getIconKeyBytes();
 }

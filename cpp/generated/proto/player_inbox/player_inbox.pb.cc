@@ -39,6 +39,12 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::GmItemGainPayload
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::CosmeticGiftCreditPayload
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::CosmeticGiftRefundPayload
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
+        // ::player_inbox::CosmeticGiftRevokePayload
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::BattleSettlementInboxRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto, /* tracker*/ nullptr,},
         // ::player_inbox::BattleSettlementInboxResponse
@@ -369,7 +375,7 @@ constexpr auto PlayerInboxItem::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -679,7 +685,7 @@ constexpr auto PlayerInboxDecisionReport::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -835,7 +841,7 @@ constexpr auto PlayerInboxAckItem::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -1348,6 +1354,551 @@ const ::_pbi::ClassData* GmCurrencyDebtPayload_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class CosmeticGiftRevokePayload::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CosmeticGiftRevokePayload>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_._has_bits_);
+};
+
+constexpr CosmeticGiftRevokePayload::ParseTableT_ CosmeticGiftRevokePayload::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::CosmeticGiftRevokePayload>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 gift_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftRevokePayload, _impl_.gift_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.gift_id_)}},
+      // uint64 sender_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftRevokePayload, _impl_.sender_player_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.sender_player_id_)}},
+      // uint32 target_kind = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CosmeticGiftRevokePayload, _impl_.target_kind_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_kind_)}},
+      // uint32 target_id_u32 = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CosmeticGiftRevokePayload, _impl_.target_id_u32_), 5>(),
+       {32, 5, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_id_u32_)}},
+      // string target_id_str = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_id_str_)}},
+      // string reason = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.reason_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 gift_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.gift_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 sender_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.sender_player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 target_kind = 3;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_kind_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 target_id_u32 = 4;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_id_u32_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string target_id_str = 5;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_id_str_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string reason = 6;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.reason_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\46\0\0\0\0\15\6\0"
+      "player_inbox.CosmeticGiftRevokePayload"
+      "target_id_str"
+      "reason"
+    }},
+  };
+}
+
+
+inline constexpr CosmeticGiftRevokePayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        target_id_str_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gift_id_{::uint64_t{0u}},
+        sender_player_id_{::uint64_t{0u}},
+        target_kind_{0u},
+        target_id_u32_{0u} {}
+
+template <typename>
+constexpr CosmeticGiftRevokePayload::CosmeticGiftRevokePayload(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CosmeticGiftRevokePayload::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CosmeticGiftRevokePayload(arena);
+}
+constexpr auto CosmeticGiftRevokePayload::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CosmeticGiftRevokePayload), alignof(CosmeticGiftRevokePayload));
+}
+constexpr auto CosmeticGiftRevokePayload::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CosmeticGiftRevokePayload::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CosmeticGiftRevokePayload>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CosmeticGiftRevokePayload::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CosmeticGiftRevokePayload>(), &CosmeticGiftRevokePayload::ByteSizeLong,
+              &CosmeticGiftRevokePayload::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CosmeticGiftRevokePayloadGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CosmeticGiftRevokePayloadGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CosmeticGiftRevokePayload_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CosmeticGiftRevokePayload::InternalGenerateClassData_(
+            _default, &CosmeticGiftRevokePayload_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CosmeticGiftRevokePayload>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CosmeticGiftRevokePayloadGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CosmeticGiftRevokePayload _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CosmeticGiftRevokePayload>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayloadGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CosmeticGiftRevokePayloadGlobalsTypeInternal CosmeticGiftRevokePayload_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CosmeticGiftRevokePayload_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CosmeticGiftRevokePayload_globals_.GetClassData();
+#else
+  return CosmeticGiftRevokePayload_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CosmeticGiftRefundPayload::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CosmeticGiftRefundPayload>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_._has_bits_);
+};
+
+constexpr CosmeticGiftRefundPayload::ParseTableT_ CosmeticGiftRefundPayload::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::CosmeticGiftRefundPayload>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string reason = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.reason_)}},
+      // uint64 gift_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftRefundPayload, _impl_.gift_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.gift_id_)}},
+      // uint64 recipient_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftRefundPayload, _impl_.recipient_player_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.recipient_player_id_)}},
+      // uint64 refund_diamond = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftRefundPayload, _impl_.refund_diamond_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.refund_diamond_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 gift_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.gift_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 recipient_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.recipient_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 refund_diamond = 3;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.refund_diamond_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string reason = 4;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.reason_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\46\0\0\0\6\0\0\0"
+      "player_inbox.CosmeticGiftRefundPayload"
+      "reason"
+    }},
+  };
+}
+
+
+inline constexpr CosmeticGiftRefundPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        reason_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gift_id_{::uint64_t{0u}},
+        recipient_player_id_{::uint64_t{0u}},
+        refund_diamond_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr CosmeticGiftRefundPayload::CosmeticGiftRefundPayload(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CosmeticGiftRefundPayload::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CosmeticGiftRefundPayload(arena);
+}
+constexpr auto CosmeticGiftRefundPayload::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CosmeticGiftRefundPayload), alignof(CosmeticGiftRefundPayload));
+}
+constexpr auto CosmeticGiftRefundPayload::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CosmeticGiftRefundPayload::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CosmeticGiftRefundPayload>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CosmeticGiftRefundPayload::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CosmeticGiftRefundPayload>(), &CosmeticGiftRefundPayload::ByteSizeLong,
+              &CosmeticGiftRefundPayload::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CosmeticGiftRefundPayloadGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CosmeticGiftRefundPayloadGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CosmeticGiftRefundPayload_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CosmeticGiftRefundPayload::InternalGenerateClassData_(
+            _default, &CosmeticGiftRefundPayload_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CosmeticGiftRefundPayload>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CosmeticGiftRefundPayloadGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CosmeticGiftRefundPayload _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CosmeticGiftRefundPayload>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayloadGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CosmeticGiftRefundPayloadGlobalsTypeInternal CosmeticGiftRefundPayload_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CosmeticGiftRefundPayload_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CosmeticGiftRefundPayload_globals_.GetClassData();
+#else
+  return CosmeticGiftRefundPayload_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class CosmeticGiftCreditPayload::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CosmeticGiftCreditPayload>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_._has_bits_);
+};
+
+constexpr CosmeticGiftCreditPayload::ParseTableT_ CosmeticGiftCreditPayload::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_._has_bits_),
+      0, // no _extensions_
+      7, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967168,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      7,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::player_inbox::CosmeticGiftCreditPayload>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 gift_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftCreditPayload, _impl_.gift_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.gift_id_)}},
+      // uint64 sender_player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftCreditPayload, _impl_.sender_player_id_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.sender_player_id_)}},
+      // string sender_name = 3;
+      {::_pbi::TcParser::FastUS1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.sender_name_)}},
+      // uint32 target_kind = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CosmeticGiftCreditPayload, _impl_.target_kind_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.target_kind_)}},
+      // uint32 target_id_u32 = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(CosmeticGiftCreditPayload, _impl_.target_id_u32_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.target_id_u32_)}},
+      // string target_id_str = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 1, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.target_id_str_)}},
+      // uint64 paid_diamond = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(CosmeticGiftCreditPayload, _impl_.paid_diamond_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.paid_diamond_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 gift_id = 1;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.gift_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 sender_player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.sender_player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // string sender_name = 3;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.sender_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 target_kind = 4;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.target_kind_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 target_id_u32 = 5;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.target_id_u32_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string target_id_str = 6;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.target_id_str_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint64 paid_diamond = 7;
+      {PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.paid_diamond_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+      "\46\0\0\13\0\0\15\0"
+      "player_inbox.CosmeticGiftCreditPayload"
+      "sender_name"
+      "target_id_str"
+    }},
+  };
+}
+
+
+inline constexpr CosmeticGiftCreditPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        sender_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        target_id_str_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        gift_id_{::uint64_t{0u}},
+        sender_player_id_{::uint64_t{0u}},
+        target_kind_{0u},
+        target_id_u32_{0u},
+        paid_diamond_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr CosmeticGiftCreditPayload::CosmeticGiftCreditPayload(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CosmeticGiftCreditPayload::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CosmeticGiftCreditPayload(arena);
+}
+constexpr auto CosmeticGiftCreditPayload::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(CosmeticGiftCreditPayload), alignof(CosmeticGiftCreditPayload));
+}
+constexpr auto CosmeticGiftCreditPayload::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CosmeticGiftCreditPayload::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CosmeticGiftCreditPayload>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CosmeticGiftCreditPayload::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CosmeticGiftCreditPayload>(), &CosmeticGiftCreditPayload::ByteSizeLong,
+              &CosmeticGiftCreditPayload::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[5],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CosmeticGiftCreditPayloadGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CosmeticGiftCreditPayloadGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CosmeticGiftCreditPayload_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CosmeticGiftCreditPayload::InternalGenerateClassData_(
+            _default, &CosmeticGiftCreditPayload_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CosmeticGiftCreditPayload>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CosmeticGiftCreditPayloadGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CosmeticGiftCreditPayload _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CosmeticGiftCreditPayload>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayloadGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CosmeticGiftCreditPayloadGlobalsTypeInternal CosmeticGiftCreditPayload_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CosmeticGiftCreditPayload_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CosmeticGiftCreditPayload_globals_.GetClassData();
+#else
+  return CosmeticGiftCreditPayload_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class FetchPlayerInboxResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<FetchPlayerInboxResponse>()._impl_._has_bits_);
@@ -1496,7 +2047,7 @@ constexpr auto FetchPlayerInboxResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -1711,7 +2262,7 @@ constexpr auto FetchPlayerInboxRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -1919,7 +2470,7 @@ constexpr auto BattleSettlementInboxResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2116,7 +2667,7 @@ constexpr auto BattleSettlementInboxRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2309,7 +2860,7 @@ constexpr auto AckPlayerInboxResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2519,7 +3070,7 @@ constexpr auto AckPlayerInboxRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
@@ -2619,6 +3170,49 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::player_inbox::GmItemGainPayload, _impl_.item_config_id_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_._has_bits_),
+        10, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.gift_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.sender_player_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.sender_name_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.target_kind_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.target_id_u32_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.target_id_str_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftCreditPayload, _impl_.paid_diamond_),
+        2,
+        3,
+        0,
+        4,
+        5,
+        1,
+        6,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRefundPayload, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRefundPayload, _impl_.gift_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRefundPayload, _impl_.recipient_player_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRefundPayload, _impl_.refund_diamond_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRefundPayload, _impl_.reason_),
+        1,
+        2,
+        3,
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_.gift_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_.sender_player_id_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_.target_kind_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_.target_id_u32_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_.target_id_str_),
+        PROTOBUF_FIELD_OFFSET(::player_inbox::CosmeticGiftRevokePayload, _impl_.reason_),
+        2,
+        3,
+        4,
+        5,
+        0,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::player_inbox::BattleSettlementInboxRequest, _impl_._has_bits_),
         10, // hasbit index offset
@@ -2775,15 +3369,18 @@ static const ::_pbi::MigrationSchema
         {18, sizeof(::player_inbox::GmCurrencyGainPayload)},
         {23, sizeof(::player_inbox::GmCurrencyDebtPayload)},
         {36, sizeof(::player_inbox::GmItemGainPayload)},
-        {41, sizeof(::player_inbox::BattleSettlementInboxRequest)},
-        {58, sizeof(::player_inbox::BattleSettlementInboxResponse)},
-        {77, sizeof(::player_inbox::FetchPlayerInboxRequest)},
-        {98, sizeof(::player_inbox::PlayerInboxItem)},
-        {117, sizeof(::player_inbox::FetchPlayerInboxResponse)},
-        {134, sizeof(::player_inbox::PlayerInboxDecisionReport)},
-        {145, sizeof(::player_inbox::AckPlayerInboxRequest)},
-        {164, sizeof(::player_inbox::PlayerInboxAckItem)},
-        {173, sizeof(::player_inbox::AckPlayerInboxResponse)},
+        {41, sizeof(::player_inbox::CosmeticGiftCreditPayload)},
+        {58, sizeof(::player_inbox::CosmeticGiftRefundPayload)},
+        {69, sizeof(::player_inbox::CosmeticGiftRevokePayload)},
+        {84, sizeof(::player_inbox::BattleSettlementInboxRequest)},
+        {101, sizeof(::player_inbox::BattleSettlementInboxResponse)},
+        {120, sizeof(::player_inbox::FetchPlayerInboxRequest)},
+        {141, sizeof(::player_inbox::PlayerInboxItem)},
+        {160, sizeof(::player_inbox::FetchPlayerInboxResponse)},
+        {177, sizeof(::player_inbox::PlayerInboxDecisionReport)},
+        {188, sizeof(::player_inbox::AckPlayerInboxRequest)},
+        {207, sizeof(::player_inbox::PlayerInboxAckItem)},
+        {216, sizeof(::player_inbox::AckPlayerInboxResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2792,6 +3389,9 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::player_inbox::GmCurrencyGainPayload_globals_,
         &::player_inbox::GmCurrencyDebtPayload_globals_,
         &::player_inbox::GmItemGainPayload_globals_,
+        &::player_inbox::CosmeticGiftCreditPayload_globals_,
+        &::player_inbox::CosmeticGiftRefundPayload_globals_,
+        &::player_inbox::CosmeticGiftRevokePayload_globals_,
         &::player_inbox::BattleSettlementInboxRequest_globals_,
         &::player_inbox::BattleSettlementInboxResponse_globals_,
         &::player_inbox::FetchPlayerInboxRequest_globals_,
@@ -2820,139 +3420,160 @@ const char descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_2ep
     "ad\022\025\n\rcurrency_type\030\001 \001(\r\022\022\n\nowe_amount\030"
     "\002 \001(\004\022\016\n\006reason\030\003 \001(\t\022\023\n\013gm_operator\030\004 \001"
     "(\t\022\022\n\nexpires_at\030\005 \001(\004\"+\n\021GmItemGainPayl"
-    "oad\022\026\n\016item_config_id\030\001 \001(\r\"\343\001\n\034BattleSe"
-    "ttlementInboxRequest\022\021\n\tplayer_id\030\001 \001(\004\022"
-    "\021\n\tbattle_id\030\002 \001(\004\022\036\n\026expected_owner_acc"
-    "ount\030\003 \001(\t\022\037\n\027expected_owner_revision\030\004 "
-    "\001(\004\022\024\n\014issued_at_ms\030\005 \001(\004\022\032\n\022settlement_"
-    "payload\030\006 \001(\014\022*\n\004auth\030\007 \001(\0132\034.common.bas"
-    "e.ServiceCallAuth\"\211\002\n\035BattleSettlementIn"
-    "boxResponse\022&\n\rerror_message\030\001 \001(\0132\017.Tip"
-    "InfoMessage\022\021\n\tplayer_id\030\002 \001(\004\022\021\n\tbattle"
-    "_id\030\003 \001(\004\022\013\n\003seq\030\004 \001(\004\0221\n\005state\030\005 \001(\0162\"."
-    "player_inbox.PlayerInboxItemState\022\026\n\016con"
-    "tent_sha256\030\006 \001(\014\022\026\n\016request_digest\030\007 \001("
-    "\t\022*\n\004auth\030\010 \001(\0132\034.common.base.ServiceCal"
-    "lAuth\"\271\002\n\027FetchPlayerInboxRequest\022\021\n\tpla"
-    "yer_id\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.player_in"
-    "box.PlayerInboxDomain\022\023\n\013owner_epoch\030\003 \001"
-    "(\004\022\026\n\016correlation_id\030\004 \001(\004\022\021\n\tmax_items\030"
-    "\005 \001(\r\022 \n\030consumer_decided_through\030\006 \001(\004\022"
-    "\025\n\rscene_node_id\030\007 \001(\r\0225\n\tadmission\030\010 \001("
-    "\0132\".common.base.RoleAdmissionIdentity\022*\n"
-    "\004auth\030\t \001(\0132\034.common.base.ServiceCallAut"
-    "h\"\230\002\n\017PlayerInboxItem\022\013\n\003seq\030\001 \001(\004\0226\n\010ms"
-    "g_type\030\002 \001(\0162$.player_inbox.PlayerInboxM"
-    "essageType\022\017\n\007payload\030\003 \001(\014\0225\n\tdirective"
-    "\030\004 \001(\0162\".player_inbox.PlayerInboxDirecti"
-    "ve\0228\n\013void_reason\030\005 \001(\0162#.player_inbox.P"
-    "layerInboxVoidReason\022\022\n\nrequest_id\030\006 \001(\004"
-    "\022\026\n\016delivery_count\030\007 \001(\r\022\022\n\ncreated_ms\030\010"
-    " \001(\004\"\224\002\n\030FetchPlayerInboxResponse\022&\n\rerr"
+    "oad\022\026\n\016item_config_id\030\001 \001(\r\"\264\001\n\031Cosmetic"
+    "GiftCreditPayload\022\017\n\007gift_id\030\001 \001(\004\022\030\n\020se"
+    "nder_player_id\030\002 \001(\004\022\023\n\013sender_name\030\003 \001("
+    "\t\022\023\n\013target_kind\030\004 \001(\r\022\025\n\rtarget_id_u32\030"
+    "\005 \001(\r\022\025\n\rtarget_id_str\030\006 \001(\t\022\024\n\014paid_dia"
+    "mond\030\007 \001(\004\"q\n\031CosmeticGiftRefundPayload\022"
+    "\017\n\007gift_id\030\001 \001(\004\022\033\n\023recipient_player_id\030"
+    "\002 \001(\004\022\026\n\016refund_diamond\030\003 \001(\004\022\016\n\006reason\030"
+    "\004 \001(\t\"\231\001\n\031CosmeticGiftRevokePayload\022\017\n\007g"
+    "ift_id\030\001 \001(\004\022\030\n\020sender_player_id\030\002 \001(\004\022\023"
+    "\n\013target_kind\030\003 \001(\r\022\025\n\rtarget_id_u32\030\004 \001"
+    "(\r\022\025\n\rtarget_id_str\030\005 \001(\t\022\016\n\006reason\030\006 \001("
+    "\t\"\343\001\n\034BattleSettlementInboxRequest\022\021\n\tpl"
+    "ayer_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\022\036\n\026expe"
+    "cted_owner_account\030\003 \001(\t\022\037\n\027expected_own"
+    "er_revision\030\004 \001(\004\022\024\n\014issued_at_ms\030\005 \001(\004\022"
+    "\032\n\022settlement_payload\030\006 \001(\014\022*\n\004auth\030\007 \001("
+    "\0132\034.common.base.ServiceCallAuth\"\211\002\n\035Batt"
+    "leSettlementInboxResponse\022&\n\rerror_messa"
+    "ge\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tplayer_id\030\002"
+    " \001(\004\022\021\n\tbattle_id\030\003 \001(\004\022\013\n\003seq\030\004 \001(\004\0221\n\005"
+    "state\030\005 \001(\0162\".player_inbox.PlayerInboxIt"
+    "emState\022\026\n\016content_sha256\030\006 \001(\014\022\026\n\016reque"
+    "st_digest\030\007 \001(\t\022*\n\004auth\030\010 \001(\0132\034.common.b"
+    "ase.ServiceCallAuth\"\271\002\n\027FetchPlayerInbox"
+    "Request\022\021\n\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 \001"
+    "(\0162\037.player_inbox.PlayerInboxDomain\022\023\n\013o"
+    "wner_epoch\030\003 \001(\004\022\026\n\016correlation_id\030\004 \001(\004"
+    "\022\021\n\tmax_items\030\005 \001(\r\022 \n\030consumer_decided_"
+    "through\030\006 \001(\004\022\025\n\rscene_node_id\030\007 \001(\r\0225\n\t"
+    "admission\030\010 \001(\0132\".common.base.RoleAdmiss"
+    "ionIdentity\022*\n\004auth\030\t \001(\0132\034.common.base."
+    "ServiceCallAuth\"\230\002\n\017PlayerInboxItem\022\013\n\003s"
+    "eq\030\001 \001(\004\0226\n\010msg_type\030\002 \001(\0162$.player_inbo"
+    "x.PlayerInboxMessageType\022\017\n\007payload\030\003 \001("
+    "\014\0225\n\tdirective\030\004 \001(\0162\".player_inbox.Play"
+    "erInboxDirective\0228\n\013void_reason\030\005 \001(\0162#."
+    "player_inbox.PlayerInboxVoidReason\022\022\n\nre"
+    "quest_id\030\006 \001(\004\022\026\n\016delivery_count\030\007 \001(\r\022\022"
+    "\n\ncreated_ms\030\010 \001(\004\"\224\002\n\030FetchPlayerInboxR"
+    "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
+    "Message\022\021\n\tplayer_id\030\002 \001(\004\022/\n\006domain\030\003 \001"
+    "(\0162\037.player_inbox.PlayerInboxDomain\022\026\n\016c"
+    "orrelation_id\030\004 \001(\004\0224\n\005fence\030\005 \001(\0162%.pla"
+    "yer_inbox.PlayerInboxFenceVerdict\022,\n\005ite"
+    "ms\030\006 \003(\0132\035.player_inbox.PlayerInboxItem\022"
+    "\020\n\010has_more\030\007 \001(\010\"\177\n\031PlayerInboxDecision"
+    "Report\022\013\n\003seq\030\001 \001(\004\0221\n\007outcome\030\002 \001(\0162 .p"
+    "layer_inbox.PlayerInboxOutcome\022\016\n\006reason"
+    "\030\003 \001(\r\022\022\n\nrequest_id\030\004 \001(\004\"\276\002\n\025AckPlayer"
+    "InboxRequest\022\021\n\tplayer_id\030\001 \001(\004\022/\n\006domai"
+    "n\030\002 \001(\0162\037.player_inbox.PlayerInboxDomain"
+    "\022\023\n\013owner_epoch\030\003 \001(\004\022\026\n\016correlation_id\030"
+    "\004 \001(\004\022:\n\tdecisions\030\005 \003(\0132\'.player_inbox."
+    "PlayerInboxDecisionReport\022\025\n\rscene_node_"
+    "id\030\006 \001(\r\0225\n\tadmission\030\007 \001(\0132\".common.bas"
+    "e.RoleAdmissionIdentity\022*\n\004auth\030\010 \001(\0132\034."
+    "common.base.ServiceCallAuth\"\210\001\n\022PlayerIn"
+    "boxAckItem\022\013\n\003seq\030\001 \001(\004\0222\n\006result\030\002 \001(\0162"
+    "\".player_inbox.PlayerInboxAckResult\0221\n\005s"
+    "tate\030\003 \001(\0162\".player_inbox.PlayerInboxIte"
+    "mState\"\205\002\n\026AckPlayerInboxResponse\022&\n\rerr"
     "or_message\030\001 \001(\0132\017.TipInfoMessage\022\021\n\tpla"
     "yer_id\030\002 \001(\004\022/\n\006domain\030\003 \001(\0162\037.player_in"
     "box.PlayerInboxDomain\022\026\n\016correlation_id\030"
     "\004 \001(\004\0224\n\005fence\030\005 \001(\0162%.player_inbox.Play"
-    "erInboxFenceVerdict\022,\n\005items\030\006 \003(\0132\035.pla"
-    "yer_inbox.PlayerInboxItem\022\020\n\010has_more\030\007 "
-    "\001(\010\"\177\n\031PlayerInboxDecisionReport\022\013\n\003seq\030"
-    "\001 \001(\004\0221\n\007outcome\030\002 \001(\0162 .player_inbox.Pl"
-    "ayerInboxOutcome\022\016\n\006reason\030\003 \001(\r\022\022\n\nrequ"
-    "est_id\030\004 \001(\004\"\276\002\n\025AckPlayerInboxRequest\022\021"
-    "\n\tplayer_id\030\001 \001(\004\022/\n\006domain\030\002 \001(\0162\037.play"
-    "er_inbox.PlayerInboxDomain\022\023\n\013owner_epoc"
-    "h\030\003 \001(\004\022\026\n\016correlation_id\030\004 \001(\004\022:\n\tdecis"
-    "ions\030\005 \003(\0132\'.player_inbox.PlayerInboxDec"
-    "isionReport\022\025\n\rscene_node_id\030\006 \001(\r\0225\n\tad"
-    "mission\030\007 \001(\0132\".common.base.RoleAdmissio"
-    "nIdentity\022*\n\004auth\030\010 \001(\0132\034.common.base.Se"
-    "rviceCallAuth\"\210\001\n\022PlayerInboxAckItem\022\013\n\003"
-    "seq\030\001 \001(\004\0222\n\006result\030\002 \001(\0162\".player_inbox"
-    ".PlayerInboxAckResult\0221\n\005state\030\003 \001(\0162\".p"
-    "layer_inbox.PlayerInboxItemState\"\205\002\n\026Ack"
-    "PlayerInboxResponse\022&\n\rerror_message\030\001 \001"
-    "(\0132\017.TipInfoMessage\022\021\n\tplayer_id\030\002 \001(\004\022/"
-    "\n\006domain\030\003 \001(\0162\037.player_inbox.PlayerInbo"
-    "xDomain\022\026\n\016correlation_id\030\004 \001(\004\0224\n\005fence"
-    "\030\005 \001(\0162%.player_inbox.PlayerInboxFenceVe"
-    "rdict\0221\n\007results\030\006 \003(\0132 .player_inbox.Pl"
-    "ayerInboxAckItem*V\n\020PlayerInboxClass\022\"\n\036"
-    "PLAYER_INBOX_CLASS_UNSPECIFIED\020\000\022\036\n\032PLAY"
-    "ER_INBOX_CLASS_DURABLE\020\001*\177\n\027PlayerInboxP"
-    "roducerKind\022%\n!PLAYER_INBOX_PRODUCER_UNS"
-    "PECIFIED\020\000\022\034\n\030PLAYER_INBOX_PRODUCER_GM\020\001"
-    "\022\037\n\033PLAYER_INBOX_PRODUCER_MATCH\020\002*\250\001\n\021Pl"
-    "ayerInboxDomain\022#\n\037PLAYER_INBOX_DOMAIN_U"
-    "NSPECIFIED\020\000\0224\n%PLAYER_INBOX_DOMAIN_SCEN"
-    "E_GM_SANCTION\020\001\032\t\212\212\315\001\004\010@\020\001\0228\n+PLAYER_INB"
-    "OX_DOMAIN_SCENE_BATTLE_SETTLEMENT\020\002\032\007\212\212\315"
-    "\001\002\010\001*\323\004\n\026PlayerInboxMessageType\022 \n\034PLAYE"
-    "R_INBOX_MSG_UNSPECIFIED\020\000\022\\\n\'PLAYER_INBO"
-    "X_MSG_GM_BLOCK_CURRENCY_GAIN\020\001\032/\222\212\315\001*\010\001\020"
+    "erInboxFenceVerdict\0221\n\007results\030\006 \003(\0132 .p"
+    "layer_inbox.PlayerInboxAckItem*V\n\020Player"
+    "InboxClass\022\"\n\036PLAYER_INBOX_CLASS_UNSPECI"
+    "FIED\020\000\022\036\n\032PLAYER_INBOX_CLASS_DURABLE\020\001*\240"
+    "\001\n\027PlayerInboxProducerKind\022%\n!PLAYER_INB"
+    "OX_PRODUCER_UNSPECIFIED\020\000\022\034\n\030PLAYER_INBO"
+    "X_PRODUCER_GM\020\001\022\037\n\033PLAYER_INBOX_PRODUCER"
+    "_MATCH\020\002\022\037\n\033PLAYER_INBOX_PRODUCER_SCENE\020"
+    "\003*\340\001\n\021PlayerInboxDomain\022#\n\037PLAYER_INBOX_"
+    "DOMAIN_UNSPECIFIED\020\000\0224\n%PLAYER_INBOX_DOM"
+    "AIN_SCENE_GM_SANCTION\020\001\032\t\212\212\315\001\004\010@\020\001\0228\n+PL"
+    "AYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMEN"
+    "T\020\002\032\007\212\212\315\001\002\010\001\0226\n\'PLAYER_INBOX_DOMAIN_SCEN"
+    "E_COSMETIC_GIFT\020\003\032\t\212\212\315\001\004\010@\020\001*\366\006\n\026PlayerI"
+    "nboxMessageType\022 \n\034PLAYER_INBOX_MSG_UNSP"
+    "ECIFIED\020\000\022\\\n\'PLAYER_INBOX_MSG_GM_BLOCK_C"
+    "URRENCY_GAIN\020\001\032/\222\212\315\001*\010\001\020\001\032\"player_inbox."
+    "GmCurrencyGainPayload @\022^\n)PLAYER_INBOX_"
+    "MSG_GM_UNBLOCK_CURRENCY_GAIN\020\002\032/\222\212\315\001*\010\001\020"
     "\001\032\"player_inbox.GmCurrencyGainPayload @\022"
-    "^\n)PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_"
-    "GAIN\020\002\032/\222\212\315\001*\010\001\020\001\032\"player_inbox.GmCurren"
-    "cyGainPayload @\022^\n(PLAYER_INBOX_MSG_GM_A"
-    "TTACH_CURRENCY_DEBT\020\003\0320\222\212\315\001+\010\001\020\001\032\"player"
-    "_inbox.GmCurrencyDebtPayload \200\010\022K\n\"PLAYE"
-    "R_INBOX_MSG_BATTLE_SETTLEMENT\020\004\032#\222\212\315\001\036\010\002"
-    "\020\001\032\024BattleSettlementData \200\200\001\022T\n#PLAYER_I"
-    "NBOX_MSG_GM_BLOCK_ITEM_GAIN\020\005\032+\222\212\315\001&\010\001\020\001"
-    "\032\036player_inbox.GmItemGainPayload @\022V\n%PL"
-    "AYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN\020\006\032+\222"
-    "\212\315\001&\010\001\020\001\032\036player_inbox.GmItemGainPayload"
-    " @*\334\001\n\024PlayerInboxItemState\022!\n\035PLAYER_IN"
-    "BOX_ITEM_UNSPECIFIED\020\000\022\035\n\031PLAYER_INBOX_I"
-    "TEM_PENDING\020\001\022\035\n\031PLAYER_INBOX_ITEM_APPLI"
-    "ED\020\002\022\036\n\032PLAYER_INBOX_ITEM_REJECTED\020\003\022\034\n\030"
-    "PLAYER_INBOX_ITEM_VOIDED\020\004\022%\n!PLAYER_INB"
-    "OX_ITEM_SETTLED_UNKNOWN\020\005*X\n\024PlayerInbox"
-    "Directive\022\037\n\033PLAYER_INBOX_DIRECTIVE_NONE"
-    "\020\000\022\037\n\033PLAYER_INBOX_DIRECTIVE_VOID\020\001*~\n\025P"
-    "layerInboxVoidReason\022!\n\035PLAYER_INBOX_VOI"
-    "D_UNSPECIFIED\020\000\022\037\n\033PLAYER_INBOX_VOID_CAN"
-    "CELLED\020\001\022!\n\035PLAYER_INBOX_VOID_QUARANTINE"
-    "D\020\002*\205\001\n\024PlayerInboxFinalizer\022&\n\"PLAYER_I"
-    "NBOX_FINALIZER_UNSPECIFIED\020\000\022#\n\037PLAYER_I"
-    "NBOX_FINALIZER_CONSUMER\020\001\022 \n\034PLAYER_INBO"
-    "X_FINALIZER_ADMIN\020\002*\303\001\n\022PlayerInboxOutco"
-    "me\022$\n PLAYER_INBOX_OUTCOME_UNSPECIFIED\020\000"
-    "\022 \n\034PLAYER_INBOX_OUTCOME_APPLIED\020\001\022!\n\035PL"
-    "AYER_INBOX_OUTCOME_REJECTED\020\002\022 \n\034PLAYER_"
-    "INBOX_OUTCOME_SKIPPED\020\003\022 \n\034PLAYER_INBOX_"
-    "OUTCOME_UNKNOWN\020\004*\244\002\n\027PlayerInboxFenceVe"
-    "rdict\022\"\n\036PLAYER_INBOX_FENCE_UNSPECIFIED\020"
-    "\000\022 \n\034PLAYER_INBOX_FENCE_NO_STREAM\020\001\022\034\n\030P"
-    "LAYER_INBOX_FENCE_FIRST\020\002\022\034\n\030PLAYER_INBO"
-    "X_FENCE_MATCH\020\003\022\036\n\032PLAYER_INBOX_FENCE_AD"
-    "VANCE\020\004\022\034\n\030PLAYER_INBOX_FENCE_STALE\020\005\022%\n"
-    "!PLAYER_INBOX_FENCE_EPOCH_REQUIRED\020\006\022\"\n\036"
-    "PLAYER_INBOX_FENCE_EPOCH_AHEAD\020\007*\250\002\n\024Pla"
-    "yerInboxAckResult\022 \n\034PLAYER_INBOX_ACK_UN"
-    "SPECIFIED\020\000\022\036\n\032PLAYER_INBOX_ACK_FINALIZE"
-    "D\020\001\022!\n\035PLAYER_INBOX_ACK_ALREADY_SAME\020\002\022\035"
-    "\n\031PLAYER_INBOX_ACK_CONFLICT\020\003\022 \n\034PLAYER_"
-    "INBOX_ACK_UNKNOWN_SEQ\020\004\022\"\n\036PLAYER_INBOX_"
-    "ACK_NOT_DELIVERED\020\005\022\'\n#PLAYER_INBOX_ACK_"
-    "SKIP_NOT_REQUESTED\020\006\022\035\n\031PLAYER_INBOX_ACK"
-    "_MISMATCH\020\0072\254\003\n\013PlayerInbox\022]\n\nFetchItem"
-    "s\022%.player_inbox.FetchPlayerInboxRequest"
-    "\032&.player_inbox.FetchPlayerInboxResponse"
-    "\"\000\022W\n\010AckItems\022#.player_inbox.AckPlayerI"
-    "nboxRequest\032$.player_inbox.AckPlayerInbo"
-    "xResponse\"\000\022r\n\027EnqueueBattleSettlement\022*"
-    ".player_inbox.BattleSettlementInboxReque"
-    "st\032+.player_inbox.BattleSettlementInboxR"
-    "esponse\022q\n\026LookupBattleSettlement\022*.play"
+    "^\n(PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_D"
+    "EBT\020\003\0320\222\212\315\001+\010\001\020\001\032\"player_inbox.GmCurrenc"
+    "yDebtPayload \200\010\022K\n\"PLAYER_INBOX_MSG_BATT"
+    "LE_SETTLEMENT\020\004\032#\222\212\315\001\036\010\002\020\001\032\024BattleSettle"
+    "mentData \200\200\001\022T\n#PLAYER_INBOX_MSG_GM_BLOC"
+    "K_ITEM_GAIN\020\005\032+\222\212\315\001&\010\001\020\001\032\036player_inbox.G"
+    "mItemGainPayload @\022V\n%PLAYER_INBOX_MSG_G"
+    "M_UNBLOCK_ITEM_GAIN\020\006\032+\222\212\315\001&\010\001\020\001\032\036player"
+    "_inbox.GmItemGainPayload @\022_\n%PLAYER_INB"
+    "OX_MSG_COSMETIC_GIFT_CREDIT\020\007\0324\222\212\315\001/\010\003\020\001"
+    "\032&player_inbox.CosmeticGiftCreditPayload"
+    " \200\004\022_\n%PLAYER_INBOX_MSG_COSMETIC_GIFT_RE"
+    "FUND\020\010\0324\222\212\315\001/\010\003\020\001\032&player_inbox.Cosmetic"
+    "GiftRefundPayload \200\004\022_\n%PLAYER_INBOX_MSG"
+    "_COSMETIC_GIFT_REVOKE\020\t\0324\222\212\315\001/\010\001\020\001\032&play"
+    "er_inbox.CosmeticGiftRevokePayload \200\004*\334\001"
+    "\n\024PlayerInboxItemState\022!\n\035PLAYER_INBOX_I"
+    "TEM_UNSPECIFIED\020\000\022\035\n\031PLAYER_INBOX_ITEM_P"
+    "ENDING\020\001\022\035\n\031PLAYER_INBOX_ITEM_APPLIED\020\002\022"
+    "\036\n\032PLAYER_INBOX_ITEM_REJECTED\020\003\022\034\n\030PLAYE"
+    "R_INBOX_ITEM_VOIDED\020\004\022%\n!PLAYER_INBOX_IT"
+    "EM_SETTLED_UNKNOWN\020\005*X\n\024PlayerInboxDirec"
+    "tive\022\037\n\033PLAYER_INBOX_DIRECTIVE_NONE\020\000\022\037\n"
+    "\033PLAYER_INBOX_DIRECTIVE_VOID\020\001*~\n\025Player"
+    "InboxVoidReason\022!\n\035PLAYER_INBOX_VOID_UNS"
+    "PECIFIED\020\000\022\037\n\033PLAYER_INBOX_VOID_CANCELLE"
+    "D\020\001\022!\n\035PLAYER_INBOX_VOID_QUARANTINED\020\002*\205"
+    "\001\n\024PlayerInboxFinalizer\022&\n\"PLAYER_INBOX_"
+    "FINALIZER_UNSPECIFIED\020\000\022#\n\037PLAYER_INBOX_"
+    "FINALIZER_CONSUMER\020\001\022 \n\034PLAYER_INBOX_FIN"
+    "ALIZER_ADMIN\020\002*\303\001\n\022PlayerInboxOutcome\022$\n"
+    " PLAYER_INBOX_OUTCOME_UNSPECIFIED\020\000\022 \n\034P"
+    "LAYER_INBOX_OUTCOME_APPLIED\020\001\022!\n\035PLAYER_"
+    "INBOX_OUTCOME_REJECTED\020\002\022 \n\034PLAYER_INBOX"
+    "_OUTCOME_SKIPPED\020\003\022 \n\034PLAYER_INBOX_OUTCO"
+    "ME_UNKNOWN\020\004*\244\002\n\027PlayerInboxFenceVerdict"
+    "\022\"\n\036PLAYER_INBOX_FENCE_UNSPECIFIED\020\000\022 \n\034"
+    "PLAYER_INBOX_FENCE_NO_STREAM\020\001\022\034\n\030PLAYER"
+    "_INBOX_FENCE_FIRST\020\002\022\034\n\030PLAYER_INBOX_FEN"
+    "CE_MATCH\020\003\022\036\n\032PLAYER_INBOX_FENCE_ADVANCE"
+    "\020\004\022\034\n\030PLAYER_INBOX_FENCE_STALE\020\005\022%\n!PLAY"
+    "ER_INBOX_FENCE_EPOCH_REQUIRED\020\006\022\"\n\036PLAYE"
+    "R_INBOX_FENCE_EPOCH_AHEAD\020\007*\250\002\n\024PlayerIn"
+    "boxAckResult\022 \n\034PLAYER_INBOX_ACK_UNSPECI"
+    "FIED\020\000\022\036\n\032PLAYER_INBOX_ACK_FINALIZED\020\001\022!"
+    "\n\035PLAYER_INBOX_ACK_ALREADY_SAME\020\002\022\035\n\031PLA"
+    "YER_INBOX_ACK_CONFLICT\020\003\022 \n\034PLAYER_INBOX"
+    "_ACK_UNKNOWN_SEQ\020\004\022\"\n\036PLAYER_INBOX_ACK_N"
+    "OT_DELIVERED\020\005\022\'\n#PLAYER_INBOX_ACK_SKIP_"
+    "NOT_REQUESTED\020\006\022\035\n\031PLAYER_INBOX_ACK_MISM"
+    "ATCH\020\0072\254\003\n\013PlayerInbox\022]\n\nFetchItems\022%.p"
+    "layer_inbox.FetchPlayerInboxRequest\032&.pl"
+    "ayer_inbox.FetchPlayerInboxResponse\"\000\022W\n"
+    "\010AckItems\022#.player_inbox.AckPlayerInboxR"
+    "equest\032$.player_inbox.AckPlayerInboxResp"
+    "onse\"\000\022r\n\027EnqueueBattleSettlement\022*.play"
     "er_inbox.BattleSettlementInboxRequest\032+."
     "player_inbox.BattleSettlementInboxRespon"
-    "se:i\n\027OptionPlayerInboxDomain\022!.google.p"
-    "rotobuf.EnumValueOptions\030\241\321\031 \001(\0132#.playe"
-    "r_inbox.PlayerInboxDomainSpec:e\n\025OptionP"
-    "layerInboxType\022!.google.protobuf.EnumVal"
-    "ueOptions\030\242\321\031 \001(\0132!.player_inbox.PlayerI"
-    "nboxTypeSpecB\036Z\031player_inbox/player_inbo"
-    "x\200\001\000b\006proto3"
+    "se\022q\n\026LookupBattleSettlement\022*.player_in"
+    "box.BattleSettlementInboxRequest\032+.playe"
+    "r_inbox.BattleSettlementInboxResponse:i\n"
+    "\027OptionPlayerInboxDomain\022!.google.protob"
+    "uf.EnumValueOptions\030\241\321\031 \001(\0132#.player_inb"
+    "ox.PlayerInboxDomainSpec:e\n\025OptionPlayer"
+    "InboxType\022!.google.protobuf.EnumValueOpt"
+    "ions\030\242\321\031 \001(\0132!.player_inbox.PlayerInboxT"
+    "ypeSpecB\036Z\031player_inbox/player_inbox\200\001\000b"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto_deps[4] = {
@@ -2965,13 +3586,13 @@ static ::absl::once_flag descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbo
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto = {
     false,
     false,
-    5932,
+    6767,
     descriptor_table_protodef_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto,
     "proto/player_inbox/player_inbox.proto",
     &descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto_once,
     descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto_deps,
     4,
-    14,
+    17,
     schemas,
     file_message_globals,
     TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto::offsets,
@@ -2992,21 +3613,21 @@ PlayerInboxProducerKind_descriptor() {
   return file_level_enum_descriptors_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto[1];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerInboxProducerKind_internal_data_[] = {
-    196608u, 0u, };
+    262144u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxDomain_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto);
   return file_level_enum_descriptors_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto[2];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerInboxDomain_internal_data_[] = {
-    196608u, 0u, };
+    262144u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxMessageType_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto);
   return file_level_enum_descriptors_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto[3];
 }
 PROTOBUF_CONSTINIT const uint32_t PlayerInboxMessageType_internal_data_[] = {
-    458752u, 0u, };
+    655360u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxItemState_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto);
@@ -4302,6 +4923,1051 @@ void GmItemGainPayload::InternalSwap(GmItemGainPayload* PROTOBUF_RESTRICT PROTOB
 }
 
 ::google::protobuf::Metadata GmItemGainPayload::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CosmeticGiftCreditPayload::CosmeticGiftCreditPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CosmeticGiftCreditPayload_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.CosmeticGiftCreditPayload)
+}
+PROTOBUF_NDEBUG_INLINE CosmeticGiftCreditPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::player_inbox::CosmeticGiftCreditPayload& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        sender_name_(arena, from.sender_name_),
+        target_id_str_(arena, from.target_id_str_) {}
+
+CosmeticGiftCreditPayload::CosmeticGiftCreditPayload(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CosmeticGiftCreditPayload& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CosmeticGiftCreditPayload_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CosmeticGiftCreditPayload* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gift_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, gift_id_),
+           offsetof(Impl_, paid_diamond_) -
+               offsetof(Impl_, gift_id_) +
+               sizeof(Impl_::paid_diamond_));
+
+  // @@protoc_insertion_point(copy_constructor:player_inbox.CosmeticGiftCreditPayload)
+}
+PROTOBUF_NDEBUG_INLINE CosmeticGiftCreditPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        sender_name_(arena),
+        target_id_str_(arena) {}
+
+inline void CosmeticGiftCreditPayload::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gift_id_),
+           0,
+           offsetof(Impl_, paid_diamond_) -
+               offsetof(Impl_, gift_id_) +
+               sizeof(Impl_::paid_diamond_));
+}
+CosmeticGiftCreditPayload::~CosmeticGiftCreditPayload() {
+  // @@protoc_insertion_point(destructor:player_inbox.CosmeticGiftCreditPayload)
+  SharedDtor(*this);
+}
+inline void CosmeticGiftCreditPayload::SharedDtor(MessageLite& self) {
+  CosmeticGiftCreditPayload& this_ = static_cast<CosmeticGiftCreditPayload&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.sender_name_.Destroy();
+  this_._impl_.target_id_str_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CosmeticGiftCreditPayload_class_data_ =
+        CosmeticGiftCreditPayload::InternalGenerateClassData_(CosmeticGiftCreditPayload_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CosmeticGiftCreditPayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CosmeticGiftCreditPayload_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CosmeticGiftCreditPayload_class_data_.tc_table);
+  return CosmeticGiftCreditPayload_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CosmeticGiftCreditPayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CosmeticGiftCreditPayload_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CosmeticGiftCreditPayload_globals_));
+  return CosmeticGiftCreditPayload_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CosmeticGiftCreditPayload::ParseTableT_
+    CosmeticGiftCreditPayload::_table_ =
+        CosmeticGiftCreditPayload::InternalGenerateParseTable_(CosmeticGiftCreditPayload_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CosmeticGiftCreditPayload::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.CosmeticGiftCreditPayload)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.sender_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.target_id_str_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
+    ::memset(&_impl_.gift_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.paid_diamond_) -
+        reinterpret_cast<char*>(&_impl_.gift_id_)) + sizeof(_impl_.paid_diamond_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CosmeticGiftCreditPayload::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CosmeticGiftCreditPayload& this_ = static_cast<const CosmeticGiftCreditPayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CosmeticGiftCreditPayload::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CosmeticGiftCreditPayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.CosmeticGiftCreditPayload)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 gift_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_gift_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_gift_id(), target);
+    }
+  }
+
+  // uint64 sender_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_sender_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_sender_player_id(), target);
+    }
+  }
+
+  // string sender_name = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_sender_name().empty()) {
+      const ::std::string& _s = this_._internal_sender_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.CosmeticGiftCreditPayload.sender_name");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  // uint32 target_kind = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_target_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_target_kind(), target);
+    }
+  }
+
+  // uint32 target_id_u32 = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_target_id_u32() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_target_id_u32(), target);
+    }
+  }
+
+  // string target_id_str = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_target_id_str().empty()) {
+      const ::std::string& _s = this_._internal_target_id_str();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.CosmeticGiftCreditPayload.target_id_str");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  // uint64 paid_diamond = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_paid_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_paid_diamond(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.CosmeticGiftCreditPayload)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CosmeticGiftCreditPayload::ByteSizeLong(const MessageLite& base) {
+  const CosmeticGiftCreditPayload& this_ = static_cast<const CosmeticGiftCreditPayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CosmeticGiftCreditPayload::ByteSizeLong() const {
+  const CosmeticGiftCreditPayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.CosmeticGiftCreditPayload)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    // string sender_name = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_sender_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_sender_name());
+      }
+    }
+    // string target_id_str = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_target_id_str().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_id_str());
+      }
+    }
+    // uint64 gift_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_gift_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gift_id());
+      }
+    }
+    // uint64 sender_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_sender_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_sender_player_id());
+      }
+    }
+    // uint32 target_kind = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_target_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_kind());
+      }
+    }
+    // uint32 target_id_u32 = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_target_id_u32() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_id_u32());
+      }
+    }
+    // uint64 paid_diamond = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_paid_diamond() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_paid_diamond());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CosmeticGiftCreditPayload::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CosmeticGiftCreditPayload*>(&to_msg);
+  auto& from = static_cast<const CosmeticGiftCreditPayload&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.CosmeticGiftCreditPayload)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_sender_name().empty()) {
+        _this->_internal_set_sender_name(from._internal_sender_name());
+      } else {
+        if (_this->_impl_.sender_name_.IsDefault()) {
+          _this->_internal_set_sender_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_target_id_str().empty()) {
+        _this->_internal_set_target_id_str(from._internal_target_id_str());
+      } else {
+        if (_this->_impl_.target_id_str_.IsDefault()) {
+          _this->_internal_set_target_id_str("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_gift_id() != 0) {
+        _this->_impl_.gift_id_ = from._impl_.gift_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_sender_player_id() != 0) {
+        _this->_impl_.sender_player_id_ = from._impl_.sender_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_target_kind() != 0) {
+        _this->_impl_.target_kind_ = from._impl_.target_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_target_id_u32() != 0) {
+        _this->_impl_.target_id_u32_ = from._impl_.target_id_u32_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_paid_diamond() != 0) {
+        _this->_impl_.paid_diamond_ = from._impl_.paid_diamond_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CosmeticGiftCreditPayload::CopyFrom(const CosmeticGiftCreditPayload& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.CosmeticGiftCreditPayload)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CosmeticGiftCreditPayload::InternalSwap(CosmeticGiftCreditPayload* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.sender_name_, &other->_impl_.sender_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_id_str_, &other->_impl_.target_id_str_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.paid_diamond_)
+      + sizeof(CosmeticGiftCreditPayload::_impl_.paid_diamond_)
+      - PROTOBUF_FIELD_OFFSET(CosmeticGiftCreditPayload, _impl_.gift_id_)>(
+          reinterpret_cast<char*>(&_impl_.gift_id_),
+          reinterpret_cast<char*>(&other->_impl_.gift_id_));
+}
+
+::google::protobuf::Metadata CosmeticGiftCreditPayload::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CosmeticGiftRefundPayload::CosmeticGiftRefundPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CosmeticGiftRefundPayload_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.CosmeticGiftRefundPayload)
+}
+PROTOBUF_NDEBUG_INLINE CosmeticGiftRefundPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::player_inbox::CosmeticGiftRefundPayload& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        reason_(arena, from.reason_) {}
+
+CosmeticGiftRefundPayload::CosmeticGiftRefundPayload(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CosmeticGiftRefundPayload& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CosmeticGiftRefundPayload_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CosmeticGiftRefundPayload* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gift_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, gift_id_),
+           offsetof(Impl_, refund_diamond_) -
+               offsetof(Impl_, gift_id_) +
+               sizeof(Impl_::refund_diamond_));
+
+  // @@protoc_insertion_point(copy_constructor:player_inbox.CosmeticGiftRefundPayload)
+}
+PROTOBUF_NDEBUG_INLINE CosmeticGiftRefundPayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        reason_(arena) {}
+
+inline void CosmeticGiftRefundPayload::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gift_id_),
+           0,
+           offsetof(Impl_, refund_diamond_) -
+               offsetof(Impl_, gift_id_) +
+               sizeof(Impl_::refund_diamond_));
+}
+CosmeticGiftRefundPayload::~CosmeticGiftRefundPayload() {
+  // @@protoc_insertion_point(destructor:player_inbox.CosmeticGiftRefundPayload)
+  SharedDtor(*this);
+}
+inline void CosmeticGiftRefundPayload::SharedDtor(MessageLite& self) {
+  CosmeticGiftRefundPayload& this_ = static_cast<CosmeticGiftRefundPayload&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.reason_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CosmeticGiftRefundPayload_class_data_ =
+        CosmeticGiftRefundPayload::InternalGenerateClassData_(CosmeticGiftRefundPayload_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CosmeticGiftRefundPayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CosmeticGiftRefundPayload_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CosmeticGiftRefundPayload_class_data_.tc_table);
+  return CosmeticGiftRefundPayload_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CosmeticGiftRefundPayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CosmeticGiftRefundPayload_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CosmeticGiftRefundPayload_globals_));
+  return CosmeticGiftRefundPayload_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CosmeticGiftRefundPayload::ParseTableT_
+    CosmeticGiftRefundPayload::_table_ =
+        CosmeticGiftRefundPayload::InternalGenerateParseTable_(CosmeticGiftRefundPayload_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CosmeticGiftRefundPayload::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.CosmeticGiftRefundPayload)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.reason_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.gift_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.refund_diamond_) -
+        reinterpret_cast<char*>(&_impl_.gift_id_)) + sizeof(_impl_.refund_diamond_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CosmeticGiftRefundPayload::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CosmeticGiftRefundPayload& this_ = static_cast<const CosmeticGiftRefundPayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CosmeticGiftRefundPayload::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CosmeticGiftRefundPayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.CosmeticGiftRefundPayload)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 gift_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_gift_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_gift_id(), target);
+    }
+  }
+
+  // uint64 recipient_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_recipient_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_recipient_player_id(), target);
+    }
+  }
+
+  // uint64 refund_diamond = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_refund_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_refund_diamond(), target);
+    }
+  }
+
+  // string reason = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_reason().empty()) {
+      const ::std::string& _s = this_._internal_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.CosmeticGiftRefundPayload.reason");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.CosmeticGiftRefundPayload)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CosmeticGiftRefundPayload::ByteSizeLong(const MessageLite& base) {
+  const CosmeticGiftRefundPayload& this_ = static_cast<const CosmeticGiftRefundPayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CosmeticGiftRefundPayload::ByteSizeLong() const {
+  const CosmeticGiftRefundPayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.CosmeticGiftRefundPayload)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // string reason = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason());
+      }
+    }
+    // uint64 gift_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_gift_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gift_id());
+      }
+    }
+    // uint64 recipient_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_recipient_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_recipient_player_id());
+      }
+    }
+    // uint64 refund_diamond = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_refund_diamond() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_refund_diamond());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CosmeticGiftRefundPayload::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CosmeticGiftRefundPayload*>(&to_msg);
+  auto& from = static_cast<const CosmeticGiftRefundPayload&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.CosmeticGiftRefundPayload)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_reason().empty()) {
+        _this->_internal_set_reason(from._internal_reason());
+      } else {
+        if (_this->_impl_.reason_.IsDefault()) {
+          _this->_internal_set_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_gift_id() != 0) {
+        _this->_impl_.gift_id_ = from._impl_.gift_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_recipient_player_id() != 0) {
+        _this->_impl_.recipient_player_id_ = from._impl_.recipient_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_refund_diamond() != 0) {
+        _this->_impl_.refund_diamond_ = from._impl_.refund_diamond_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CosmeticGiftRefundPayload::CopyFrom(const CosmeticGiftRefundPayload& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.CosmeticGiftRefundPayload)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CosmeticGiftRefundPayload::InternalSwap(CosmeticGiftRefundPayload* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.refund_diamond_)
+      + sizeof(CosmeticGiftRefundPayload::_impl_.refund_diamond_)
+      - PROTOBUF_FIELD_OFFSET(CosmeticGiftRefundPayload, _impl_.gift_id_)>(
+          reinterpret_cast<char*>(&_impl_.gift_id_),
+          reinterpret_cast<char*>(&other->_impl_.gift_id_));
+}
+
+::google::protobuf::Metadata CosmeticGiftRefundPayload::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+CosmeticGiftRevokePayload::CosmeticGiftRevokePayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CosmeticGiftRevokePayload_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:player_inbox.CosmeticGiftRevokePayload)
+}
+PROTOBUF_NDEBUG_INLINE CosmeticGiftRevokePayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::player_inbox::CosmeticGiftRevokePayload& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        target_id_str_(arena, from.target_id_str_),
+        reason_(arena, from.reason_) {}
+
+CosmeticGiftRevokePayload::CosmeticGiftRevokePayload(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const CosmeticGiftRevokePayload& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, CosmeticGiftRevokePayload_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  CosmeticGiftRevokePayload* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gift_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, gift_id_),
+           offsetof(Impl_, target_id_u32_) -
+               offsetof(Impl_, gift_id_) +
+               sizeof(Impl_::target_id_u32_));
+
+  // @@protoc_insertion_point(copy_constructor:player_inbox.CosmeticGiftRevokePayload)
+}
+PROTOBUF_NDEBUG_INLINE CosmeticGiftRevokePayload::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        target_id_str_(arena),
+        reason_(arena) {}
+
+inline void CosmeticGiftRevokePayload::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, gift_id_),
+           0,
+           offsetof(Impl_, target_id_u32_) -
+               offsetof(Impl_, gift_id_) +
+               sizeof(Impl_::target_id_u32_));
+}
+CosmeticGiftRevokePayload::~CosmeticGiftRevokePayload() {
+  // @@protoc_insertion_point(destructor:player_inbox.CosmeticGiftRevokePayload)
+  SharedDtor(*this);
+}
+inline void CosmeticGiftRevokePayload::SharedDtor(MessageLite& self) {
+  CosmeticGiftRevokePayload& this_ = static_cast<CosmeticGiftRevokePayload&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.target_id_str_.Destroy();
+  this_._impl_.reason_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull CosmeticGiftRevokePayload_class_data_ =
+        CosmeticGiftRevokePayload::InternalGenerateClassData_(CosmeticGiftRevokePayload_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CosmeticGiftRevokePayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CosmeticGiftRevokePayload_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(CosmeticGiftRevokePayload_class_data_.tc_table);
+  return CosmeticGiftRevokePayload_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+CosmeticGiftRevokePayload::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&CosmeticGiftRevokePayload_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&CosmeticGiftRevokePayload_globals_));
+  return CosmeticGiftRevokePayload_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const CosmeticGiftRevokePayload::ParseTableT_
+    CosmeticGiftRevokePayload::_table_ =
+        CosmeticGiftRevokePayload::InternalGenerateParseTable_(CosmeticGiftRevokePayload_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void CosmeticGiftRevokePayload::Clear() {
+// @@protoc_insertion_point(message_clear_start:player_inbox.CosmeticGiftRevokePayload)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.target_id_str_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.reason_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+    ::memset(&_impl_.gift_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.target_id_u32_) -
+        reinterpret_cast<char*>(&_impl_.gift_id_)) + sizeof(_impl_.target_id_u32_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL CosmeticGiftRevokePayload::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const CosmeticGiftRevokePayload& this_ = static_cast<const CosmeticGiftRevokePayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL CosmeticGiftRevokePayload::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const CosmeticGiftRevokePayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:player_inbox.CosmeticGiftRevokePayload)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 gift_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_gift_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_gift_id(), target);
+    }
+  }
+
+  // uint64 sender_player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_sender_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_sender_player_id(), target);
+    }
+  }
+
+  // uint32 target_kind = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_target_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_target_kind(), target);
+    }
+  }
+
+  // uint32 target_id_u32 = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_target_id_u32() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_target_id_u32(), target);
+    }
+  }
+
+  // string target_id_str = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_target_id_str().empty()) {
+      const ::std::string& _s = this_._internal_target_id_str();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.CosmeticGiftRevokePayload.target_id_str");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+    }
+  }
+
+  // string reason = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_reason().empty()) {
+      const ::std::string& _s = this_._internal_reason();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "player_inbox.CosmeticGiftRevokePayload.reason");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:player_inbox.CosmeticGiftRevokePayload)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t CosmeticGiftRevokePayload::ByteSizeLong(const MessageLite& base) {
+  const CosmeticGiftRevokePayload& this_ = static_cast<const CosmeticGiftRevokePayload&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t CosmeticGiftRevokePayload::ByteSizeLong() const {
+  const CosmeticGiftRevokePayload& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:player_inbox.CosmeticGiftRevokePayload)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // string target_id_str = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_target_id_str().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_id_str());
+      }
+    }
+    // string reason = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_reason().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_reason());
+      }
+    }
+    // uint64 gift_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_gift_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gift_id());
+      }
+    }
+    // uint64 sender_player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_sender_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_sender_player_id());
+      }
+    }
+    // uint32 target_kind = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_target_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_kind());
+      }
+    }
+    // uint32 target_id_u32 = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_target_id_u32() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_id_u32());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void CosmeticGiftRevokePayload::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<CosmeticGiftRevokePayload*>(&to_msg);
+  auto& from = static_cast<const CosmeticGiftRevokePayload&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:player_inbox.CosmeticGiftRevokePayload)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_target_id_str().empty()) {
+        _this->_internal_set_target_id_str(from._internal_target_id_str());
+      } else {
+        if (_this->_impl_.target_id_str_.IsDefault()) {
+          _this->_internal_set_target_id_str("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_reason().empty()) {
+        _this->_internal_set_reason(from._internal_reason());
+      } else {
+        if (_this->_impl_.reason_.IsDefault()) {
+          _this->_internal_set_reason("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_gift_id() != 0) {
+        _this->_impl_.gift_id_ = from._impl_.gift_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_sender_player_id() != 0) {
+        _this->_impl_.sender_player_id_ = from._impl_.sender_player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_target_kind() != 0) {
+        _this->_impl_.target_kind_ = from._impl_.target_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_target_id_u32() != 0) {
+        _this->_impl_.target_id_u32_ = from._impl_.target_id_u32_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void CosmeticGiftRevokePayload::CopyFrom(const CosmeticGiftRevokePayload& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:player_inbox.CosmeticGiftRevokePayload)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void CosmeticGiftRevokePayload::InternalSwap(CosmeticGiftRevokePayload* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_id_str_, &other->_impl_.target_id_str_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.reason_, &other->_impl_.reason_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.target_id_u32_)
+      + sizeof(CosmeticGiftRevokePayload::_impl_.target_id_u32_)
+      - PROTOBUF_FIELD_OFFSET(CosmeticGiftRevokePayload, _impl_.gift_id_)>(
+          reinterpret_cast<char*>(&_impl_.gift_id_),
+          reinterpret_cast<char*>(&other->_impl_.gift_id_));
+}
+
+::google::protobuf::Metadata CosmeticGiftRevokePayload::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

@@ -38,6 +38,24 @@ public:
     static void EquipSkillVfx(entt::entity player,
         const ::EquipSkillVfxRequest* request,
         ::EquipSkillVfxResponse* response);
+    static void BuyAppearanceSeriesBundle(entt::entity player,
+        const ::BuyAppearanceSeriesBundleRequest* request,
+        ::BuyAppearanceSeriesBundleResponse* response);
+    static void EquipShowcaseCosmetic(entt::entity player,
+        const ::EquipShowcaseCosmeticRequest* request,
+        ::EquipShowcaseCosmeticResponse* response);
+    static void CastCityCelebration(entt::entity player,
+        const ::CastCityCelebrationRequest* request,
+        ::CastCityCelebrationResponse* response);
+    static void ClaimCityCelebrationGift(entt::entity player,
+        const ::ClaimCityCelebrationGiftRequest* request,
+        ::ClaimCityCelebrationGiftResponse* response);
+    static void NotifyCityCelebration(entt::entity player,
+        const ::CityCelebrationNotify* request,
+        ::Empty* response);
+    static void SendCosmeticGift(entt::entity player,
+        const ::SendCosmeticGiftRequest* request,
+        ::SendCosmeticGiftResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -112,6 +130,58 @@ public:
             EquipSkillVfx(player,
                 static_cast<const ::EquipSkillVfxRequest*>(request),
                 static_cast<::EquipSkillVfxResponse*>(response));
+			}
+            break;
+        case 8:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::BuyAppearanceSeriesBundleResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            BuyAppearanceSeriesBundle(player,
+                static_cast<const ::BuyAppearanceSeriesBundleRequest*>(request),
+                static_cast<::BuyAppearanceSeriesBundleResponse*>(response));
+			}
+            break;
+        case 9:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::EquipShowcaseCosmeticResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            EquipShowcaseCosmetic(player,
+                static_cast<const ::EquipShowcaseCosmeticRequest*>(request),
+                static_cast<::EquipShowcaseCosmeticResponse*>(response));
+			}
+            break;
+        case 10:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::CastCityCelebrationResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            CastCityCelebration(player,
+                static_cast<const ::CastCityCelebrationRequest*>(request),
+                static_cast<::CastCityCelebrationResponse*>(response));
+			}
+            break;
+        case 11:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ClaimCityCelebrationGiftResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ClaimCityCelebrationGift(player,
+                static_cast<const ::ClaimCityCelebrationGiftRequest*>(request),
+                static_cast<::ClaimCityCelebrationGiftResponse*>(response));
+			}
+            break;
+        case 12:
+			{
+            NotifyCityCelebration(player,
+                static_cast<const ::CityCelebrationNotify*>(request),
+                static_cast<::Empty*>(response));
+			}
+            break;
+        case 13:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SendCosmeticGiftResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SendCosmeticGift(player,
+                static_cast<const ::SendCosmeticGiftRequest*>(request),
+                static_cast<::SendCosmeticGiftResponse*>(response));
 			}
             break;
         default:

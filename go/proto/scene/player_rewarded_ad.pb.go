@@ -89,6 +89,7 @@ type RewardedAdSlotView struct {
 	CooldownUntilMs uint64                 `protobuf:"varint,7,opt,name=cooldown_until_ms,json=cooldownUntilMs,proto3" json:"cooldown_until_ms,omitempty"` // 冷却结束时间戳(0 = 无冷却)
 	CurrencyType    uint32                 `protobuf:"varint,8,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`            // CurrencyType(默认 3 = CURRENCY_TYPE_BIND_GOLD)
 	RewardAmount    uint64                 `protobuf:"varint,9,opt,name=reward_amount,json=rewardAmount,proto3" json:"reward_amount,omitempty"`
+	RewardKind      uint32                 `protobuf:"varint,10,opt,name=reward_kind,json=rewardKind,proto3" json:"reward_kind,omitempty"` // 1=绑定银两,2=幻境奇策重随,3=衣柜1h试穿,4=神秘商人个人换货
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -182,6 +183,13 @@ func (x *RewardedAdSlotView) GetCurrencyType() uint32 {
 func (x *RewardedAdSlotView) GetRewardAmount() uint64 {
 	if x != nil {
 		return x.RewardAmount
+	}
+	return 0
+}
+
+func (x *RewardedAdSlotView) GetRewardKind() uint32 {
+	if x != nil {
+		return x.RewardKind
 	}
 	return 0
 }
@@ -422,8 +430,10 @@ type ClaimRewardedAdRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必填非 0 客户端幂等键
 	SlotId          uint32                 `protobuf:"varint,2,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`
-	AdSessionId     uint64                 `protobuf:"varint,3,opt,name=ad_session_id,json=adSessionId,proto3" json:"ad_session_id,omitempty"` // BeginRewardedAdSession 签发的会话号
-	SsvProof        string                 `protobuf:"bytes,4,opt,name=ssv_proof,json=ssvProof,proto3" json:"ssv_proof,omitempty"`             // V1 留空;V2 强制 SSV 模式用于传递平台回执标识
+	AdSessionId     uint64                 `protobuf:"varint,3,opt,name=ad_session_id,json=adSessionId,proto3" json:"ad_session_id,omitempty"`          // BeginRewardedAdSession 签发的会话号
+	SsvProof        string                 `protobuf:"bytes,4,opt,name=ssv_proof,json=ssvProof,proto3" json:"ssv_proof,omitempty"`                      // V1 留空;V2 强制 SSV 模式用于传递平台回执标识
+	TargetParamU32  uint32                 `protobuf:"varint,5,opt,name=target_param_u32,json=targetParamU32,proto3" json:"target_param_u32,omitempty"` // 槽位 2 传 run_id 低 32 位(0=当前局),槽位 4 传 round_id(0=当前轮)
+	TargetParamStr  string                 `protobuf:"bytes,6,opt,name=target_param_str,json=targetParamStr,proto3" json:"target_param_str,omitempty"`  // 槽位 3 传目标未拥有角色外观 appearance_id
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -486,17 +496,33 @@ func (x *ClaimRewardedAdRequest) GetSsvProof() string {
 	return ""
 }
 
+func (x *ClaimRewardedAdRequest) GetTargetParamU32() uint32 {
+	if x != nil {
+		return x.TargetParamU32
+	}
+	return 0
+}
+
+func (x *ClaimRewardedAdRequest) GetTargetParamStr() string {
+	if x != nil {
+		return x.TargetParamStr
+	}
+	return ""
+}
+
 type ClaimRewardedAdResponse struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ErrorMessage    *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	CurrencyType    uint32                 `protobuf:"varint,2,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
-	RewardAmount    uint64                 `protobuf:"varint,3,opt,name=reward_amount,json=rewardAmount,proto3" json:"reward_amount,omitempty"`
-	CurrencyBalance uint64                 `protobuf:"varint,4,opt,name=currency_balance,json=currencyBalance,proto3" json:"currency_balance,omitempty"` // 领奖后该币种(绑定银两)最新余额
-	GoldBalance     uint64                 `protobuf:"varint,5,opt,name=gold_balance,json=goldBalance,proto3" json:"gold_balance,omitempty"`             // 当前流通银两余额
-	Slot            *RewardedAdSlotView    `protobuf:"bytes,6,opt,name=slot,proto3" json:"slot,omitempty"`                                               // 领奖后最新槽位状态
-	Replayed        bool                   `protobuf:"varint,7,opt,name=replayed,proto3" json:"replayed,omitempty"`                                      // true = 幂等重放命中首次记录
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	CurrencyType     uint32                 `protobuf:"varint,2,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	RewardAmount     uint64                 `protobuf:"varint,3,opt,name=reward_amount,json=rewardAmount,proto3" json:"reward_amount,omitempty"`
+	CurrencyBalance  uint64                 `protobuf:"varint,4,opt,name=currency_balance,json=currencyBalance,proto3" json:"currency_balance,omitempty"`             // 领奖后该币种(绑定银两)最新余额
+	GoldBalance      uint64                 `protobuf:"varint,5,opt,name=gold_balance,json=goldBalance,proto3" json:"gold_balance,omitempty"`                         // 当前流通银两余额
+	Slot             *RewardedAdSlotView    `protobuf:"bytes,6,opt,name=slot,proto3" json:"slot,omitempty"`                                                           // 领奖后最新槽位状态
+	Replayed         bool                   `protobuf:"varint,7,opt,name=replayed,proto3" json:"replayed,omitempty"`                                                  // true = 幂等重放命中首次记录
+	RewardKind       uint32                 `protobuf:"varint,8,opt,name=reward_kind,json=rewardKind,proto3" json:"reward_kind,omitempty"`                            // 对应槽位 reward_kind(1..4)
+	RerolledSigilIds []uint32               `protobuf:"varint,9,rep,packed,name=rerolled_sigil_ids,json=rerolledSigilIds,proto3" json:"rerolled_sigil_ids,omitempty"` // 槽位 2 重随后的最新 3 选 1 奇策 ID
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ClaimRewardedAdResponse) Reset() {
@@ -578,11 +604,25 @@ func (x *ClaimRewardedAdResponse) GetReplayed() bool {
 	return false
 }
 
+func (x *ClaimRewardedAdResponse) GetRewardKind() uint32 {
+	if x != nil {
+		return x.RewardKind
+	}
+	return 0
+}
+
+func (x *ClaimRewardedAdResponse) GetRerolledSigilIds() []uint32 {
+	if x != nil {
+		return x.RerolledSigilIds
+	}
+	return nil
+}
+
 var File_proto_scene_player_rewarded_ad_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_rewarded_ad_proto_rawDesc = "" +
 	"\n" +
-	"$proto/scene/player_rewarded_ad.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\xc4\x02\n" +
+	"$proto/scene/player_rewarded_ad.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\xe5\x02\n" +
 	"\x12RewardedAdSlotView\x12\x17\n" +
 	"\aslot_id\x18\x01 \x01(\rR\x06slotId\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x1b\n" +
@@ -593,7 +633,10 @@ const file_proto_scene_player_rewarded_ad_proto_rawDesc = "" +
 	"\rnext_reset_ms\x18\x06 \x01(\x04R\vnextResetMs\x12*\n" +
 	"\x11cooldown_until_ms\x18\a \x01(\x04R\x0fcooldownUntilMs\x12#\n" +
 	"\rcurrency_type\x18\b \x01(\rR\fcurrencyType\x12#\n" +
-	"\rreward_amount\x18\t \x01(\x04R\frewardAmount\"C\n" +
+	"\rreward_amount\x18\t \x01(\x04R\frewardAmount\x12\x1f\n" +
+	"\vreward_kind\x18\n" +
+	" \x01(\rR\n" +
+	"rewardKind\"C\n" +
 	"\x18GetRewardedAdInfoRequest\x12'\n" +
 	"\x0fclient_platform\x18\x01 \x01(\rR\x0eclientPlatform\"\xf1\x01\n" +
 	"\x19GetRewardedAdInfoResponse\x124\n" +
@@ -608,12 +651,14 @@ const file_proto_scene_player_rewarded_ad_proto_rawDesc = "" +
 	"\x1eBeginRewardedAdSessionResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
 	"\rad_session_id\x18\x02 \x01(\x04R\vadSessionId\x12\"\n" +
-	"\rexpires_at_ms\x18\x03 \x01(\x04R\vexpiresAtMs\"\x9e\x01\n" +
+	"\rexpires_at_ms\x18\x03 \x01(\x04R\vexpiresAtMs\"\xf2\x01\n" +
 	"\x16ClaimRewardedAdRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12\x17\n" +
 	"\aslot_id\x18\x02 \x01(\rR\x06slotId\x12\"\n" +
 	"\rad_session_id\x18\x03 \x01(\x04R\vadSessionId\x12\x1b\n" +
-	"\tssv_proof\x18\x04 \x01(\tR\bssvProof\"\xac\x02\n" +
+	"\tssv_proof\x18\x04 \x01(\tR\bssvProof\x12(\n" +
+	"\x10target_param_u32\x18\x05 \x01(\rR\x0etargetParamU32\x12(\n" +
+	"\x10target_param_str\x18\x06 \x01(\tR\x0etargetParamStr\"\xfb\x02\n" +
 	"\x17ClaimRewardedAdResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12#\n" +
 	"\rcurrency_type\x18\x02 \x01(\rR\fcurrencyType\x12#\n" +
@@ -621,7 +666,10 @@ const file_proto_scene_player_rewarded_ad_proto_rawDesc = "" +
 	"\x10currency_balance\x18\x04 \x01(\x04R\x0fcurrencyBalance\x12!\n" +
 	"\fgold_balance\x18\x05 \x01(\x04R\vgoldBalance\x12'\n" +
 	"\x04slot\x18\x06 \x01(\v2\x13.RewardedAdSlotViewR\x04slot\x12\x1a\n" +
-	"\breplayed\x18\a \x01(\bR\breplayed*\xca\x01\n" +
+	"\breplayed\x18\a \x01(\bR\breplayed\x12\x1f\n" +
+	"\vreward_kind\x18\b \x01(\rR\n" +
+	"rewardKind\x12,\n" +
+	"\x12rerolled_sigil_ids\x18\t \x03(\rR\x10rerolledSigilIds*\xca\x01\n" +
 	"\x10AdClientPlatform\x12\"\n" +
 	"\x1eAD_CLIENT_PLATFORM_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"AD_CLIENT_PLATFORM_WECHAT_MINIGAME\x10\x01\x12&\n" +

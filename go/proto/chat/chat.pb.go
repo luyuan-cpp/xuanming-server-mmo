@@ -150,8 +150,11 @@ type ChatMessage struct {
 	Channel        ChatChannelType        `protobuf:"varint,3,opt,name=channel,proto3,enum=chatpb.ChatChannelType" json:"channel,omitempty"`
 	Content        string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
 	SendTimeMs     int64                  `protobuf:"varint,5,opt,name=send_time_ms,json=sendTimeMs,proto3" json:"send_time_ms,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 由服务端权威校验填充的聊天气泡与战报/残局分享卡片底纹外观 ID（CosmeticShowcase.id；客户端自报值一律忽略）。
+	BubbleSkinId    uint32 `protobuf:"varint,6,opt,name=bubble_skin_id,json=bubbleSkinId,proto3" json:"bubble_skin_id,omitempty"`
+	ShareCardSkinId uint32 `protobuf:"varint,7,opt,name=share_card_skin_id,json=shareCardSkinId,proto3" json:"share_card_skin_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *ChatMessage) Reset() {
@@ -215,6 +218,20 @@ func (x *ChatMessage) GetContent() string {
 func (x *ChatMessage) GetSendTimeMs() int64 {
 	if x != nil {
 		return x.SendTimeMs
+	}
+	return 0
+}
+
+func (x *ChatMessage) GetBubbleSkinId() uint32 {
+	if x != nil {
+		return x.BubbleSkinId
+	}
+	return 0
+}
+
+func (x *ChatMessage) GetShareCardSkinId() uint32 {
+	if x != nil {
+		return x.ShareCardSkinId
 	}
 	return 0
 }
@@ -887,14 +904,16 @@ var File_proto_chat_chat_proto protoreflect.FileDescriptor
 
 const file_proto_chat_chat_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/chat/chat.proto\x12\x06chatpb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"\xd0\x01\n" +
+	"\x15proto/chat/chat.proto\x12\x06chatpb\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\"\xa3\x02\n" +
 	"\vChatMessage\x12(\n" +
 	"\x10sender_player_id\x18\x01 \x01(\x04R\x0esenderPlayerId\x12(\n" +
 	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\x121\n" +
 	"\achannel\x18\x03 \x01(\x0e2\x17.chatpb.ChatChannelTypeR\achannel\x12\x18\n" +
 	"\acontent\x18\x04 \x01(\tR\acontent\x12 \n" +
 	"\fsend_time_ms\x18\x05 \x01(\x03R\n" +
-	"sendTimeMs\"_\n" +
+	"sendTimeMs\x12$\n" +
+	"\x0ebubble_skin_id\x18\x06 \x01(\rR\fbubbleSkinId\x12+\n" +
+	"\x12share_card_skin_id\x18\a \x01(\rR\x0fshareCardSkinId\"_\n" +
 	"\x0fSendChatRequest\x12-\n" +
 	"\amessage\x18\x01 \x01(\v2\x13.chatpb.ChatMessageR\amessage\x12\x1d\n" +
 	"\n" +

@@ -4,6 +4,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <hiredis/hiredis.h>
 
@@ -12,6 +13,8 @@
 #include "engine/core/time/system/time.h"
 #include "engine/core/type_define/player_guid_comp.h"
 #include "infra/storage/redis_cluster/redis_cluster_client.h" // tlsPlayerRedis:投影属于玩家域
+#include "modules/bag/bag_service.h"
+#include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_ownership_comp.h" // AfkPassRedisKey
@@ -19,12 +22,17 @@
 #include "player/system/client_request_ledger.h"
 #include "player/system/connection_lost_hold.h" // PlayerConnectionLostComp:判定战斗结算是否处于离线托管中
 #include "player/system/player_attribute.h"
+#include "player/system/player_equipment_material_reward.h"
+#include "player/system/player_feature_snapshot.h"
 #include "player/system/player_lifecycle.h" // RequestKeyProgressSave
 #include "player/system/player_mutability.h"
+#include "player/system/player_travel_pass.h"
 #include "thread_context/ecs_context.h"
 
 #include "table/code/afkpassrule_table.h"
+#include "table/code/item_table.h"
 #include "table/proto/tip/afk_pass_error_tip.pb.h"
+#include "table/proto/tip/bag_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 
 #include "proto/common/component/player_attribute_comp.pb.h"
@@ -32,6 +40,7 @@
 #include "proto/common/database/player_cache.pb.h"  // PlayerAllData:提交回调的快照
 #include "proto/common/rollback/transaction_log.pb.h" // TX_AFK_PASS_BUY
 #include "proto/scene/player_afk_pass.pb.h"
+#include "proto/scene/player_bag.pb.h"
 
 namespace
 {
@@ -43,20 +52,137 @@ namespace
 	// 写法见 afk_hosting.h 的 WriteMetrics)。
 	thread_local uint64_t tlsProjectionFailures = 0;
 
-	// 规则表第一行。表空或取值不合法返回 false,problem 是原因(只进日志)。
-	bool CurrentRule(afk_pass::Rule &rule, const char *&problem)
+	afk_pass::Rule RuleFromRow(const AfkPassRuleTable &row)
 	{
+		afk_pass::Rule rule;
+		rule.periodDays = row.period_days();
+		rule.priceCurrencyType = row.price_currency_type();
+		rule.price = row.price();
+		rule.maxRemainingDays = row.max_remaining_days();
+		rule.remindBeforeHours = row.remind_before_hours();
+		rule.planId = row.id();
+		rule.bonusItemId = row.bonus_item_id();
+		rule.bonusItemCount = row.bonus_item_count();
+		rule.bonusFrameKey = row.bonus_frame_key();
+		rule.planName = row.plan_name();
+		rule.iconKey = row.icon_key();
+		rule.desc = row.desc();
+		return rule;
+	}
+
+	const char *ValidateRuleWithTables(const afk_pass::Rule &rule)
+	{
+		if (const char *problem = afk_pass::RuleProblem(rule); problem != nullptr)
+		{
+			return problem;
+		}
+		if (rule.bonusItemId != 0)
+		{
+			const auto [item, itemErr] = ItemTableManager::Instance().FindByIdSilent(rule.bonusItemId);
+			if (item == nullptr || item->max_stack_size() == 0)
+			{
+				return "bonus_item_id does not exist in Item table";
+			}
+		}
+		return nullptr;
+	}
+
+	// 读取并校验全表套餐（按 id 升序）。任一行非法或空表均返回 false（fail-closed）。
+	bool LoadAllPlans(std::vector<afk_pass::Rule> &plans, const char *&problem)
+	{
+		plans.clear();
 		const auto &rows = AfkPassRuleTableManager::Instance().FindAll().data();
 		if (rows.empty())
 		{
 			problem = "AfkPassRule table is empty";
 			return false;
 		}
-		const auto &row = *rows.begin();
-		rule = afk_pass::Rule{row.period_days(), row.price_currency_type(), row.price(), row.max_remaining_days(),
-							  row.remind_before_hours()};
-		problem = afk_pass::RuleProblem(rule);
-		return problem == nullptr;
+		plans.reserve(static_cast<std::size_t>(rows.size()));
+		for (const auto &row : rows)
+		{
+			afk_pass::Rule rule = RuleFromRow(row);
+			if (const char *p = ValidateRuleWithTables(rule); p != nullptr)
+			{
+				problem = p;
+				return false;
+			}
+			plans.push_back(std::move(rule));
+		}
+		std::sort(plans.begin(), plans.end(),
+				  [](const afk_pass::Rule &a, const afk_pass::Rule &b) { return a.planId < b.planId; });
+		for (std::size_t i = 1; i < plans.size(); ++i)
+		{
+			if (plans[i].planId == plans[i - 1].planId)
+			{
+				problem = "duplicate AfkPassRule plan id";
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// 查询指定套餐（planId == 0 兼容默认取首行 / id=1）。返回 true 表示表可用且找到该套餐。
+	enum class PlanLookupResult : uint8_t
+	{
+		kOk,
+		kTableInvalid,
+		kPlanNotFound,
+	};
+
+	PlanLookupResult FindPlan(uint32_t requestedPlanId, afk_pass::Rule &outRule, const char *&problem)
+	{
+		std::vector<afk_pass::Rule> plans;
+		if (!LoadAllPlans(plans, problem))
+		{
+			return PlanLookupResult::kTableInvalid;
+		}
+		if (requestedPlanId == 0)
+		{
+			for (const auto &p : plans)
+			{
+				if (p.planId == 1u)
+				{
+					outRule = p;
+					return PlanLookupResult::kOk;
+				}
+			}
+			outRule = plans.front();
+			return PlanLookupResult::kOk;
+		}
+		for (const auto &p : plans)
+		{
+			if (p.planId == requestedPlanId)
+			{
+				outRule = p;
+				return PlanLookupResult::kOk;
+			}
+		}
+		return PlanLookupResult::kPlanNotFound;
+	}
+
+	uint32_t EffectiveLightCardTrialUsed(const PlayerProfileComp *profile, uint64_t nowUnixSec)
+	{
+		if (profile == nullptr)
+		{
+			return 0u;
+		}
+		uint64_t weekStartMs = 0u;
+		uint64_t nextWeekMs = 0u;
+		if (!PlayerEquipmentMaterialRewardSystem::ResolveWeek(nowUnixSec * 1000ULL, weekStartMs, nextWeekMs))
+		{
+			return profile->light_card_trial_used();
+		}
+		if (weekStartMs > profile->light_card_trial_week_start_ms())
+		{
+			return 0u;
+		}
+		return profile->light_card_trial_used();
+	}
+
+	std::string AfkPassBonusExtraJson(uint32_t planId, uint32_t periodDays)
+	{
+		return std::string("{\"source\":\"afk_pass_bonus\",\"plan_id\":") + std::to_string(planId) +
+			   ",\"period_days\":" + std::to_string(periodDays) + "}";
 	}
 
 	void MarkProjectionConfirmed(Guid playerId, uint64_t seq)
@@ -157,9 +283,9 @@ namespace
 
 bool AfkPassSystem::ValidateTables()
 {
-	afk_pass::Rule rule;
+	std::vector<afk_pass::Rule> plans;
 	const char *problem = nullptr;
-	if (!CurrentRule(rule, problem))
+	if (!LoadAllPlans(plans, problem))
 	{
 		LOG_ERROR << "[AfkPass] table validation failed: " << (problem != nullptr ? problem : "unknown");
 		return false;
@@ -208,6 +334,9 @@ void AfkPassSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, AfkPassIn
 	info.set_server_now(nowUnixSec);
 	info.set_unlocked_loadout_slots(afk_pass::UnlockedLoadoutSlots(active));
 	info.set_stage2_tradable_enabled(active);
+	info.set_market_listing_limit(afk_pass::MarketListingLimit(active));
+	info.set_stall_duration_hours(afk_pass::StallDurationHours(active));
+	info.set_weekly_free_trial_quota(afk_pass::WeeklyFreeTrialQuota(active));
 	if (auto &registry = tlsEcs.actorRegistry; registry.valid(player))
 	{
 		if (const auto *profile = registry.try_get<PlayerUint64Comp>(player))
@@ -215,19 +344,55 @@ void AfkPassSystem::FillInfo(entt::entity player, uint64_t nowUnixSec, AfkPassIn
 			info.set_auto_return_city_on_team_end(profile->afk_auto_return_city_on_team_end());
 			FillHostedRecap(*profile, info);
 		}
+		if (const auto *roleProfile = registry.try_get<PlayerProfileComp>(player))
+		{
+			info.set_weekly_free_trial_used(EffectiveLightCardTrialUsed(roleProfile, nowUnixSec));
+		}
 	}
-	afk_pass::Rule rule;
+	std::vector<afk_pass::Rule> plans;
 	const char *problem = nullptr;
-	if (!CurrentRule(rule, problem))
+	if (!LoadAllPlans(plans, problem))
 	{
 		return; // 售价各项留 0 = 暂不出售;原因在开通时打(这里是纯读取,登录与打开面板都会调)
 	}
-	info.set_price_currency_type(rule.priceCurrencyType);
-	info.set_price(rule.price);
-	info.set_period_days(rule.periodDays);
-	info.set_max_remaining_days(rule.maxRemainingDays);
-	info.set_remind_before_hours(rule.remindBeforeHours);
-	info.set_balance(CurrencySystem::GetBalance(player, static_cast<CurrencyType>(rule.priceCurrencyType)));
+	const afk_pass::Rule *defaultPlan = &plans.front();
+	for (const auto &p : plans)
+	{
+		if (p.planId == 1u)
+		{
+			defaultPlan = &p;
+			break;
+		}
+	}
+	info.set_price_currency_type(defaultPlan->priceCurrencyType);
+	info.set_price(defaultPlan->price);
+	info.set_period_days(defaultPlan->periodDays);
+	info.set_max_remaining_days(defaultPlan->maxRemainingDays);
+	info.set_remind_before_hours(defaultPlan->remindBeforeHours);
+	info.set_balance(CurrencySystem::GetBalance(player, static_cast<CurrencyType>(defaultPlan->priceCurrencyType)));
+
+	for (const auto &p : plans)
+	{
+		auto *view = info.add_plans();
+		view->set_plan_id(p.planId);
+		view->set_plan_name(p.planName);
+		view->set_period_days(p.periodDays);
+		view->set_price_currency_type(p.priceCurrencyType);
+		view->set_price(p.price);
+		view->set_bonus_item_id(p.bonusItemId);
+		view->set_bonus_item_count(p.bonusItemCount);
+		if (p.bonusItemId != 0)
+		{
+			if (const auto [itemRow, itemErr] = ItemTableManager::Instance().FindByIdSilent(p.bonusItemId); itemRow != nullptr)
+			{
+				view->set_bonus_item_name(itemRow->name());
+				view->set_bonus_item_icon_key(itemRow->icon_key());
+			}
+		}
+		view->set_bonus_frame_key(p.bonusFrameKey);
+		view->set_icon_key(p.iconKey);
+		view->set_desc(p.desc);
+	}
 }
 
 uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &request, uint64_t nowUnixSec,
@@ -235,6 +400,7 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 {
 	response.clear_info();
 	response.clear_replayed();
+	response.clear_bag();
 	auto &registry = tlsEcs.actorRegistry;
 	if (!registry.valid(player))
 	{
@@ -245,8 +411,7 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 
 	// ── 第一段:只读预检。这一段里任何一处 return 都保证「什么都没改」 ──────────────────
 
-	// 1. 幂等键(docs/design/client-request-idempotency.md §3.4):查账排在一切依赖状态的校验之前 —— 首次已经成交的话,
-	//    余额、剩余时长、规则都可能变了,重放再过一遍预检会被拒掉,客户端就以为那一笔没成。新接口没有旧客户端,键必须非 0。
+	// 1. 幂等键(docs/design/client-request-idempotency.md §3.4):查账排在一切依赖状态的校验之前。
 	const uint64_t clientRequestId = request.client_request_id();
 	if (clientRequestId == 0)
 	{
@@ -257,9 +422,15 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 	switch (client_request_dedup::Check(player, clientRequestId, ClientRequestKind::kBuyAfkPass, fingerprint, first))
 	{
 	case ClientRequestVerdict::kReplay:
-		// 首次结果就是开通之后的月卡状态,当前状态里都有,账本不存别的。
 		response.set_replayed(true);
 		FillInfo(player, nowUnixSec, *response.mutable_info());
+		if (registry.all_of<PlayerBagsComp>(player))
+		{
+			if (PlayerBagSystem::BuildSnapshot(player, kInventory, *response.mutable_bag()) != kSuccess)
+			{
+				response.clear_bag();
+			}
+		}
 		return kSuccess;
 	case ClientRequestVerdict::kMismatch:
 		return kInvalidParameter;
@@ -269,26 +440,32 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 		break;
 	}
 
-	// 2. 规则表。
+	// 2. 规则表与套餐查找（plan_id == 0 向下兼容默认套餐 1）。
 	afk_pass::Rule rule;
 	const char *problem = nullptr;
-	if (!CurrentRule(rule, problem))
+	const PlanLookupResult lookup = FindPlan(request.plan_id(), rule, problem);
+	if (lookup == PlanLookupResult::kTableInvalid)
 	{
-		LOG_ERROR << "[AfkPass] purchase refused: AfkPassRule is not usable (" << problem << ") player_id=" << playerId;
+		LOG_ERROR << "[AfkPass] purchase refused: AfkPassRule is not usable (" << (problem != nullptr ? problem : "unknown")
+				  << ") player_id=" << playerId;
 		return kAfkPassUnavailable;
 	}
-	// 3. 报价防呆:价格与币种与玩家看到的不同(配表热更过)就拒绝,让客户端刷新后再买。
-	if (request.expected_currency_type() != rule.priceCurrencyType || request.expected_price() != rule.price)
+	if (lookup == PlanLookupResult::kPlanNotFound)
+	{
+		return kAfkPassPlanInvalid;
+	}
+	// 3. 报价防呆:价格、币种或天数与玩家看到的不同(配表热更过)就拒绝,让客户端刷新后再买。
+	if (request.expected_currency_type() != rule.priceCurrencyType || request.expected_price() != rule.price ||
+		(request.expected_period_days() != 0 && request.expected_period_days() != rule.periodDays))
 	{
 		return kAfkPassPriceChanged;
 	}
 	// 4. 不可写窗口(冻结、跨区交接、退出在途、无归属围栏):与全局玩家可写闸保持一致。
-	//    战斗中不拦:开通不碰战斗快照。
 	if (!player_mutability::IsPlayerMutable(player))
 	{
 		return kAfkPassFrozen;
 	}
-	// 5. 事实源:持久组件缺失 = 加载不变量被破坏,不现造一份(那等于把已有的月卡清零)。
+	// 5. 事实源:持久组件缺失 = 加载不变量被破坏,不现造一份。
 	auto *profile = registry.try_get<PlayerUint64Comp>(player);
 	if (profile == nullptr)
 	{
@@ -309,21 +486,72 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 		return kAfkPassCurrencyNotEnough;
 	}
 
-	// ── 第二段:修改。扣钱 → 写到期 → 记键,同一次同步调用里完成,中间不让出 EventLoop ─────────
-	//
-	// 先扣钱、后加天数:后一步是内存赋值,不会失败,所以不需要退款路径。扣钱会失败的条件(金额、币种、冻结、缺组件、
-	// 余额)上面都已排除,走到失败分支就是缺陷:什么都还没改,干净地拒绝。
-	if (const auto err = CurrencySystem::DeductCurrency(player, currency, price, TX_AFK_PASS_BUY, clientRequestId);
-		err != kSuccess)
+	// ── 第二段:原子修改。若含开卡一次性直赠绑定道具，先由 ExchangeInventoryExact 校验空间与入包候选，
+	//    再于 beforeCommit 内同步扣灵石 + 写到期 + 幂等授纪念头像框 + 记幂等键，满包零扣费。 ──
+	const auto commitChargeAndExpiry = [&]() -> uint32_t {
+		if (!player_mutability::IsPlayerMutable(player))
+		{
+			return kAfkPassFrozen;
+		}
+		if (const auto err = CurrencySystem::DeductCurrency(player, currency, price, TX_AFK_PASS_BUY, clientRequestId);
+			err != kSuccess)
+		{
+			LOG_ERROR << "[AfkPass] purchase refused: charge rejected after precheck (nothing changed) player_id=" << playerId
+					  << " plan_id=" << rule.planId << " price=" << price << " currency_type=" << rule.priceCurrencyType
+					  << " err=" << err;
+			return kAfkPassUnavailable;
+		}
+		profile->set_afk_pass_expires_at(*after);
+		if (!rule.bonusFrameKey.empty())
+		{
+			(void)PlayerTravelPassSystem::GrantBonusCosmetic(player, rule.bonusFrameKey);
+		}
+		client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kBuyAfkPass, std::move(fingerprint),
+									   ClientRequestResult{});
+		return kSuccess;
+	};
+
+	if (rule.bonusItemId != 0 && rule.bonusItemCount > 0)
 	{
-		LOG_ERROR << "[AfkPass] purchase refused: charge rejected after precheck (nothing changed) player_id=" << playerId
-				  << " price=" << price << " currency_type=" << rule.priceCurrencyType << " err=" << err;
-		return kAfkPassUnavailable;
+		if (!registry.all_of<PlayerBagsComp>(player))
+		{
+			LOG_ERROR << "[AfkPass] purchase refused: player has no PlayerBagsComp for bonus item player_id=" << playerId;
+			return kAfkPassUnavailable;
+		}
+		InitItemParam bonusParam;
+		bonusParam.itemPBComp.set_config_id(rule.bonusItemId);
+		bonusParam.itemPBComp.set_size(rule.bonusItemCount);
+		bonusParam.itemPBComp.set_item_id(kInvalidGuid);
+		bonusParam.itemPBComp.set_bound(true); // 强制绑定仅自用，绝不污染流通市场
+		std::vector<InitItemParam> gained;
+		gained.push_back(std::move(bonusParam));
+		std::vector<GuidVector> written;
+		const uint32_t exchangeErr = BagService::ExchangeInventoryExact(
+			player, {}, gained, {}, clientRequestId, AfkPassBonusExtraJson(rule.planId, rule.periodDays), written,
+			[&](const std::vector<GuidVector> &) -> uint32_t { return commitChargeAndExpiry(); });
+		if (exchangeErr != kSuccess)
+		{
+			if (exchangeErr == kBagAddItemBagFull || exchangeErr == kBagItemNotStacked)
+			{
+				return kAfkPassBagFull;
+			}
+			if (exchangeErr == kAfkPassFrozen || exchangeErr == kAfkPassUnavailable)
+			{
+				return exchangeErr;
+			}
+			LOG_ERROR << "[AfkPass] purchase refused: bonus item exchange failed player_id=" << playerId
+					  << " plan_id=" << rule.planId << " item_id=" << rule.bonusItemId << " err=" << exchangeErr;
+			return kAfkPassUnavailable;
+		}
 	}
-	profile->set_afk_pass_expires_at(*after);
-	// 成交了才记键(只记成功)。首次结果取当前状态,不另存。
-	client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kBuyAfkPass, std::move(fingerprint),
-								   ClientRequestResult{});
+	else
+	{
+		if (const uint32_t commitErr = commitChargeAndExpiry(); commitErr != kSuccess)
+		{
+			return commitErr;
+		}
+	}
+
 	// 尽快落盘:投影随这次提交写出,玩家开通后马上断线也来得及让 player_locator 看到(1 秒节流)。
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "afk_pass_buy");
 	if (registry.all_of<PlayerAttributeComp>(player))
@@ -331,12 +559,22 @@ uint32_t AfkPassSystem::Buy(entt::entity player, const BuyAfkPassRequest &reques
 		PlayerAttributeSystem::PushPanel(player);
 	}
 
-	LOG_INFO << "[AfkPass] metric=afk_pass_bought player_id=" << playerId << " expires_before=" << before
-			 << " expires_after=" << *after << " price=" << price << " currency_type=" << rule.priceCurrencyType
+	LOG_INFO << "[AfkPass] metric=afk_pass_bought player_id=" << playerId << " plan_id=" << rule.planId
+			 << " period_days=" << rule.periodDays << " expires_before=" << before << " expires_after=" << *after
+			 << " price=" << price << " currency_type=" << rule.priceCurrencyType
+			 << " bonus_item_id=" << rule.bonusItemId << " bonus_item_count=" << rule.bonusItemCount
+			 << " bonus_frame_key=" << (rule.bonusFrameKey.empty() ? "none" : rule.bonusFrameKey)
 			 << " client_request_id=" << clientRequestId;
 
 	// ── 第三段:组应答。开通已经生效,这里出任何问题都不回滚 ──────────────────────────
 	FillInfo(player, nowUnixSec, *response.mutable_info());
+	if (registry.all_of<PlayerBagsComp>(player))
+	{
+		if (PlayerBagSystem::BuildSnapshot(player, kInventory, *response.mutable_bag()) != kSuccess)
+		{
+			response.clear_bag();
+		}
+	}
 	return kSuccess;
 }
 

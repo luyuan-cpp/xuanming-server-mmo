@@ -31,6 +31,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
     file_reflection_data[] = {
         // ::HostedRecapSummary
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto, /* tracker*/ nullptr,},
+        // ::AfkPassPlanView
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto, /* tracker*/ nullptr,},
         // ::AfkPassInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto, /* tracker*/ nullptr,},
         // ::GetAfkPassRequest
@@ -146,7 +148,7 @@ constexpr auto SetAfkPassSettingsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -477,7 +479,7 @@ constexpr auto GmSetAfkPassRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -601,7 +603,7 @@ constexpr auto GetAfkPassRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[2],
+      &file_reflection_data[3],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -664,11 +666,11 @@ constexpr BuyAfkPassRequest::ParseTableT_ BuyAfkPassRequest::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -691,6 +693,16 @@ constexpr BuyAfkPassRequest::ParseTableT_ BuyAfkPassRequest::InternalGeneratePar
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BuyAfkPassRequest, _impl_.expected_price_), 1>(),
        {24, 1, 0,
         PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_price_)}},
+      // uint32 plan_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BuyAfkPassRequest, _impl_.plan_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.plan_id_)}},
+      // uint32 expected_period_days = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BuyAfkPassRequest, _impl_.expected_period_days_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_period_days_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -700,6 +712,10 @@ constexpr BuyAfkPassRequest::ParseTableT_ BuyAfkPassRequest::InternalGeneratePar
       {PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_currency_type_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 expected_price = 3;
       {PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_price_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 plan_id = 4;
+      {PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.plan_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 expected_period_days = 5;
+      {PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_period_days_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -714,7 +730,9 @@ inline constexpr BuyAfkPassRequest::Impl_::Impl_(
       : _cached_size_{0},
         client_request_id_{::uint64_t{0u}},
         expected_price_{::uint64_t{0u}},
-        expected_currency_type_{0u} {}
+        expected_currency_type_{0u},
+        plan_id_{0u},
+        expected_period_days_{0u} {}
 
 template <typename>
 constexpr BuyAfkPassRequest::BuyAfkPassRequest(::_pbi::ConstantInitialized,
@@ -757,7 +775,7 @@ constexpr auto BuyAfkPassRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -804,6 +822,248 @@ const ::_pbi::ClassData* BuyAfkPassRequest_get_class_data() {
   return BuyAfkPassRequest_globals_.GetClassData();
 #else
   return BuyAfkPassRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AfkPassPlanView::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AfkPassPlanView>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_._has_bits_);
+};
+
+constexpr AfkPassPlanView::ParseTableT_ AfkPassPlanView::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_._has_bits_),
+      0, // no _extensions_
+      12, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294963200,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      12,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::AfkPassPlanView>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 plan_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassPlanView, _impl_.plan_id_), 6>(),
+       {8, 6, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.plan_id_)}},
+      // string plan_name = 2;
+      {::_pbi::TcParser::FastUS1,
+       {18, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.plan_name_)}},
+      // uint32 period_days = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassPlanView, _impl_.period_days_), 7>(),
+       {24, 7, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.period_days_)}},
+      // uint32 price_currency_type = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassPlanView, _impl_.price_currency_type_), 9>(),
+       {32, 9, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.price_currency_type_)}},
+      // uint64 price = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassPlanView, _impl_.price_), 8>(),
+       {40, 8, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.price_)}},
+      // uint32 bonus_item_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassPlanView, _impl_.bonus_item_id_), 10>(),
+       {48, 10, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_id_)}},
+      // uint32 bonus_item_count = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassPlanView, _impl_.bonus_item_count_), 11>(),
+       {56, 11, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_count_)}},
+      // string bonus_item_name = 8;
+      {::_pbi::TcParser::FastUS1,
+       {66, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_name_)}},
+      // string bonus_item_icon_key = 9;
+      {::_pbi::TcParser::FastUS1,
+       {74, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_icon_key_)}},
+      // string bonus_frame_key = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 3, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_frame_key_)}},
+      // string icon_key = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 4, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.icon_key_)}},
+      // string desc = 12;
+      {::_pbi::TcParser::FastUS1,
+       {98, 5, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.desc_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 plan_id = 1;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.plan_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string plan_name = 2;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.plan_name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 period_days = 3;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.period_days_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 price_currency_type = 4;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.price_currency_type_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 price = 5;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.price_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 bonus_item_id = 6;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 bonus_item_count = 7;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string bonus_item_name = 8;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_name_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string bonus_item_icon_key = 9;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_icon_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string bonus_frame_key = 10;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_frame_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string icon_key = 11;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.icon_key_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string desc = 12;
+      {PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.desc_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\17\0\11\0\0\0\0\0\17\23\17\10\4\0\0\0"
+      "AfkPassPlanView"
+      "plan_name"
+      "bonus_item_name"
+      "bonus_item_icon_key"
+      "bonus_frame_key"
+      "icon_key"
+      "desc"
+    }},
+  };
+}
+
+
+inline constexpr AfkPassPlanView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        plan_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        bonus_item_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        bonus_item_icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        bonus_frame_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        desc_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        plan_id_{0u},
+        period_days_{0u},
+        price_{::uint64_t{0u}},
+        price_currency_type_{0u},
+        bonus_item_id_{0u},
+        bonus_item_count_{0u} {}
+
+template <typename>
+constexpr AfkPassPlanView::AfkPassPlanView(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AfkPassPlanView::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AfkPassPlanView(arena);
+}
+constexpr auto AfkPassPlanView::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AfkPassPlanView), alignof(AfkPassPlanView));
+}
+constexpr auto AfkPassPlanView::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AfkPassPlanView::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AfkPassPlanView>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AfkPassPlanView::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AfkPassPlanView>(), &AfkPassPlanView::ByteSizeLong,
+              &AfkPassPlanView::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[1],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AfkPassPlanViewGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AfkPassPlanViewGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AfkPassPlanView_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AfkPassPlanView::InternalGenerateClassData_(
+            _default, &AfkPassPlanView_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AfkPassPlanView>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AfkPassPlanViewGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AfkPassPlanView _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AfkPassPlanView>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AfkPassPlanViewGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AfkPassPlanViewGlobalsTypeInternal AfkPassPlanView_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AfkPassPlanView_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AfkPassPlanView_globals_.GetClassData();
+#else
+  return AfkPassPlanView_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -898,7 +1158,7 @@ constexpr auto AckHostedRecapRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -961,12 +1221,12 @@ constexpr AfkPassInfo::ParseTableT_ AfkPassInfo::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_._has_bits_),
       0, // no _extensions_
-      12, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294963200,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      12,  // num_field_entries
-      1,  // num_aux_entries
+      17,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -977,53 +1237,84 @@ constexpr AfkPassInfo::ParseTableT_ AfkPassInfo::InternalGenerateParseTable_(con
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint64 expires_at = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.expires_at_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.expires_at_), 2>(),
+       {8, 2, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.expires_at_)}},
       // uint64 server_now = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.server_now_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.server_now_), 3>(),
+       {16, 3, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.server_now_)}},
       // uint32 price_currency_type = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.price_currency_type_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.price_currency_type_), 5>(),
+       {24, 5, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.price_currency_type_)}},
       // uint64 price = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.price_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.price_), 4>(),
+       {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.price_)}},
       // uint32 period_days = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.period_days_), 5>(),
-       {40, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.period_days_), 6>(),
+       {40, 6, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.period_days_)}},
       // uint32 max_remaining_days = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.max_remaining_days_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.max_remaining_days_), 7>(),
+       {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.max_remaining_days_)}},
       // uint32 remind_before_hours = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.remind_before_hours_), 7>(),
-       {56, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.remind_before_hours_), 8>(),
+       {56, 8, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.remind_before_hours_)}},
       // uint64 balance = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.balance_), 8>(),
-       {64, 8, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassInfo, _impl_.balance_), 9>(),
+       {64, 9, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.balance_)}},
       // bool auto_return_city_on_team_end = 9;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AfkPassInfo, _impl_.auto_return_city_on_team_end_), 9>(),
-       {72, 9, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AfkPassInfo, _impl_.auto_return_city_on_team_end_), 10>(),
+       {72, 10, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.auto_return_city_on_team_end_)}},
       // .HostedRecapSummary hosted_recap = 10;
       {::_pbi::TcParser::FastMtS1,
-       {82, 0, 0,
+       {82, 1, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_)}},
       // uint32 unlocked_loadout_slots = 11;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.unlocked_loadout_slots_), 11>(),
-       {88, 11, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.unlocked_loadout_slots_), 12>(),
+       {88, 12, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_)}},
       // bool stage2_tradable_enabled = 12;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AfkPassInfo, _impl_.stage2_tradable_enabled_), 10>(),
-       {96, 10, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(AfkPassInfo, _impl_.stage2_tradable_enabled_), 11>(),
+       {96, 11, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stage2_tradable_enabled_)}},
+      // uint32 market_listing_limit = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.market_listing_limit_), 13>(),
+       {104, 13, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.market_listing_limit_)}},
+      // uint32 stall_duration_hours = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.stall_duration_hours_), 14>(),
+       {112, 14, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stall_duration_hours_)}},
+      // uint32 weekly_free_trial_quota = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassInfo, _impl_.weekly_free_trial_quota_), 15>(),
+       {120, 15, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.weekly_free_trial_quota_)}},
+      // uint32 weekly_free_trial_used = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 16, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.weekly_free_trial_used_)}},
+      // repeated .AfkPassPlanView plans = 17;
+      {::_pbi::TcParser::FastMtR2,
+       {394, 0, 1,
+        PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.plans_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -1031,35 +1322,50 @@ constexpr AfkPassInfo::ParseTableT_ AfkPassInfo::InternalGenerateParseTable_(con
       65535, 65535
     }}, {{
       // uint64 expires_at = 1;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.expires_at_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.expires_at_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 server_now = 2;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.server_now_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.server_now_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 price_currency_type = 3;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.price_currency_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.price_currency_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 price = 4;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.price_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.price_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 period_days = 5;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.period_days_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.period_days_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_remaining_days = 6;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.max_remaining_days_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.max_remaining_days_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 remind_before_hours = 7;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.remind_before_hours_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.remind_before_hours_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 balance = 8;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.balance_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.balance_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool auto_return_city_on_team_end = 9;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.auto_return_city_on_team_end_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.auto_return_city_on_team_end_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .HostedRecapSummary hosted_recap = 10;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 unlocked_loadout_slots = 11;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // bool stage2_tradable_enabled = 12;
-      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stage2_tradable_enabled_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stage2_tradable_enabled_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 market_listing_limit = 13;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.market_listing_limit_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 stall_duration_hours = 14;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.stall_duration_hours_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_free_trial_quota = 15;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.weekly_free_trial_quota_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 weekly_free_trial_used = 16;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.weekly_free_trial_used_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated .AfkPassPlanView plans = 17;
+      {PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.plans_), _Internal::kHasBitsOffset + 0, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::HostedRecapSummary>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::HostedRecapSummary_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::AfkPassPlanView>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::AfkPassPlanView_globals_},
         #endif
     }},
     {{
@@ -1072,6 +1378,11 @@ inline constexpr AfkPassInfo::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        plans_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::AfkPassInfo,
+            PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.plans_)>()
+         }
+        ,
         hosted_recap_{nullptr},
         expires_at_{::uint64_t{0u}},
         server_now_{::uint64_t{0u}},
@@ -1083,7 +1394,11 @@ inline constexpr AfkPassInfo::Impl_::Impl_(
         balance_{::uint64_t{0u}},
         auto_return_city_on_team_end_{false},
         stage2_tradable_enabled_{false},
-        unlocked_loadout_slots_{0u} {}
+        unlocked_loadout_slots_{0u},
+        market_listing_limit_{0u},
+        stall_duration_hours_{0u},
+        weekly_free_trial_quota_{0u},
+        weekly_free_trial_used_{0u} {}
 
 template <typename>
 constexpr AfkPassInfo::AfkPassInfo(::_pbi::ConstantInitialized,
@@ -1101,7 +1416,7 @@ inline void* PROTOBUF_NONNULL AfkPassInfo::PlacementNew_(
   return ::new (mem) AfkPassInfo(arena);
 }
 constexpr auto AfkPassInfo::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AfkPassInfo), alignof(AfkPassInfo));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AfkPassInfo), alignof(AfkPassInfo));
 }
 constexpr auto AfkPassInfo::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -1126,7 +1441,7 @@ constexpr auto AfkPassInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[1],
+      &file_reflection_data[2],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -1285,7 +1600,7 @@ constexpr auto SetAfkPassSettingsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -1444,7 +1759,7 @@ constexpr auto GmSetAfkPassResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -1603,7 +1918,7 @@ constexpr auto GetAfkPassResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[4],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -1650,173 +1965,6 @@ const ::_pbi::ClassData* GetAfkPassResponse_get_class_data() {
   return GetAfkPassResponse_globals_.GetClassData();
 #else
   return GetAfkPassResponse_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
-class BuyAfkPassResponse::_Internal {
- public:
-  using HasBits = decltype(::std::declval<BuyAfkPassResponse>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_._has_bits_);
-};
-
-constexpr BuyAfkPassResponse::ParseTableT_ BuyAfkPassResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_._has_bits_),
-      0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
-      2,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::BuyAfkPassResponse>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // .TipInfoMessage error_message = 1;
-      {::_pbi::TcParser::FastMtS1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.error_message_)}},
-      // .AfkPassInfo info = 2;
-      {::_pbi::TcParser::FastMtS1,
-       {18, 1, 1,
-        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.info_)}},
-      // bool replayed = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BuyAfkPassResponse, _impl_.replayed_), 2>(),
-       {24, 2, 0,
-        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.replayed_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // .TipInfoMessage error_message = 1;
-      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // .AfkPassInfo info = 2;
-      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.info_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-      // bool replayed = 3;
-      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
-        #endif
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::AfkPassInfo>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::AfkPassInfo_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr BuyAfkPassResponse::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        error_message_{nullptr},
-        info_{nullptr},
-        replayed_{false} {}
-
-template <typename>
-constexpr BuyAfkPassResponse::BuyAfkPassResponse(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL BuyAfkPassResponse::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) BuyAfkPassResponse(arena);
-}
-constexpr auto BuyAfkPassResponse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BuyAfkPassResponse), alignof(BuyAfkPassResponse));
-}
-constexpr auto BuyAfkPassResponse::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &BuyAfkPassResponse::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<BuyAfkPassResponse>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &BuyAfkPassResponse::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<BuyAfkPassResponse>(), &BuyAfkPassResponse::ByteSizeLong,
-              &BuyAfkPassResponse::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct BuyAfkPassResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr BuyAfkPassResponseGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 BuyAfkPassResponse_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(BuyAfkPassResponse::InternalGenerateClassData_(
-            _default, &BuyAfkPassResponse_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<BuyAfkPassResponse>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~BuyAfkPassResponseGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) BuyAfkPassResponse _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<BuyAfkPassResponse>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(BuyAfkPassResponseGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BuyAfkPassResponseGlobalsTypeInternal BuyAfkPassResponse_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* BuyAfkPassResponse_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return BuyAfkPassResponse_globals_.GetClassData();
-#else
-  return BuyAfkPassResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -1929,7 +2077,7 @@ constexpr auto AckHostedRecapResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
@@ -1980,6 +2128,184 @@ const ::_pbi::ClassData* AckHostedRecapResponse_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class BuyAfkPassResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BuyAfkPassResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_._has_bits_);
+};
+
+constexpr BuyAfkPassResponse::ParseTableT_ BuyAfkPassResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      3,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::BuyAfkPassResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .BagInfo bag = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 2, 2,
+        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.bag_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.error_message_)}},
+      // .AfkPassInfo info = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.info_)}},
+      // bool replayed = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(BuyAfkPassResponse, _impl_.replayed_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.replayed_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .AfkPassInfo info = 2;
+      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.info_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool replayed = 3;
+      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // .BagInfo bag = 4;
+      {PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_.bag_), _Internal::kHasBitsOffset + 2, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::AfkPassInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::AfkPassInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::BagInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::BagInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BuyAfkPassResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        info_{nullptr},
+        bag_{nullptr},
+        replayed_{false} {}
+
+template <typename>
+constexpr BuyAfkPassResponse::BuyAfkPassResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BuyAfkPassResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BuyAfkPassResponse(arena);
+}
+constexpr auto BuyAfkPassResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BuyAfkPassResponse), alignof(BuyAfkPassResponse));
+}
+constexpr auto BuyAfkPassResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BuyAfkPassResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BuyAfkPassResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BuyAfkPassResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BuyAfkPassResponse>(), &BuyAfkPassResponse::ByteSizeLong,
+              &BuyAfkPassResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BuyAfkPassResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[6],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BuyAfkPassResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BuyAfkPassResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BuyAfkPassResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BuyAfkPassResponse::InternalGenerateClassData_(
+            _default, &BuyAfkPassResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BuyAfkPassResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BuyAfkPassResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BuyAfkPassResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BuyAfkPassResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BuyAfkPassResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BuyAfkPassResponseGlobalsTypeInternal BuyAfkPassResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BuyAfkPassResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BuyAfkPassResponse_globals_.GetClassData();
+#else
+  return BuyAfkPassResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 static constexpr const ::_pb::EnumDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_enum_descriptors_proto_2fscene_2fplayer_5fafk_5fpass_2eproto = nullptr;
 static const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL
@@ -2007,8 +2333,35 @@ const ::uint32_t
         6,
         7,
         0x081, // bitmap
-        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_._has_bits_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_._has_bits_),
         15, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.plan_id_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.plan_name_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.period_days_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.price_currency_type_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.price_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.bonus_item_id_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.bonus_item_count_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.bonus_item_name_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.bonus_item_icon_key_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.bonus_frame_key_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.icon_key_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassPlanView, _impl_.desc_),
+        6,
+        0,
+        7,
+        9,
+        8,
+        10,
+        11,
+        1,
+        2,
+        3,
+        4,
+        5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_._has_bits_),
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.expires_at_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.server_now_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.price_currency_type_),
@@ -2021,18 +2374,28 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.hosted_recap_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.unlocked_loadout_slots_),
         PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.stage2_tradable_enabled_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.market_listing_limit_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.stall_duration_hours_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.weekly_free_trial_quota_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.weekly_free_trial_used_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.plans_),
         2,
-        4,
         3,
         5,
+        4,
         6,
         7,
         8,
         9,
-        0,
-        11,
         10,
+        1,
+        12,
+        11,
+        13,
+        14,
+        15,
+        16,
+        0,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetAfkPassResponse, _impl_._has_bits_),
@@ -2043,21 +2406,27 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassRequest, _impl_._has_bits_),
-        6, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassRequest, _impl_.expected_currency_type_),
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassRequest, _impl_.expected_price_),
+        PROTOBUF_FIELD_OFFSET(::BuyAfkPassRequest, _impl_.plan_id_),
+        PROTOBUF_FIELD_OFFSET(::BuyAfkPassRequest, _impl_.expected_period_days_),
         0,
         2,
         1,
+        3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassResponse, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassResponse, _impl_.info_),
         PROTOBUF_FIELD_OFFSET(::BuyAfkPassResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::BuyAfkPassResponse, _impl_.bag_),
         0,
         1,
+        3,
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GmSetAfkPassRequest, _impl_._has_bits_),
@@ -2100,21 +2469,23 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::HostedRecapSummary)},
-        {19, sizeof(::AfkPassInfo)},
-        {46, sizeof(::GetAfkPassRequest)},
-        {47, sizeof(::GetAfkPassResponse)},
-        {54, sizeof(::BuyAfkPassRequest)},
-        {63, sizeof(::BuyAfkPassResponse)},
-        {72, sizeof(::GmSetAfkPassRequest)},
-        {77, sizeof(::GmSetAfkPassResponse)},
-        {84, sizeof(::SetAfkPassSettingsRequest)},
-        {89, sizeof(::SetAfkPassSettingsResponse)},
-        {96, sizeof(::AckHostedRecapRequest)},
-        {101, sizeof(::AckHostedRecapResponse)},
+        {19, sizeof(::AfkPassPlanView)},
+        {46, sizeof(::AfkPassInfo)},
+        {83, sizeof(::GetAfkPassRequest)},
+        {84, sizeof(::GetAfkPassResponse)},
+        {91, sizeof(::BuyAfkPassRequest)},
+        {104, sizeof(::BuyAfkPassResponse)},
+        {115, sizeof(::GmSetAfkPassRequest)},
+        {120, sizeof(::GmSetAfkPassResponse)},
+        {127, sizeof(::SetAfkPassSettingsRequest)},
+        {132, sizeof(::SetAfkPassSettingsResponse)},
+        {139, sizeof(::AckHostedRecapRequest)},
+        {144, sizeof(::AckHostedRecapResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::HostedRecapSummary_globals_,
+        &::AfkPassPlanView_globals_,
         &::AfkPassInfo_globals_,
         &::GetAfkPassRequest_globals_,
         &::GetAfkPassResponse_globals_,
@@ -2131,66 +2502,80 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fafk_5fpass_2eproto
     protodesc_cold) = {
     "\n!proto/scene/player_afk_pass.proto\032\033pro"
     "to/db/proto_option.proto\032\033proto/common/b"
-    "ase/tip.proto\"\267\001\n\022HostedRecapSummary\022\022\n\n"
-    "started_at\030\001 \001(\004\022\020\n\010ended_at\030\002 \001(\004\022\024\n\014ba"
-    "ttle_count\030\003 \001(\r\022\021\n\twin_count\030\004 \001(\r\022\022\n\ne"
-    "xp_gained\030\005 \001(\004\022\025\n\rsilver_gained\030\006 \001(\004\022\022"
-    "\n\nitem_count\030\007 \001(\r\022\023\n\013pending_ack\030\010 \001(\010\""
-    "\322\002\n\013AfkPassInfo\022\022\n\nexpires_at\030\001 \001(\004\022\022\n\ns"
-    "erver_now\030\002 \001(\004\022\033\n\023price_currency_type\030\003"
-    " \001(\r\022\r\n\005price\030\004 \001(\004\022\023\n\013period_days\030\005 \001(\r"
-    "\022\032\n\022max_remaining_days\030\006 \001(\r\022\033\n\023remind_b"
-    "efore_hours\030\007 \001(\r\022\017\n\007balance\030\010 \001(\004\022$\n\034au"
-    "to_return_city_on_team_end\030\t \001(\010\022)\n\014host"
-    "ed_recap\030\n \001(\0132\023.HostedRecapSummary\022\036\n\026u"
-    "nlocked_loadout_slots\030\013 \001(\r\022\037\n\027stage2_tr"
-    "adable_enabled\030\014 \001(\010\"\023\n\021GetAfkPassReques"
-    "t\"X\n\022GetAfkPassResponse\022&\n\rerror_message"
-    "\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014."
-    "AfkPassInfo\"f\n\021BuyAfkPassRequest\022\031\n\021clie"
-    "nt_request_id\030\001 \001(\004\022\036\n\026expected_currency"
-    "_type\030\002 \001(\r\022\026\n\016expected_price\030\003 \001(\004\"j\n\022B"
-    "uyAfkPassResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPas"
-    "sInfo\022\020\n\010replayed\030\003 \001(\010\"0\n\023GmSetAfkPassR"
-    "equest\022\031\n\021remaining_seconds\030\001 \001(\r\"Z\n\024GmS"
-    "etAfkPassResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPas"
-    "sInfo\"A\n\031SetAfkPassSettingsRequest\022$\n\034au"
-    "to_return_city_on_team_end\030\001 \001(\010\"`\n\032SetA"
-    "fkPassSettingsResponse\022&\n\rerror_message\030"
+    "ase/tip.proto\032\034proto/scene/player_bag.pr"
+    "oto\"\267\001\n\022HostedRecapSummary\022\022\n\nstarted_at"
+    "\030\001 \001(\004\022\020\n\010ended_at\030\002 \001(\004\022\024\n\014battle_count"
+    "\030\003 \001(\r\022\021\n\twin_count\030\004 \001(\r\022\022\n\nexp_gained\030"
+    "\005 \001(\004\022\025\n\rsilver_gained\030\006 \001(\004\022\022\n\nitem_cou"
+    "nt\030\007 \001(\r\022\023\n\013pending_ack\030\010 \001(\010\"\226\002\n\017AfkPas"
+    "sPlanView\022\017\n\007plan_id\030\001 \001(\r\022\021\n\tplan_name\030"
+    "\002 \001(\t\022\023\n\013period_days\030\003 \001(\r\022\033\n\023price_curr"
+    "ency_type\030\004 \001(\r\022\r\n\005price\030\005 \001(\004\022\025\n\rbonus_"
+    "item_id\030\006 \001(\r\022\030\n\020bonus_item_count\030\007 \001(\r\022"
+    "\027\n\017bonus_item_name\030\010 \001(\t\022\033\n\023bonus_item_i"
+    "con_key\030\t \001(\t\022\027\n\017bonus_frame_key\030\n \001(\t\022\020"
+    "\n\010icon_key\030\013 \001(\t\022\014\n\004desc\030\014 \001(\t\"\360\003\n\013AfkPa"
+    "ssInfo\022\022\n\nexpires_at\030\001 \001(\004\022\022\n\nserver_now"
+    "\030\002 \001(\004\022\033\n\023price_currency_type\030\003 \001(\r\022\r\n\005p"
+    "rice\030\004 \001(\004\022\023\n\013period_days\030\005 \001(\r\022\032\n\022max_r"
+    "emaining_days\030\006 \001(\r\022\033\n\023remind_before_hou"
+    "rs\030\007 \001(\r\022\017\n\007balance\030\010 \001(\004\022$\n\034auto_return"
+    "_city_on_team_end\030\t \001(\010\022)\n\014hosted_recap\030"
+    "\n \001(\0132\023.HostedRecapSummary\022\036\n\026unlocked_l"
+    "oadout_slots\030\013 \001(\r\022\037\n\027stage2_tradable_en"
+    "abled\030\014 \001(\010\022\034\n\024market_listing_limit\030\r \001("
+    "\r\022\034\n\024stall_duration_hours\030\016 \001(\r\022\037\n\027weekl"
+    "y_free_trial_quota\030\017 \001(\r\022\036\n\026weekly_free_"
+    "trial_used\030\020 \001(\r\022\037\n\005plans\030\021 \003(\0132\020.AfkPas"
+    "sPlanView\"\023\n\021GetAfkPassRequest\"X\n\022GetAfk"
+    "PassResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPassInfo"
+    "\"\225\001\n\021BuyAfkPassRequest\022\031\n\021client_request"
+    "_id\030\001 \001(\004\022\036\n\026expected_currency_type\030\002 \001("
+    "\r\022\026\n\016expected_price\030\003 \001(\004\022\017\n\007plan_id\030\004 \001"
+    "(\r\022\034\n\024expected_period_days\030\005 \001(\r\"\201\001\n\022Buy"
+    "AfkPassResponse\022&\n\rerror_message\030\001 \001(\0132\017"
+    ".TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.AfkPassI"
+    "nfo\022\020\n\010replayed\030\003 \001(\010\022\025\n\003bag\030\004 \001(\0132\010.Bag"
+    "Info\"0\n\023GmSetAfkPassRequest\022\031\n\021remaining"
+    "_seconds\030\001 \001(\r\"Z\n\024GmSetAfkPassResponse\022&"
+    "\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\032"
+    "\n\004info\030\002 \001(\0132\014.AfkPassInfo\"A\n\031SetAfkPass"
+    "SettingsRequest\022$\n\034auto_return_city_on_t"
+    "eam_end\030\001 \001(\010\"`\n\032SetAfkPassSettingsRespo"
+    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
+    "age\022\032\n\004info\030\002 \001(\0132\014.AfkPassInfo\"+\n\025AckHo"
+    "stedRecapRequest\022\022\n\nstarted_at\030\001 \001(\004\"\\\n\026"
+    "AckHostedRecapResponse\022&\n\rerror_message\030"
     "\001 \001(\0132\017.TipInfoMessage\022\032\n\004info\030\002 \001(\0132\014.A"
-    "fkPassInfo\"+\n\025AckHostedRecapRequest\022\022\n\ns"
-    "tarted_at\030\001 \001(\004\"\\\n\026AckHostedRecapRespons"
-    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
-    "e\022\032\n\004info\030\002 \001(\0132\014.AfkPassInfo2\343\002\n\030SceneA"
-    "fkPassClientPlayer\0225\n\nGetAfkPass\022\022.GetAf"
-    "kPassRequest\032\023.GetAfkPassResponse\0225\n\nBuy"
-    "AfkPass\022\022.BuyAfkPassRequest\032\023.BuyAfkPass"
-    "Response\022;\n\014GmSetAfkPass\022\024.GmSetAfkPassR"
-    "equest\032\025.GmSetAfkPassResponse\022M\n\022SetAfkP"
-    "assSettings\022\032.SetAfkPassSettingsRequest\032"
-    "\033.SetAfkPassSettingsResponse\022A\n\016AckHoste"
-    "dRecap\022\026.AckHostedRecapRequest\032\027.AckHost"
-    "edRecapResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230"
-    "\324a\003b\006proto3"
+    "fkPassInfo2\343\002\n\030SceneAfkPassClientPlayer\022"
+    "5\n\nGetAfkPass\022\022.GetAfkPassRequest\032\023.GetA"
+    "fkPassResponse\0225\n\nBuyAfkPass\022\022.BuyAfkPas"
+    "sRequest\032\023.BuyAfkPassResponse\022;\n\014GmSetAf"
+    "kPass\022\024.GmSetAfkPassRequest\032\025.GmSetAfkPa"
+    "ssResponse\022M\n\022SetAfkPassSettings\022\032.SetAf"
+    "kPassSettingsRequest\032\033.SetAfkPassSetting"
+    "sResponse\022A\n\016AckHostedRecap\022\026.AckHostedR"
+    "ecapRequest\032\027.AckHostedRecapResponse\032\n\200\250"
+    "\303\001\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
-    descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_deps[2] = {
+    descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_deps[3] = {
         &::descriptor_table_proto_2fcommon_2fbase_2ftip_2eproto,
         &::descriptor_table_proto_2fdb_2fproto_5foption_2eproto,
+        &::descriptor_table_proto_2fscene_2fplayer_5fbag_2eproto,
 };
 static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto = {
     false,
     false,
-    1771,
+    2312,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fafk_5fpass_2eproto,
     "proto/scene/player_afk_pass.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fafk_5fpass_2eproto_deps,
-    2,
-    12,
+    3,
+    13,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fafk_5fpass_2eproto::offsets,
@@ -2552,6 +2937,549 @@ void HostedRecapSummary::InternalSwap(HostedRecapSummary* PROTOBUF_RESTRICT PROT
 }
 // ===================================================================
 
+AfkPassPlanView::AfkPassPlanView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AfkPassPlanView_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:AfkPassPlanView)
+}
+PROTOBUF_NDEBUG_INLINE AfkPassPlanView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::AfkPassPlanView& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        plan_name_(arena, from.plan_name_),
+        bonus_item_name_(arena, from.bonus_item_name_),
+        bonus_item_icon_key_(arena, from.bonus_item_icon_key_),
+        bonus_frame_key_(arena, from.bonus_frame_key_),
+        icon_key_(arena, from.icon_key_),
+        desc_(arena, from.desc_) {}
+
+AfkPassPlanView::AfkPassPlanView(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AfkPassPlanView& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AfkPassPlanView_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AfkPassPlanView* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, plan_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, plan_id_),
+           offsetof(Impl_, bonus_item_count_) -
+               offsetof(Impl_, plan_id_) +
+               sizeof(Impl_::bonus_item_count_));
+
+  // @@protoc_insertion_point(copy_constructor:AfkPassPlanView)
+}
+PROTOBUF_NDEBUG_INLINE AfkPassPlanView::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        plan_name_(arena),
+        bonus_item_name_(arena),
+        bonus_item_icon_key_(arena),
+        bonus_frame_key_(arena),
+        icon_key_(arena),
+        desc_(arena) {}
+
+inline void AfkPassPlanView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, plan_id_),
+           0,
+           offsetof(Impl_, bonus_item_count_) -
+               offsetof(Impl_, plan_id_) +
+               sizeof(Impl_::bonus_item_count_));
+}
+AfkPassPlanView::~AfkPassPlanView() {
+  // @@protoc_insertion_point(destructor:AfkPassPlanView)
+  SharedDtor(*this);
+}
+inline void AfkPassPlanView::SharedDtor(MessageLite& self) {
+  AfkPassPlanView& this_ = static_cast<AfkPassPlanView&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.plan_name_.Destroy();
+  this_._impl_.bonus_item_name_.Destroy();
+  this_._impl_.bonus_item_icon_key_.Destroy();
+  this_._impl_.bonus_frame_key_.Destroy();
+  this_._impl_.icon_key_.Destroy();
+  this_._impl_.desc_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AfkPassPlanView_class_data_ =
+        AfkPassPlanView::InternalGenerateClassData_(AfkPassPlanView_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AfkPassPlanView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AfkPassPlanView_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AfkPassPlanView_class_data_.tc_table);
+  return AfkPassPlanView_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AfkPassPlanView::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AfkPassPlanView_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AfkPassPlanView_globals_));
+  return AfkPassPlanView_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AfkPassPlanView::ParseTableT_
+    AfkPassPlanView::_table_ =
+        AfkPassPlanView::InternalGenerateParseTable_(AfkPassPlanView_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AfkPassPlanView::Clear() {
+// @@protoc_insertion_point(message_clear_start:AfkPassPlanView)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.plan_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.bonus_item_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.bonus_item_icon_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.bonus_frame_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      _impl_.icon_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      _impl_.desc_.ClearNonDefaultToEmpty();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
+    ::memset(&_impl_.plan_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.period_days_) -
+        reinterpret_cast<char*>(&_impl_.plan_id_)) + sizeof(_impl_.period_days_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.price_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.bonus_item_count_) -
+        reinterpret_cast<char*>(&_impl_.price_)) + sizeof(_impl_.bonus_item_count_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AfkPassPlanView::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AfkPassPlanView& this_ = static_cast<const AfkPassPlanView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AfkPassPlanView::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AfkPassPlanView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:AfkPassPlanView)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 plan_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_plan_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_plan_id(), target);
+    }
+  }
+
+  // string plan_name = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_plan_name().empty()) {
+      const ::std::string& _s = this_._internal_plan_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassPlanView.plan_name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // uint32 period_days = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_period_days() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_period_days(), target);
+    }
+  }
+
+  // uint32 price_currency_type = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_price_currency_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_price_currency_type(), target);
+    }
+  }
+
+  // uint64 price = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_price() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_price(), target);
+    }
+  }
+
+  // uint32 bonus_item_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_bonus_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_bonus_item_id(), target);
+    }
+  }
+
+  // uint32 bonus_item_count = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_bonus_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_bonus_item_count(), target);
+    }
+  }
+
+  // string bonus_item_name = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_bonus_item_name().empty()) {
+      const ::std::string& _s = this_._internal_bonus_item_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassPlanView.bonus_item_name");
+      target = stream->WriteStringMaybeAliased(8, _s, target);
+    }
+  }
+
+  // string bonus_item_icon_key = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_bonus_item_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_bonus_item_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassPlanView.bonus_item_icon_key");
+      target = stream->WriteStringMaybeAliased(9, _s, target);
+    }
+  }
+
+  // string bonus_frame_key = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_bonus_frame_key().empty()) {
+      const ::std::string& _s = this_._internal_bonus_frame_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassPlanView.bonus_frame_key");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // string icon_key = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (!this_._internal_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassPlanView.icon_key");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // string desc = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (!this_._internal_desc().empty()) {
+      const ::std::string& _s = this_._internal_desc();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassPlanView.desc");
+      target = stream->WriteStringMaybeAliased(12, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:AfkPassPlanView)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AfkPassPlanView::ByteSizeLong(const MessageLite& base) {
+  const AfkPassPlanView& this_ = static_cast<const AfkPassPlanView&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AfkPassPlanView::ByteSizeLong() const {
+  const AfkPassPlanView& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:AfkPassPlanView)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // string plan_name = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_plan_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_plan_name());
+      }
+    }
+    // string bonus_item_name = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_bonus_item_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_bonus_item_name());
+      }
+    }
+    // string bonus_item_icon_key = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_bonus_item_icon_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_bonus_item_icon_key());
+      }
+    }
+    // string bonus_frame_key = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_bonus_frame_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_bonus_frame_key());
+      }
+    }
+    // string icon_key = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!this_._internal_icon_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_icon_key());
+      }
+    }
+    // string desc = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!this_._internal_desc().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_desc());
+      }
+    }
+    // uint32 plan_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_plan_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_plan_id());
+      }
+    }
+    // uint32 period_days = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_period_days() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_period_days());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    // uint64 price = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_price() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_price());
+      }
+    }
+    // uint32 price_currency_type = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_price_currency_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_price_currency_type());
+      }
+    }
+    // uint32 bonus_item_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_bonus_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bonus_item_id());
+      }
+    }
+    // uint32 bonus_item_count = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_bonus_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bonus_item_count());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AfkPassPlanView::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AfkPassPlanView*>(&to_msg);
+  auto& from = static_cast<const AfkPassPlanView&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:AfkPassPlanView)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_plan_name().empty()) {
+        _this->_internal_set_plan_name(from._internal_plan_name());
+      } else {
+        if (_this->_impl_.plan_name_.IsDefault()) {
+          _this->_internal_set_plan_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_bonus_item_name().empty()) {
+        _this->_internal_set_bonus_item_name(from._internal_bonus_item_name());
+      } else {
+        if (_this->_impl_.bonus_item_name_.IsDefault()) {
+          _this->_internal_set_bonus_item_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_bonus_item_icon_key().empty()) {
+        _this->_internal_set_bonus_item_icon_key(from._internal_bonus_item_icon_key());
+      } else {
+        if (_this->_impl_.bonus_item_icon_key_.IsDefault()) {
+          _this->_internal_set_bonus_item_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_bonus_frame_key().empty()) {
+        _this->_internal_set_bonus_frame_key(from._internal_bonus_frame_key());
+      } else {
+        if (_this->_impl_.bonus_frame_key_.IsDefault()) {
+          _this->_internal_set_bonus_frame_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (!from._internal_icon_key().empty()) {
+        _this->_internal_set_icon_key(from._internal_icon_key());
+      } else {
+        if (_this->_impl_.icon_key_.IsDefault()) {
+          _this->_internal_set_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (!from._internal_desc().empty()) {
+        _this->_internal_set_desc(from._internal_desc());
+      } else {
+        if (_this->_impl_.desc_.IsDefault()) {
+          _this->_internal_set_desc("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_plan_id() != 0) {
+        _this->_impl_.plan_id_ = from._impl_.plan_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_period_days() != 0) {
+        _this->_impl_.period_days_ = from._impl_.period_days_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_price() != 0) {
+        _this->_impl_.price_ = from._impl_.price_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_price_currency_type() != 0) {
+        _this->_impl_.price_currency_type_ = from._impl_.price_currency_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_bonus_item_id() != 0) {
+        _this->_impl_.bonus_item_id_ = from._impl_.bonus_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_bonus_item_count() != 0) {
+        _this->_impl_.bonus_item_count_ = from._impl_.bonus_item_count_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AfkPassPlanView::CopyFrom(const AfkPassPlanView& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:AfkPassPlanView)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AfkPassPlanView::InternalSwap(AfkPassPlanView* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.plan_name_, &other->_impl_.plan_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bonus_item_name_, &other->_impl_.bonus_item_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bonus_item_icon_key_, &other->_impl_.bonus_item_icon_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bonus_frame_key_, &other->_impl_.bonus_frame_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.bonus_item_count_)
+      + sizeof(AfkPassPlanView::_impl_.bonus_item_count_)
+      - PROTOBUF_FIELD_OFFSET(AfkPassPlanView, _impl_.plan_id_)>(
+          reinterpret_cast<char*>(&_impl_.plan_id_),
+          reinterpret_cast<char*>(&other->_impl_.plan_id_));
+}
+
+::google::protobuf::Metadata AfkPassPlanView::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 AfkPassInfo::AfkPassInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, AfkPassInfo_get_class_data()) {
@@ -2566,7 +3494,14 @@ PROTOBUF_NDEBUG_INLINE AfkPassInfo::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     [[maybe_unused]] const ::AfkPassInfo& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0} {}
+        _cached_size_{0},
+        plans_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::AfkPassInfo,
+              PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.plans_)>()
+          , from.plans_
+        }
+     {}
 
 AfkPassInfo::AfkPassInfo(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2583,32 +3518,37 @@ AfkPassInfo::AfkPassInfo(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.hosted_recap_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+  _impl_.hosted_recap_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.hosted_recap_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, expires_at_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, expires_at_),
-           offsetof(Impl_, unlocked_loadout_slots_) -
+           offsetof(Impl_, weekly_free_trial_used_) -
                offsetof(Impl_, expires_at_) +
-               sizeof(Impl_::unlocked_loadout_slots_));
+               sizeof(Impl_::weekly_free_trial_used_));
 
   // @@protoc_insertion_point(copy_constructor:AfkPassInfo)
 }
 PROTOBUF_NDEBUG_INLINE AfkPassInfo::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        plans_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::AfkPassInfo,
+            PROTOBUF_FIELD_OFFSET(::AfkPassInfo, _impl_.plans_)>()
+         }
+     {}
 
 inline void AfkPassInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, hosted_recap_),
            0,
-           offsetof(Impl_, unlocked_loadout_slots_) -
+           offsetof(Impl_, weekly_free_trial_used_) -
                offsetof(Impl_, hosted_recap_) +
-               sizeof(Impl_::unlocked_loadout_slots_));
+               sizeof(Impl_::weekly_free_trial_used_));
 }
 AfkPassInfo::~AfkPassInfo() {
   // @@protoc_insertion_point(destructor:AfkPassInfo)
@@ -2659,20 +3599,26 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    ABSL_DCHECK(_impl_.hosted_recap_ != nullptr);
-    _impl_.hosted_recap_->Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.plans_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.hosted_recap_ != nullptr);
+      _impl_.hosted_recap_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.expires_at_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.remind_before_hours_) -
-        reinterpret_cast<char*>(&_impl_.expires_at_)) + sizeof(_impl_.remind_before_hours_));
+        reinterpret_cast<char*>(&_impl_.max_remaining_days_) -
+        reinterpret_cast<char*>(&_impl_.expires_at_)) + sizeof(_impl_.max_remaining_days_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    ::memset(&_impl_.balance_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.unlocked_loadout_slots_) -
-        reinterpret_cast<char*>(&_impl_.balance_)) + sizeof(_impl_.unlocked_loadout_slots_));
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.remind_before_hours_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.weekly_free_trial_quota_) -
+        reinterpret_cast<char*>(&_impl_.remind_before_hours_)) + sizeof(_impl_.weekly_free_trial_quota_));
   }
+  _impl_.weekly_free_trial_used_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2697,7 +3643,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 expires_at = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_expires_at() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2706,7 +3652,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint64 server_now = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_server_now() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2715,7 +3661,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint32 price_currency_type = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_price_currency_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2724,7 +3670,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint64 price = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_price() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2733,7 +3679,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint32 period_days = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_period_days() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2742,7 +3688,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint32 max_remaining_days = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_max_remaining_days() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2751,7 +3697,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint32 remind_before_hours = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_remind_before_hours() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2760,7 +3706,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // uint64 balance = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -2769,7 +3715,7 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // bool auto_return_city_on_team_end = 9;
-  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
     if (this_._internal_auto_return_city_on_team_end() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -2778,14 +3724,14 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // .HostedRecapSummary hosted_recap = 10;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         10, *this_._impl_.hosted_recap_, this_._impl_.hosted_recap_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 unlocked_loadout_slots = 11;
-  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
     if (this_._internal_unlocked_loadout_slots() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -2794,11 +3740,60 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   }
 
   // bool stage2_tradable_enabled = 12;
-  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
     if (this_._internal_stage2_tradable_enabled() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           12, this_._internal_stage2_tradable_enabled(), target);
+    }
+  }
+
+  // uint32 market_listing_limit = 13;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_market_listing_limit() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          13, this_._internal_market_listing_limit(), target);
+    }
+  }
+
+  // uint32 stall_duration_hours = 14;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_stall_duration_hours() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_stall_duration_hours(), target);
+    }
+  }
+
+  // uint32 weekly_free_trial_quota = 15;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_weekly_free_trial_quota() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_weekly_free_trial_quota(), target);
+    }
+  }
+
+  // uint32 weekly_free_trial_used = 16;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_weekly_free_trial_used() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_weekly_free_trial_used(), target);
+    }
+  }
+
+  // repeated .AfkPassPlanView plans = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_plans_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_plans().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              17, repfield, repfield.GetCachedSize(),
+              target, stream);
     }
   }
 
@@ -2828,86 +3823,123 @@ PROTOBUF_NOINLINE void AfkPassInfo::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
-    // .HostedRecapSummary hosted_recap = 10;
+    // repeated .AfkPassPlanView plans = 17;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 2UL * this_._internal_plans_size();
+      for (const auto& msg : this_._internal_plans()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // .HostedRecapSummary hosted_recap = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.hosted_recap_);
     }
     // uint64 expires_at = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_expires_at() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_expires_at());
       }
     }
     // uint64 server_now = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_server_now() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_server_now());
       }
     }
     // uint64 price = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_price() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_price());
       }
     }
     // uint32 price_currency_type = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_price_currency_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_price_currency_type());
       }
     }
     // uint32 period_days = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_period_days() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_period_days());
       }
     }
     // uint32 max_remaining_days = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_max_remaining_days() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_remaining_days());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 remind_before_hours = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_remind_before_hours() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_remind_before_hours());
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint64 balance = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_balance());
       }
     }
     // bool auto_return_city_on_team_end = 9;
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (this_._internal_auto_return_city_on_team_end() != 0) {
         total_size += 2;
       }
     }
     // bool stage2_tradable_enabled = 12;
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (this_._internal_stage2_tradable_enabled() != 0) {
         total_size += 2;
       }
     }
     // uint32 unlocked_loadout_slots = 11;
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (this_._internal_unlocked_loadout_slots() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_unlocked_loadout_slots());
+      }
+    }
+    // uint32 market_listing_limit = 13;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_market_listing_limit() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_market_listing_limit());
+      }
+    }
+    // uint32 stall_duration_hours = 14;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_stall_duration_hours() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_stall_duration_hours());
+      }
+    }
+    // uint32 weekly_free_trial_quota = 15;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_weekly_free_trial_quota() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_weekly_free_trial_quota());
+      }
+    }
+  }
+   {
+    // uint32 weekly_free_trial_used = 16;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_weekly_free_trial_used() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_weekly_free_trial_used());
       }
     }
   }
@@ -2931,6 +3963,11 @@ void AfkPassInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
   cached_has_bits = from._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_plans()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_plans());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(from._impl_.hosted_recap_ != nullptr);
       if (_this->_impl_.hosted_recap_ == nullptr) {
         _this->_impl_.hosted_recap_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.hosted_recap_);
@@ -2938,62 +3975,82 @@ void AfkPassInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.hosted_recap_->MergeFrom(*from._impl_.hosted_recap_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_expires_at() != 0) {
         _this->_impl_.expires_at_ = from._impl_.expires_at_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_server_now() != 0) {
         _this->_impl_.server_now_ = from._impl_.server_now_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_price() != 0) {
         _this->_impl_.price_ = from._impl_.price_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_price_currency_type() != 0) {
         _this->_impl_.price_currency_type_ = from._impl_.price_currency_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_period_days() != 0) {
         _this->_impl_.period_days_ = from._impl_.period_days_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_max_remaining_days() != 0) {
         _this->_impl_.max_remaining_days_ = from._impl_.max_remaining_days_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_remind_before_hours() != 0) {
         _this->_impl_.remind_before_hours_ = from._impl_.remind_before_hours_;
       }
     }
-  }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
-    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_balance() != 0) {
         _this->_impl_.balance_ = from._impl_.balance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_auto_return_city_on_team_end() != 0) {
         _this->_impl_.auto_return_city_on_team_end_ = from._impl_.auto_return_city_on_team_end_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
       if (from._internal_stage2_tradable_enabled() != 0) {
         _this->_impl_.stage2_tradable_enabled_ = from._impl_.stage2_tradable_enabled_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_unlocked_loadout_slots() != 0) {
         _this->_impl_.unlocked_loadout_slots_ = from._impl_.unlocked_loadout_slots_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_market_listing_limit() != 0) {
+        _this->_impl_.market_listing_limit_ = from._impl_.market_listing_limit_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_stall_duration_hours() != 0) {
+        _this->_impl_.stall_duration_hours_ = from._impl_.stall_duration_hours_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_weekly_free_trial_quota() != 0) {
+        _this->_impl_.weekly_free_trial_quota_ = from._impl_.weekly_free_trial_quota_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_weekly_free_trial_used() != 0) {
+      _this->_impl_.weekly_free_trial_used_ = from._impl_.weekly_free_trial_used_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3013,9 +4070,10 @@ void AfkPassInfo::InternalSwap(AfkPassInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.plans_.InternalSwap(&other->_impl_.plans_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.unlocked_loadout_slots_)
-      + sizeof(AfkPassInfo::_impl_.unlocked_loadout_slots_)
+      PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.weekly_free_trial_used_)
+      + sizeof(AfkPassInfo::_impl_.weekly_free_trial_used_)
       - PROTOBUF_FIELD_OFFSET(AfkPassInfo, _impl_.hosted_recap_)>(
           reinterpret_cast<char*>(&_impl_.hosted_recap_),
           reinterpret_cast<char*>(&other->_impl_.hosted_recap_));
@@ -3378,9 +4436,9 @@ inline void BuyAfkPassRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, client_request_id_),
            0,
-           offsetof(Impl_, expected_currency_type_) -
+           offsetof(Impl_, expected_period_days_) -
                offsetof(Impl_, client_request_id_) +
-               sizeof(Impl_::expected_currency_type_));
+               sizeof(Impl_::expected_period_days_));
 }
 BuyAfkPassRequest::~BuyAfkPassRequest() {
   // @@protoc_insertion_point(destructor:BuyAfkPassRequest)
@@ -3430,10 +4488,10 @@ PROTOBUF_NOINLINE void BuyAfkPassRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.expected_currency_type_) -
-        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.expected_currency_type_));
+        reinterpret_cast<char*>(&_impl_.expected_period_days_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.expected_period_days_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3485,6 +4543,24 @@ PROTOBUF_NOINLINE void BuyAfkPassRequest::Clear() {
     }
   }
 
+  // uint32 plan_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_plan_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_plan_id(), target);
+    }
+  }
+
+  // uint32 expected_period_days = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_expected_period_days() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_expected_period_days(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3510,7 +4586,7 @@ PROTOBUF_NOINLINE void BuyAfkPassRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // uint64 client_request_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_client_request_id() != 0) {
@@ -3532,6 +4608,20 @@ PROTOBUF_NOINLINE void BuyAfkPassRequest::Clear() {
             this_._internal_expected_currency_type());
       }
     }
+    // uint32 plan_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_plan_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_plan_id());
+      }
+    }
+    // uint32 expected_period_days = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_expected_period_days() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_expected_period_days());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -3550,7 +4640,7 @@ void BuyAfkPassRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_client_request_id() != 0) {
         _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
@@ -3564,6 +4654,16 @@ void BuyAfkPassRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_expected_currency_type() != 0) {
         _this->_impl_.expected_currency_type_ = from._impl_.expected_currency_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_plan_id() != 0) {
+        _this->_impl_.plan_id_ = from._impl_.plan_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_expected_period_days() != 0) {
+        _this->_impl_.expected_period_days_ = from._impl_.expected_period_days_;
       }
     }
   }
@@ -3585,8 +4685,8 @@ void BuyAfkPassRequest::InternalSwap(BuyAfkPassRequest* PROTOBUF_RESTRICT PROTOB
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_currency_type_)
-      + sizeof(BuyAfkPassRequest::_impl_.expected_currency_type_)
+      PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.expected_period_days_)
+      + sizeof(BuyAfkPassRequest::_impl_.expected_period_days_)
       - PROTOBUF_FIELD_OFFSET(BuyAfkPassRequest, _impl_.client_request_id_)>(
           reinterpret_cast<char*>(&_impl_.client_request_id_),
           reinterpret_cast<char*>(&other->_impl_.client_request_id_));
@@ -3601,6 +4701,11 @@ void BuyAfkPassResponse::clear_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+void BuyAfkPassResponse::clear_bag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bag_ != nullptr) _impl_.bag_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 BuyAfkPassResponse::BuyAfkPassResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -3639,6 +4744,9 @@ BuyAfkPassResponse::BuyAfkPassResponse(
   _impl_.info_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.info_)
                 : nullptr;
+  _impl_.bag_ = (CheckHasBit(cached_has_bits, 0x00000004U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_)
+                : nullptr;
   _impl_.replayed_ = from._impl_.replayed_;
 
   // @@protoc_insertion_point(copy_constructor:BuyAfkPassResponse)
@@ -3670,6 +4778,7 @@ inline void BuyAfkPassResponse::SharedDtor(MessageLite& self) {
   ABSL_DCHECK(this_.GetArena() == nullptr);
   delete this_._impl_.error_message_;
   delete this_._impl_.info_;
+  delete this_._impl_.bag_;
   this_._impl_.~Impl_();
 }
 
@@ -3707,7 +4816,7 @@ PROTOBUF_NOINLINE void BuyAfkPassResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(_impl_.error_message_ != nullptr);
       _impl_.error_message_->Clear();
@@ -3715,6 +4824,10 @@ PROTOBUF_NOINLINE void BuyAfkPassResponse::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(_impl_.info_ != nullptr);
       _impl_.info_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(_impl_.bag_ != nullptr);
+      _impl_.bag_->Clear();
     }
   }
   _impl_.replayed_ = false;
@@ -3756,12 +4869,19 @@ PROTOBUF_NOINLINE void BuyAfkPassResponse::Clear() {
   }
 
   // bool replayed = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_replayed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           3, this_._internal_replayed(), target);
     }
+  }
+
+  // .BagInfo bag = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        4, *this_._impl_.bag_, this_._impl_.bag_->GetCachedSize(), target,
+        stream);
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -3789,7 +4909,7 @@ PROTOBUF_NOINLINE void BuyAfkPassResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // .TipInfoMessage error_message = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1 +
@@ -3800,8 +4920,13 @@ PROTOBUF_NOINLINE void BuyAfkPassResponse::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.info_);
     }
-    // bool replayed = 3;
+    // .BagInfo bag = 4;
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.bag_);
+    }
+    // bool replayed = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_replayed() != 0) {
         total_size += 2;
       }
@@ -3825,7 +4950,7 @@ void BuyAfkPassResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       ABSL_DCHECK(from._impl_.error_message_ != nullptr);
       if (_this->_impl_.error_message_ == nullptr) {
@@ -3843,6 +4968,14 @@ void BuyAfkPassResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      ABSL_DCHECK(from._impl_.bag_ != nullptr);
+      if (_this->_impl_.bag_ == nullptr) {
+        _this->_impl_.bag_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.bag_);
+      } else {
+        _this->_impl_.bag_->MergeFrom(*from._impl_.bag_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_replayed() != 0) {
         _this->_impl_.replayed_ = from._impl_.replayed_;
       }

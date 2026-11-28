@@ -16,6 +16,11 @@ message AfkPassRuleTable {
 	uint32 max_remaining_days = 5;
 	uint32 remind_before_hours = 6;
 	string desc = 7;
+	uint32 bonus_item_id = 8;
+	uint32 bonus_item_count = 9;
+	string bonus_frame_key = 10;
+	string plan_name = 11;
+	string icon_key = 12;
 }
 
 message AfkPassRuleTableData {

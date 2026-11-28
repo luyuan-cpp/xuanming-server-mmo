@@ -1670,8 +1670,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatMessage final : public ::google
     kContentFieldNumber = 4,
     kSenderPlayerIdFieldNumber = 1,
     kTargetPlayerIdFieldNumber = 2,
-    kSendTimeMsFieldNumber = 5,
     kChannelFieldNumber = 3,
+    kBubbleSkinIdFieldNumber = 6,
+    kSendTimeMsFieldNumber = 5,
+    kShareCardSkinIdFieldNumber = 7,
   };
   // string content = 4;
   void clear_content() ;
@@ -1708,16 +1710,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatMessage final : public ::google
   void _internal_set_target_player_id(::uint64_t value);
 
   public:
-  // int64 send_time_ms = 5;
-  void clear_send_time_ms() ;
-  [[nodiscard]] ::int64_t send_time_ms() const;
-  void set_send_time_ms(::int64_t value);
-
-  private:
-  ::int64_t _internal_send_time_ms() const;
-  void _internal_set_send_time_ms(::int64_t value);
-
-  public:
   // .chatpb.ChatChannelType channel = 3;
   void clear_channel() ;
   [[nodiscard]] ::chatpb::ChatChannelType channel() const;
@@ -1728,11 +1720,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatMessage final : public ::google
   void _internal_set_channel(::chatpb::ChatChannelType value);
 
   public:
+  // uint32 bubble_skin_id = 6;
+  void clear_bubble_skin_id() ;
+  [[nodiscard]] ::uint32_t bubble_skin_id() const;
+  void set_bubble_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bubble_skin_id() const;
+  void _internal_set_bubble_skin_id(::uint32_t value);
+
+  public:
+  // int64 send_time_ms = 5;
+  void clear_send_time_ms() ;
+  [[nodiscard]] ::int64_t send_time_ms() const;
+  void set_send_time_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_send_time_ms() const;
+  void _internal_set_send_time_ms(::int64_t value);
+
+  public:
+  // uint32 share_card_skin_id = 7;
+  void clear_share_card_skin_id() ;
+  [[nodiscard]] ::uint32_t share_card_skin_id() const;
+  void set_share_card_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_share_card_skin_id() const;
+  void _internal_set_share_card_skin_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:chatpb.ChatMessage)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 34,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1764,8 +1786,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ChatMessage final : public ::google
     ::google::protobuf::internal::ArenaStringPtr content_;
     ::uint64_t sender_player_id_;
     ::uint64_t target_player_id_;
-    ::int64_t send_time_ms_;
     int channel_;
+    ::uint32_t bubble_skin_id_;
+    ::int64_t send_time_ms_;
+    ::uint32_t share_card_skin_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3146,7 +3170,7 @@ inline void ChatMessage::_internal_set_target_player_id(::uint64_t value) {
 inline void ChatMessage::clear_channel() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.channel_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::chatpb::ChatChannelType ChatMessage::channel() const {
   // @@protoc_insertion_point(field_get:chatpb.ChatMessage.channel)
@@ -3154,7 +3178,7 @@ inline ::chatpb::ChatChannelType ChatMessage::channel() const {
 }
 inline void ChatMessage::set_channel(::chatpb::ChatChannelType value) {
   _internal_set_channel(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:chatpb.ChatMessage.channel)
 }
 inline ::chatpb::ChatChannelType ChatMessage::_internal_channel() const {
@@ -3234,7 +3258,7 @@ inline void ChatMessage::set_allocated_content(::std::string* PROTOBUF_NULLABLE 
 inline void ChatMessage::clear_send_time_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.send_time_ms_ = ::int64_t{0};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::int64_t ChatMessage::send_time_ms() const {
   // @@protoc_insertion_point(field_get:chatpb.ChatMessage.send_time_ms)
@@ -3242,7 +3266,7 @@ inline ::int64_t ChatMessage::send_time_ms() const {
 }
 inline void ChatMessage::set_send_time_ms(::int64_t value) {
   _internal_set_send_time_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:chatpb.ChatMessage.send_time_ms)
 }
 inline ::int64_t ChatMessage::_internal_send_time_ms() const {
@@ -3252,6 +3276,54 @@ inline ::int64_t ChatMessage::_internal_send_time_ms() const {
 inline void ChatMessage::_internal_set_send_time_ms(::int64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.send_time_ms_ = value;
+}
+
+// uint32 bubble_skin_id = 6;
+inline void ChatMessage::clear_bubble_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bubble_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t ChatMessage::bubble_skin_id() const {
+  // @@protoc_insertion_point(field_get:chatpb.ChatMessage.bubble_skin_id)
+  return _internal_bubble_skin_id();
+}
+inline void ChatMessage::set_bubble_skin_id(::uint32_t value) {
+  _internal_set_bubble_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:chatpb.ChatMessage.bubble_skin_id)
+}
+inline ::uint32_t ChatMessage::_internal_bubble_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bubble_skin_id_;
+}
+inline void ChatMessage::_internal_set_bubble_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bubble_skin_id_ = value;
+}
+
+// uint32 share_card_skin_id = 7;
+inline void ChatMessage::clear_share_card_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_card_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t ChatMessage::share_card_skin_id() const {
+  // @@protoc_insertion_point(field_get:chatpb.ChatMessage.share_card_skin_id)
+  return _internal_share_card_skin_id();
+}
+inline void ChatMessage::set_share_card_skin_id(::uint32_t value) {
+  _internal_set_share_card_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:chatpb.ChatMessage.share_card_skin_id)
+}
+inline ::uint32_t ChatMessage::_internal_share_card_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.share_card_skin_id_;
+}
+inline void ChatMessage::_internal_set_share_card_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_card_skin_id_ = value;
 }
 
 // -------------------------------------------------------------------

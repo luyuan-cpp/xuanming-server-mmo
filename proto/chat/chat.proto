@@ -24,6 +24,9 @@ message ChatMessage {
   ChatChannelType channel = 3;
   string content = 4;
   int64 send_time_ms = 5;
+  // 由服务端权威校验填充的聊天气泡与战报/残局分享卡片底纹外观 ID（CosmeticShowcase.id；客户端自报值一律忽略）。
+  uint32 bubble_skin_id = 6;
+  uint32 share_card_skin_id = 7;
 }
 
 message SendChatRequest {

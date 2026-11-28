@@ -101,6 +101,14 @@ extern const ::google::protobuf::internal::ClassDataFull PlayerProfileComp_class
 #else
 extern const PlayerProfileCompGlobalsTypeInternal PlayerProfileComp_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse;
+struct PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUseGlobalsTypeInternal PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse_class_data_;
+#else
+extern const PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUseGlobalsTypeInternal PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse;
 struct PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -985,7 +993,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerStressTestProbe final : publi
   [[nodiscard]] static const PlayerStressTestProbe& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerStressTestProbe>(&PlayerStressTestProbe_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(PlayerStressTestProbe& a, PlayerStressTestProbe& b) { a.Swap(&b); }
   inline void Swap(PlayerStressTestProbe* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1203,7 +1211,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerRenameOp final : public ::goo
   [[nodiscard]] static const PlayerRenameOp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerRenameOp>(&PlayerRenameOp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(PlayerRenameOp& a, PlayerRenameOp& b) { a.Swap(&b); }
   inline void Swap(PlayerRenameOp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1442,6 +1450,55 @@ class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp_EquippedSkillVfxEn
   friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto;
   friend ::google::protobuf::internal::PrivateAccess;
   friend PlayerProfileComp_EquippedSkillVfxEntry_DoNotUseGlobalsTypeInternal;
+
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+};
+// -------------------------------------------------------------------
+
+class PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse final
+    : public ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                             ::google::protobuf::internal::WireFormatLite::TYPE_UINT32> {
+ public:
+  using SuperType =
+      ::google::protobuf::internal::MapEntry<::uint32_t, ::uint32_t,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32,
+                      ::google::protobuf::internal::WireFormatLite::TYPE_UINT32>;
+  PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse();
+  template <typename = void>
+  explicit constexpr PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+  explicit PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr const void* PROTOBUF_NONNULL internal_message_globals() {
+    return &PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse_globals_;
+  }
+
+
+  static constexpr auto InternalGenerateClassData_(
+      const ::google::protobuf::MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+ private:
+  friend class ::google::protobuf::MessageLite;
+  friend struct ::TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto;
+  friend ::google::protobuf::internal::PrivateAccess;
+  friend PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUseGlobalsTypeInternal;
 
   using ParseTableT_ =
       ::google::protobuf::internal::TcParseTable<1, 2,
@@ -2138,7 +2195,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   [[nodiscard]] static const PlayerProfileComp& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerProfileComp>(&PlayerProfileComp_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(PlayerProfileComp& a, PlayerProfileComp& b) { a.Swap(&b); }
   inline void Swap(PlayerProfileComp* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2237,6 +2294,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     kAppearanceOwnedBitsFieldNumber = 11,
     kPetCosmeticOwnedBitsFieldNumber = 12,
     kSkillVfxOwnedBitsFieldNumber = 13,
+    kShowcaseCosmeticOwnedBitsFieldNumber = 18,
     kRenameOpFieldNumber = 6,
     kRenameSeqFieldNumber = 4,
     kRenamedMsFieldNumber = 5,
@@ -2244,7 +2302,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     kGenderFieldNumber = 3,
     kSpectateChatPrefFieldNumber = 15,
     kAppearanceSwitchSeqFieldNumber = 10,
+    kLightCardTrialWeekStartMsFieldNumber = 16,
+    kLightCardTrialUsedFieldNumber = 17,
+    kCelebrationBindGoldClaimedFieldNumber = 21,
+    kCelebrationWeekStartMsFieldNumber = 20,
+    kCosmeticGiftWeekStartMsFieldNumber = 22,
+    kCosmeticGiftSentCountFieldNumber = 23,
     kEquippedSkillVfxFieldNumber = 14,
+    kEquippedShowcaseCosmeticsFieldNumber = 19,
   };
   // string name = 1;
   void clear_name() ;
@@ -2351,6 +2416,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   ::std::string* PROTOBUF_NONNULL _internal_mutable_skill_vfx_owned_bits();
 
   public:
+  // bytes showcase_cosmetic_owned_bits = 18;
+  void clear_showcase_cosmetic_owned_bits() ;
+  [[nodiscard]] const ::std::string& showcase_cosmetic_owned_bits() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_showcase_cosmetic_owned_bits(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_showcase_cosmetic_owned_bits();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_showcase_cosmetic_owned_bits();
+  void set_allocated_showcase_cosmetic_owned_bits(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_showcase_cosmetic_owned_bits() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_showcase_cosmetic_owned_bits(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_showcase_cosmetic_owned_bits();
+
+  public:
   // .PlayerRenameOp rename_op = 6;
   [[nodiscard]] bool has_rename_op()
       const;
@@ -2427,6 +2507,66 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   void _internal_set_appearance_switch_seq(::uint64_t value);
 
   public:
+  // uint64 light_card_trial_week_start_ms = 16;
+  void clear_light_card_trial_week_start_ms() ;
+  [[nodiscard]] ::uint64_t light_card_trial_week_start_ms() const;
+  void set_light_card_trial_week_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_light_card_trial_week_start_ms() const;
+  void _internal_set_light_card_trial_week_start_ms(::uint64_t value);
+
+  public:
+  // uint32 light_card_trial_used = 17;
+  void clear_light_card_trial_used() ;
+  [[nodiscard]] ::uint32_t light_card_trial_used() const;
+  void set_light_card_trial_used(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_light_card_trial_used() const;
+  void _internal_set_light_card_trial_used(::uint32_t value);
+
+  public:
+  // uint32 celebration_bind_gold_claimed = 21;
+  void clear_celebration_bind_gold_claimed() ;
+  [[nodiscard]] ::uint32_t celebration_bind_gold_claimed() const;
+  void set_celebration_bind_gold_claimed(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_celebration_bind_gold_claimed() const;
+  void _internal_set_celebration_bind_gold_claimed(::uint32_t value);
+
+  public:
+  // uint64 celebration_week_start_ms = 20;
+  void clear_celebration_week_start_ms() ;
+  [[nodiscard]] ::uint64_t celebration_week_start_ms() const;
+  void set_celebration_week_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_celebration_week_start_ms() const;
+  void _internal_set_celebration_week_start_ms(::uint64_t value);
+
+  public:
+  // uint64 cosmetic_gift_week_start_ms = 22;
+  void clear_cosmetic_gift_week_start_ms() ;
+  [[nodiscard]] ::uint64_t cosmetic_gift_week_start_ms() const;
+  void set_cosmetic_gift_week_start_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cosmetic_gift_week_start_ms() const;
+  void _internal_set_cosmetic_gift_week_start_ms(::uint64_t value);
+
+  public:
+  // uint32 cosmetic_gift_sent_count = 23;
+  void clear_cosmetic_gift_sent_count() ;
+  [[nodiscard]] ::uint32_t cosmetic_gift_sent_count() const;
+  void set_cosmetic_gift_sent_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cosmetic_gift_sent_count() const;
+  void _internal_set_cosmetic_gift_sent_count(::uint32_t value);
+
+  public:
   // map<uint32, uint32> equipped_skill_vfx = 14;
   [[nodiscard]] int equipped_skill_vfx_size()
       const;
@@ -2443,12 +2583,28 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
   ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_equipped_skill_vfx();
 
   public:
+  // map<uint32, uint32> equipped_showcase_cosmetics = 19;
+  [[nodiscard]] int equipped_showcase_cosmetics_size()
+      const;
+  private:
+  int _internal_equipped_showcase_cosmetics_size() const;
+
+  public:
+  void clear_equipped_showcase_cosmetics() ;
+  [[nodiscard]] const ::google::protobuf::Map<::uint32_t, ::uint32_t>& equipped_showcase_cosmetics() const;
+  [[nodiscard]] ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL mutable_equipped_showcase_cosmetics();
+
+  private:
+  const ::google::protobuf::Map<::uint32_t, ::uint32_t>& _internal_equipped_showcase_cosmetics() const;
+  ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_equipped_showcase_cosmetics();
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerProfileComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          2, 70,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          3, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2483,6 +2639,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     ::google::protobuf::internal::ArenaStringPtr appearance_owned_bits_;
     ::google::protobuf::internal::ArenaStringPtr pet_cosmetic_owned_bits_;
     ::google::protobuf::internal::ArenaStringPtr skill_vfx_owned_bits_;
+    ::google::protobuf::internal::ArenaStringPtr showcase_cosmetic_owned_bits_;
     ::PlayerRenameOp* PROTOBUF_NULLABLE rename_op_;
     ::uint64_t rename_seq_;
     ::uint64_t renamed_ms_;
@@ -2490,7 +2647,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerProfileComp final : public ::
     ::uint32_t gender_;
     int spectate_chat_pref_;
     ::uint64_t appearance_switch_seq_;
+    ::uint64_t light_card_trial_week_start_ms_;
+    ::uint32_t light_card_trial_used_;
+    ::uint32_t celebration_bind_gold_claimed_;
+    ::uint64_t celebration_week_start_ms_;
+    ::uint64_t cosmetic_gift_week_start_ms_;
+    ::uint32_t cosmetic_gift_sent_count_;
     ::google::protobuf::internal::MapField<PlayerProfileComp_EquippedSkillVfxEntry_DoNotUse, ::uint32_t, ::uint32_t> equipped_skill_vfx_;
+    ::google::protobuf::internal::MapField<PlayerProfileComp_EquippedShowcaseCosmeticsEntry_DoNotUse, ::uint32_t, ::uint32_t> equipped_showcase_cosmetics_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2917,6 +3081,8 @@ inline void PlayerUint32Comp::_internal_set_class_(::uint32_t value) {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
 // PlayerProfileComp
 
 // string name = 1;
@@ -3051,7 +3217,7 @@ inline void PlayerProfileComp::set_allocated_appearance_id(::std::string* PROTOB
 inline void PlayerProfileComp::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t PlayerProfileComp::gender() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.gender)
@@ -3059,7 +3225,7 @@ inline ::uint32_t PlayerProfileComp::gender() const {
 }
 inline void PlayerProfileComp::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.gender)
 }
 inline ::uint32_t PlayerProfileComp::_internal_gender() const {
@@ -3075,7 +3241,7 @@ inline void PlayerProfileComp::_internal_set_gender(::uint32_t value) {
 inline void PlayerProfileComp::clear_rename_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.rename_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t PlayerProfileComp::rename_seq() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.rename_seq)
@@ -3083,7 +3249,7 @@ inline ::uint64_t PlayerProfileComp::rename_seq() const {
 }
 inline void PlayerProfileComp::set_rename_seq(::uint64_t value) {
   _internal_set_rename_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.rename_seq)
 }
 inline ::uint64_t PlayerProfileComp::_internal_rename_seq() const {
@@ -3099,7 +3265,7 @@ inline void PlayerProfileComp::_internal_set_rename_seq(::uint64_t value) {
 inline void PlayerProfileComp::clear_renamed_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.renamed_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint64_t PlayerProfileComp::renamed_ms() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.renamed_ms)
@@ -3107,7 +3273,7 @@ inline ::uint64_t PlayerProfileComp::renamed_ms() const {
 }
 inline void PlayerProfileComp::set_renamed_ms(::uint64_t value) {
   _internal_set_renamed_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.renamed_ms)
 }
 inline ::uint64_t PlayerProfileComp::_internal_renamed_ms() const {
@@ -3121,14 +3287,14 @@ inline void PlayerProfileComp::_internal_set_renamed_ms(::uint64_t value) {
 
 // .PlayerRenameOp rename_op = 6;
 inline bool PlayerProfileComp::has_rename_op() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
   PROTOBUF_ASSUME(!value || _impl_.rename_op_ != nullptr);
   return value;
 }
 inline void PlayerProfileComp::clear_rename_op() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.rename_op_ != nullptr) _impl_.rename_op_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline const ::PlayerRenameOp& PlayerProfileComp::_internal_rename_op() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3147,16 +3313,16 @@ inline void PlayerProfileComp::unsafe_arena_set_allocated_rename_op(
   }
   _impl_.rename_op_ = reinterpret_cast<::PlayerRenameOp*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PlayerProfileComp.rename_op)
 }
 inline ::PlayerRenameOp* PROTOBUF_NULLABLE PlayerProfileComp::release_rename_op() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PlayerRenameOp* released = _impl_.rename_op_;
   _impl_.rename_op_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3176,7 +3342,7 @@ inline ::PlayerRenameOp* PROTOBUF_NULLABLE PlayerProfileComp::unsafe_arena_relea
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerProfileComp.rename_op)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PlayerRenameOp* temp = _impl_.rename_op_;
   _impl_.rename_op_ = nullptr;
   return temp;
@@ -3191,7 +3357,7 @@ inline ::PlayerRenameOp* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_r
 }
 inline ::PlayerRenameOp* PROTOBUF_NONNULL PlayerProfileComp::mutable_rename_op()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   ::PlayerRenameOp* _msg = _internal_mutable_rename_op();
   // @@protoc_insertion_point(field_mutable:PlayerProfileComp.rename_op)
   return _msg;
@@ -3208,9 +3374,9 @@ inline void PlayerProfileComp::set_allocated_rename_op(::PlayerRenameOp* PROTOBU
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
   }
 
   _impl_.rename_op_ = reinterpret_cast<::PlayerRenameOp*>(value);
@@ -3349,7 +3515,7 @@ inline void PlayerProfileComp::set_allocated_trial_appearance_id(::std::string* 
 inline void PlayerProfileComp::clear_trial_expires_at() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.trial_expires_at_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t PlayerProfileComp::trial_expires_at() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.trial_expires_at)
@@ -3357,7 +3523,7 @@ inline ::uint64_t PlayerProfileComp::trial_expires_at() const {
 }
 inline void PlayerProfileComp::set_trial_expires_at(::uint64_t value) {
   _internal_set_trial_expires_at(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.trial_expires_at)
 }
 inline ::uint64_t PlayerProfileComp::_internal_trial_expires_at() const {
@@ -3373,7 +3539,7 @@ inline void PlayerProfileComp::_internal_set_trial_expires_at(::uint64_t value) 
 inline void PlayerProfileComp::clear_appearance_switch_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.appearance_switch_seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint64_t PlayerProfileComp::appearance_switch_seq() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.appearance_switch_seq)
@@ -3381,7 +3547,7 @@ inline ::uint64_t PlayerProfileComp::appearance_switch_seq() const {
 }
 inline void PlayerProfileComp::set_appearance_switch_seq(::uint64_t value) {
   _internal_set_appearance_switch_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.appearance_switch_seq)
 }
 inline ::uint64_t PlayerProfileComp::_internal_appearance_switch_seq() const {
@@ -3595,7 +3761,7 @@ inline int PlayerProfileComp::equipped_skill_vfx_size() const {
 inline void PlayerProfileComp::clear_equipped_skill_vfx() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_skill_vfx_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerProfileComp::_internal_equipped_skill_vfx() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3611,7 +3777,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerProfileComp::mutable_equipped_skill_vfx()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_mutable_map:PlayerProfileComp.equipped_skill_vfx)
   return _internal_mutable_equipped_skill_vfx();
 }
@@ -3620,7 +3786,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerP
 inline void PlayerProfileComp::clear_spectate_chat_pref() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spectate_chat_pref_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::eSpectateChatPreference PlayerProfileComp::spectate_chat_pref() const {
   // @@protoc_insertion_point(field_get:PlayerProfileComp.spectate_chat_pref)
@@ -3628,7 +3794,7 @@ inline ::eSpectateChatPreference PlayerProfileComp::spectate_chat_pref() const {
 }
 inline void PlayerProfileComp::set_spectate_chat_pref(::eSpectateChatPreference value) {
   _internal_set_spectate_chat_pref(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:PlayerProfileComp.spectate_chat_pref)
 }
 inline ::eSpectateChatPreference PlayerProfileComp::_internal_spectate_chat_pref() const {
@@ -3638,6 +3804,245 @@ inline ::eSpectateChatPreference PlayerProfileComp::_internal_spectate_chat_pref
 inline void PlayerProfileComp::_internal_set_spectate_chat_pref(::eSpectateChatPreference value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spectate_chat_pref_ = value;
+}
+
+// uint64 light_card_trial_week_start_ms = 16;
+inline void PlayerProfileComp::clear_light_card_trial_week_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_trial_week_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint64_t PlayerProfileComp::light_card_trial_week_start_ms() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.light_card_trial_week_start_ms)
+  return _internal_light_card_trial_week_start_ms();
+}
+inline void PlayerProfileComp::set_light_card_trial_week_start_ms(::uint64_t value) {
+  _internal_set_light_card_trial_week_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.light_card_trial_week_start_ms)
+}
+inline ::uint64_t PlayerProfileComp::_internal_light_card_trial_week_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.light_card_trial_week_start_ms_;
+}
+inline void PlayerProfileComp::_internal_set_light_card_trial_week_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_trial_week_start_ms_ = value;
+}
+
+// uint32 light_card_trial_used = 17;
+inline void PlayerProfileComp::clear_light_card_trial_used() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_trial_used_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t PlayerProfileComp::light_card_trial_used() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.light_card_trial_used)
+  return _internal_light_card_trial_used();
+}
+inline void PlayerProfileComp::set_light_card_trial_used(::uint32_t value) {
+  _internal_set_light_card_trial_used(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.light_card_trial_used)
+}
+inline ::uint32_t PlayerProfileComp::_internal_light_card_trial_used() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.light_card_trial_used_;
+}
+inline void PlayerProfileComp::_internal_set_light_card_trial_used(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.light_card_trial_used_ = value;
+}
+
+// bytes showcase_cosmetic_owned_bits = 18;
+inline void PlayerProfileComp::clear_showcase_cosmetic_owned_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.showcase_cosmetic_owned_bits_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline const ::std::string& PlayerProfileComp::showcase_cosmetic_owned_bits() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.showcase_cosmetic_owned_bits)
+  return _internal_showcase_cosmetic_owned_bits();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PlayerProfileComp::set_showcase_cosmetic_owned_bits(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  _impl_.showcase_cosmetic_owned_bits_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.showcase_cosmetic_owned_bits)
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::mutable_showcase_cosmetic_owned_bits()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::std::string* _s = _internal_mutable_showcase_cosmetic_owned_bits();
+  // @@protoc_insertion_point(field_mutable:PlayerProfileComp.showcase_cosmetic_owned_bits)
+  return _s;
+}
+inline const ::std::string& PlayerProfileComp::_internal_showcase_cosmetic_owned_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.showcase_cosmetic_owned_bits_.Get();
+}
+inline void PlayerProfileComp::_internal_set_showcase_cosmetic_owned_bits(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.showcase_cosmetic_owned_bits_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_showcase_cosmetic_owned_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.showcase_cosmetic_owned_bits_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PlayerProfileComp::release_showcase_cosmetic_owned_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PlayerProfileComp.showcase_cosmetic_owned_bits)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000080U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  auto* released = _impl_.showcase_cosmetic_owned_bits_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.showcase_cosmetic_owned_bits_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PlayerProfileComp::set_allocated_showcase_cosmetic_owned_bits(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  _impl_.showcase_cosmetic_owned_bits_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.showcase_cosmetic_owned_bits_.IsDefault()) {
+    _impl_.showcase_cosmetic_owned_bits_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PlayerProfileComp.showcase_cosmetic_owned_bits)
+}
+
+// map<uint32, uint32> equipped_showcase_cosmetics = 19;
+inline int PlayerProfileComp::_internal_equipped_showcase_cosmetics_size() const {
+  return _internal_equipped_showcase_cosmetics().size();
+}
+inline int PlayerProfileComp::equipped_showcase_cosmetics_size() const {
+  return _internal_equipped_showcase_cosmetics_size();
+}
+inline void PlayerProfileComp::clear_equipped_showcase_cosmetics() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equipped_showcase_cosmetics_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerProfileComp::_internal_equipped_showcase_cosmetics() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equipped_showcase_cosmetics_.GetMap();
+}
+inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerProfileComp::equipped_showcase_cosmetics() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_map:PlayerProfileComp.equipped_showcase_cosmetics)
+  return _internal_equipped_showcase_cosmetics();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerProfileComp::_internal_mutable_equipped_showcase_cosmetics() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.equipped_showcase_cosmetics_.MutableMap();
+}
+inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerProfileComp::mutable_equipped_showcase_cosmetics()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  // @@protoc_insertion_point(field_mutable_map:PlayerProfileComp.equipped_showcase_cosmetics)
+  return _internal_mutable_equipped_showcase_cosmetics();
+}
+
+// uint64 celebration_week_start_ms = 20;
+inline void PlayerProfileComp::clear_celebration_week_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.celebration_week_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint64_t PlayerProfileComp::celebration_week_start_ms() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.celebration_week_start_ms)
+  return _internal_celebration_week_start_ms();
+}
+inline void PlayerProfileComp::set_celebration_week_start_ms(::uint64_t value) {
+  _internal_set_celebration_week_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.celebration_week_start_ms)
+}
+inline ::uint64_t PlayerProfileComp::_internal_celebration_week_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.celebration_week_start_ms_;
+}
+inline void PlayerProfileComp::_internal_set_celebration_week_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.celebration_week_start_ms_ = value;
+}
+
+// uint32 celebration_bind_gold_claimed = 21;
+inline void PlayerProfileComp::clear_celebration_bind_gold_claimed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.celebration_bind_gold_claimed_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t PlayerProfileComp::celebration_bind_gold_claimed() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.celebration_bind_gold_claimed)
+  return _internal_celebration_bind_gold_claimed();
+}
+inline void PlayerProfileComp::set_celebration_bind_gold_claimed(::uint32_t value) {
+  _internal_set_celebration_bind_gold_claimed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.celebration_bind_gold_claimed)
+}
+inline ::uint32_t PlayerProfileComp::_internal_celebration_bind_gold_claimed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.celebration_bind_gold_claimed_;
+}
+inline void PlayerProfileComp::_internal_set_celebration_bind_gold_claimed(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.celebration_bind_gold_claimed_ = value;
+}
+
+// uint64 cosmetic_gift_week_start_ms = 22;
+inline void PlayerProfileComp::clear_cosmetic_gift_week_start_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_gift_week_start_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+}
+inline ::uint64_t PlayerProfileComp::cosmetic_gift_week_start_ms() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.cosmetic_gift_week_start_ms)
+  return _internal_cosmetic_gift_week_start_ms();
+}
+inline void PlayerProfileComp::set_cosmetic_gift_week_start_ms(::uint64_t value) {
+  _internal_set_cosmetic_gift_week_start_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.cosmetic_gift_week_start_ms)
+}
+inline ::uint64_t PlayerProfileComp::_internal_cosmetic_gift_week_start_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cosmetic_gift_week_start_ms_;
+}
+inline void PlayerProfileComp::_internal_set_cosmetic_gift_week_start_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_gift_week_start_ms_ = value;
+}
+
+// uint32 cosmetic_gift_sent_count = 23;
+inline void PlayerProfileComp::clear_cosmetic_gift_sent_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_gift_sent_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+}
+inline ::uint32_t PlayerProfileComp::cosmetic_gift_sent_count() const {
+  // @@protoc_insertion_point(field_get:PlayerProfileComp.cosmetic_gift_sent_count)
+  return _internal_cosmetic_gift_sent_count();
+}
+inline void PlayerProfileComp::set_cosmetic_gift_sent_count(::uint32_t value) {
+  _internal_set_cosmetic_gift_sent_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  // @@protoc_insertion_point(field_set:PlayerProfileComp.cosmetic_gift_sent_count)
+}
+inline ::uint32_t PlayerProfileComp::_internal_cosmetic_gift_sent_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cosmetic_gift_sent_count_;
+}
+inline void PlayerProfileComp::_internal_set_cosmetic_gift_sent_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cosmetic_gift_sent_count_ = value;
 }
 
 // -------------------------------------------------------------------

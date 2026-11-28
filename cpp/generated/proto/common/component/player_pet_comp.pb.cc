@@ -45,11 +45,174 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PetInstance
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::PetSquadPreset
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerPetComp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class PetSquadPreset::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PetSquadPreset>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_._has_bits_);
+};
+
+constexpr PetSquadPreset::ParseTableT_ PetSquadPreset::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PetSquadPreset>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 slot_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetSquadPreset, _impl_.slot_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.slot_id_)}},
+      // uint32 tag = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetSquadPreset, _impl_.tag_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.tag_)}},
+      // repeated uint64 pet_ids = 3;
+      {::_pbi::TcParser::FastV64P1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.pet_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 slot_id = 1;
+      {PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.slot_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tag = 2;
+      {PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.tag_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint64 pet_ids = 3;
+      {PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.pet_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PetSquadPreset::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        pet_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PetSquadPreset,
+            PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_.pet_ids_)>()
+         }
+        ,
+        _pet_ids_cached_byte_size_{0},
+        slot_id_{0u},
+        tag_{0u} {}
+
+template <typename>
+constexpr PetSquadPreset::PetSquadPreset(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PetSquadPreset::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PetSquadPreset(arena);
+}
+constexpr auto PetSquadPreset::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PetSquadPreset), alignof(PetSquadPreset));
+}
+constexpr auto PetSquadPreset::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PetSquadPreset::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PetSquadPreset>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PetSquadPreset::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PetSquadPreset>(), &PetSquadPreset::ByteSizeLong,
+              &PetSquadPreset::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[8],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PetSquadPresetGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PetSquadPresetGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PetSquadPreset_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PetSquadPreset::InternalGenerateClassData_(
+            _default, &PetSquadPreset_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PetSquadPreset>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PetSquadPresetGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PetSquadPreset _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PetSquadPreset>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PetSquadPresetGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PetSquadPresetGlobalsTypeInternal PetSquadPreset_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PetSquadPreset_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PetSquadPreset_globals_.GetClassData();
+#else
+  return PetSquadPreset_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 constexpr PetInstance_SkillRanksEntry_DoNotUse::ParseTableT_ PetInstance_SkillRanksEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
@@ -1378,12 +1541,12 @@ constexpr PlayerPetComp::ParseTableT_ PlayerPetComp::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
-      1,  // num_aux_entries
+      9,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -1398,52 +1561,75 @@ constexpr PlayerPetComp::ParseTableT_ PlayerPetComp::InternalGenerateParseTable_
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.pets_)}},
       // uint64 active_pet_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.active_pet_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.active_pet_id_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.active_pet_id_)}},
       // uint64 last_purchase_sequence = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_sequence_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_sequence_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_sequence_)}},
       // uint32 last_purchase_pet_table_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_table_id_), 4>(),
-       {32, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_table_id_), 5>(),
+       {32, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_)}},
       // uint64 last_purchase_pet_id = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_id_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_pet_id_), 4>(),
+       {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_id_)}},
       // uint64 last_purchase_price_gold = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_price_gold_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerPetComp, _impl_.last_purchase_price_gold_), 7>(),
+       {48, 7, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_)}},
       // bool starter_pet_granted = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerPetComp, _impl_.starter_pet_granted_), 5>(),
-       {56, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PlayerPetComp, _impl_.starter_pet_granted_), 6>(),
+       {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.starter_pet_granted_)}},
+      // repeated .PetSquadPreset squad_presets = 8;
+      {::_pbi::TcParser::FastMtR1,
+       {66, 1, 1,
+        PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.squad_presets_)}},
+      // uint32 unlocked_squad_preset_slots = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerPetComp, _impl_.unlocked_squad_preset_slots_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.unlocked_squad_preset_slots_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated .PetInstance pets = 1;
       {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.pets_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 active_pet_id = 2;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.active_pet_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.active_pet_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 last_purchase_sequence = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_sequence_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_sequence_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 last_purchase_pet_table_id = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_table_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 last_purchase_pet_id = 5;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_pet_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 last_purchase_price_gold = 6;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool starter_pet_granted = 7;
-      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.starter_pet_granted_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.starter_pet_granted_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // repeated .PetSquadPreset squad_presets = 8;
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.squad_presets_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 unlocked_squad_preset_slots = 9;
+      {PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.unlocked_squad_preset_slots_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::PetInstance>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PetInstance_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PetSquadPreset>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PetSquadPreset_globals_},
         #endif
     }},
     {{
@@ -1461,12 +1647,18 @@ inline constexpr PlayerPetComp::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.pets_)>()
          }
         ,
+        squad_presets_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerPetComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.squad_presets_)>()
+         }
+        ,
         active_pet_id_{::uint64_t{0u}},
         last_purchase_sequence_{::uint64_t{0u}},
         last_purchase_pet_id_{::uint64_t{0u}},
         last_purchase_pet_table_id_{0u},
         starter_pet_granted_{false},
-        last_purchase_price_gold_{::uint64_t{0u}} {}
+        last_purchase_price_gold_{::uint64_t{0u}},
+        unlocked_squad_preset_slots_{0u} {}
 
 template <typename>
 constexpr PlayerPetComp::PlayerPetComp(::_pbi::ConstantInitialized,
@@ -1509,7 +1701,7 @@ constexpr auto PlayerPetComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto,
@@ -1674,8 +1866,17 @@ const ::uint32_t
         19,
         20,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_.slot_id_),
+        PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_.tag_),
+        PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_.pet_ids_),
+        1,
+        2,
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_._has_bits_),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.pets_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.active_pet_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_sequence_),
@@ -1683,13 +1884,17 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_pet_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.last_purchase_price_gold_),
         PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.starter_pet_granted_),
+        PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.squad_presets_),
+        PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.unlocked_squad_preset_slots_),
         0,
-        1,
         2,
-        4,
         3,
-        6,
         5,
+        4,
+        7,
+        6,
+        1,
+        8,
 };
 
 static const ::_pbi::MigrationSchema
@@ -1702,7 +1907,8 @@ static const ::_pbi::MigrationSchema
         {37, sizeof(::PetInstance_EntryAllocatedEntry_DoNotUse)},
         {44, sizeof(::PetInstance_EntryLastTargetEntry_DoNotUse)},
         {51, sizeof(::PetInstance)},
-        {106, sizeof(::PlayerPetComp)},
+        {106, sizeof(::PetSquadPreset)},
+        {115, sizeof(::PlayerPetComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1714,6 +1920,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::PetInstance_EntryAllocatedEntry_DoNotUse_globals_,
         &::PetInstance_EntryLastTargetEntry_DoNotUse_globals_,
         &::PetInstance_globals_,
+        &::PetSquadPreset_globals_,
         &::PlayerPetComp_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
@@ -1750,25 +1957,29 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fpet_5
     "\005value\030\002 \001(\r:\0028\001\0325\n\023EntryAllocatedEntry\022"
     "\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0326\n\024Entry"
     "LastTargetEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 "
-    "\001(\r:\0028\001\"\343\001\n\rPlayerPetComp\022\032\n\004pets\030\001 \003(\0132"
-    "\014.PetInstance\022\025\n\ractive_pet_id\030\002 \001(\004\022\036\n\026"
-    "last_purchase_sequence\030\003 \001(\004\022\"\n\032last_pur"
-    "chase_pet_table_id\030\004 \001(\r\022\034\n\024last_purchas"
-    "e_pet_id\030\005 \001(\004\022 \n\030last_purchase_price_go"
-    "ld\030\006 \001(\004\022\033\n\023starter_pet_granted\030\007 \001(\010B\022Z"
-    "\020common/componentb\006proto3"
+    "\001(\r:\0028\001\"\?\n\016PetSquadPreset\022\017\n\007slot_id\030\001 \001"
+    "(\r\022\013\n\003tag\030\002 \001(\r\022\017\n\007pet_ids\030\003 \003(\004\"\260\002\n\rPla"
+    "yerPetComp\022\032\n\004pets\030\001 \003(\0132\014.PetInstance\022\025"
+    "\n\ractive_pet_id\030\002 \001(\004\022\036\n\026last_purchase_s"
+    "equence\030\003 \001(\004\022\"\n\032last_purchase_pet_table"
+    "_id\030\004 \001(\r\022\034\n\024last_purchase_pet_id\030\005 \001(\004\022"
+    " \n\030last_purchase_price_gold\030\006 \001(\004\022\033\n\023sta"
+    "rter_pet_granted\030\007 \001(\010\022&\n\rsquad_presets\030"
+    "\010 \003(\0132\017.PetSquadPreset\022#\n\033unlocked_squad"
+    "_preset_slots\030\t \001(\rB\022Z\020common/componentb"
+    "\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto = {
     false,
     false,
-    1545,
+    1687,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto,
     "proto/common/component/player_pet_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto_once,
     nullptr,
     0,
-    9,
+    10,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fpet_5fcomp_2eproto::offsets,
@@ -3303,6 +3514,293 @@ void PetInstance::InternalSwap(PetInstance* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
 }
 // ===================================================================
 
+PetSquadPreset::PetSquadPreset(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PetSquadPreset_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PetSquadPreset)
+}
+PROTOBUF_NDEBUG_INLINE PetSquadPreset::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PetSquadPreset& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        pet_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PetSquadPreset,
+              PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_.pet_ids_)>()
+          , from.pet_ids_
+        }
+        ,
+        _pet_ids_cached_byte_size_{0} {}
+
+PetSquadPreset::PetSquadPreset(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PetSquadPreset& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PetSquadPreset_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PetSquadPreset* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, slot_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, slot_id_),
+           offsetof(Impl_, tag_) -
+               offsetof(Impl_, slot_id_) +
+               sizeof(Impl_::tag_));
+
+  // @@protoc_insertion_point(copy_constructor:PetSquadPreset)
+}
+PROTOBUF_NDEBUG_INLINE PetSquadPreset::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        pet_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PetSquadPreset,
+            PROTOBUF_FIELD_OFFSET(::PetSquadPreset, _impl_.pet_ids_)>()
+         }
+        ,
+        _pet_ids_cached_byte_size_{0} {}
+
+inline void PetSquadPreset::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, slot_id_),
+           0,
+           offsetof(Impl_, tag_) -
+               offsetof(Impl_, slot_id_) +
+               sizeof(Impl_::tag_));
+}
+PetSquadPreset::~PetSquadPreset() {
+  // @@protoc_insertion_point(destructor:PetSquadPreset)
+  SharedDtor(*this);
+}
+inline void PetSquadPreset::SharedDtor(MessageLite& self) {
+  PetSquadPreset& this_ = static_cast<PetSquadPreset&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PetSquadPreset_class_data_ =
+        PetSquadPreset::InternalGenerateClassData_(PetSquadPreset_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PetSquadPreset::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PetSquadPreset_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PetSquadPreset_class_data_.tc_table);
+  return PetSquadPreset_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PetSquadPreset::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PetSquadPreset_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PetSquadPreset_globals_));
+  return PetSquadPreset_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PetSquadPreset::ParseTableT_
+    PetSquadPreset::_table_ =
+        PetSquadPreset::InternalGenerateParseTable_(PetSquadPreset_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PetSquadPreset::Clear() {
+// @@protoc_insertion_point(message_clear_start:PetSquadPreset)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.pet_ids_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.slot_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.tag_) -
+        reinterpret_cast<char*>(&_impl_.slot_id_)) + sizeof(_impl_.tag_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PetSquadPreset::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PetSquadPreset& this_ = static_cast<const PetSquadPreset&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PetSquadPreset::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PetSquadPreset& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PetSquadPreset)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 slot_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_slot_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_slot_id(), target);
+    }
+  }
+
+  // uint32 tag = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_tag(), target);
+    }
+  }
+
+  // repeated uint64 pet_ids = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._pet_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            3, this_._internal_pet_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PetSquadPreset)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PetSquadPreset::ByteSizeLong(const MessageLite& base) {
+  const PetSquadPreset& this_ = static_cast<const PetSquadPreset&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PetSquadPreset::ByteSizeLong() const {
+  const PetSquadPreset& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PetSquadPreset)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated uint64 pet_ids = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_pet_ids(), 1,
+              this_._impl_._pet_ids_cached_byte_size_);
+    }
+    // uint32 slot_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_slot_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_slot_id());
+      }
+    }
+    // uint32 tag = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_tag() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tag());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PetSquadPreset::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PetSquadPreset*>(&to_msg);
+  auto& from = static_cast<const PetSquadPreset&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:PetSquadPreset)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_pet_ids()->MergeFrom(from._internal_pet_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_slot_id() != 0) {
+        _this->_impl_.slot_id_ = from._impl_.slot_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_tag() != 0) {
+        _this->_impl_.tag_ = from._impl_.tag_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PetSquadPreset::CopyFrom(const PetSquadPreset& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PetSquadPreset)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PetSquadPreset::InternalSwap(PetSquadPreset* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.pet_ids_.InternalSwap(&other->_impl_.pet_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.tag_)
+      + sizeof(PetSquadPreset::_impl_.tag_)
+      - PROTOBUF_FIELD_OFFSET(PetSquadPreset, _impl_.slot_id_)>(
+          reinterpret_cast<char*>(&_impl_.slot_id_),
+          reinterpret_cast<char*>(&other->_impl_.slot_id_));
+}
+
+::google::protobuf::Metadata PetSquadPreset::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 PlayerPetComp::PlayerPetComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, PlayerPetComp_get_class_data()) {
@@ -3324,6 +3822,13 @@ PROTOBUF_NDEBUG_INLINE PlayerPetComp::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.pets_)>()
           , from.pets_
         }
+        ,
+        squad_presets_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PlayerPetComp,
+              PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.squad_presets_)>()
+          , from.squad_presets_
+        }
      {}
 
 PlayerPetComp::PlayerPetComp(
@@ -3344,9 +3849,9 @@ PlayerPetComp::PlayerPetComp(
                offsetof(Impl_, active_pet_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, active_pet_id_),
-           offsetof(Impl_, last_purchase_price_gold_) -
+           offsetof(Impl_, unlocked_squad_preset_slots_) -
                offsetof(Impl_, active_pet_id_) +
-               sizeof(Impl_::last_purchase_price_gold_));
+               sizeof(Impl_::unlocked_squad_preset_slots_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerPetComp)
 }
@@ -3358,6 +3863,11 @@ PROTOBUF_NDEBUG_INLINE PlayerPetComp::Impl_::Impl_(
             ::PlayerPetComp,
             PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.pets_)>()
          }
+        ,
+        squad_presets_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerPetComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerPetComp, _impl_.squad_presets_)>()
+         }
      {}
 
 inline void PlayerPetComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
@@ -3365,9 +3875,9 @@ inline void PlayerPetComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, active_pet_id_),
            0,
-           offsetof(Impl_, last_purchase_price_gold_) -
+           offsetof(Impl_, unlocked_squad_preset_slots_) -
                offsetof(Impl_, active_pet_id_) +
-               sizeof(Impl_::last_purchase_price_gold_));
+               sizeof(Impl_::unlocked_squad_preset_slots_));
 }
 PlayerPetComp::~PlayerPetComp() {
   // @@protoc_insertion_point(destructor:PlayerPetComp)
@@ -3417,14 +3927,20 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.pets_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.pets_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.squad_presets_.Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.active_pet_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.last_purchase_price_gold_) -
         reinterpret_cast<char*>(&_impl_.active_pet_id_)) + sizeof(_impl_.last_purchase_price_gold_));
   }
+  _impl_.unlocked_squad_preset_slots_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -3462,7 +3978,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint64 active_pet_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_active_pet_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3471,7 +3987,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint64 last_purchase_sequence = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_last_purchase_sequence() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3480,7 +3996,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint32 last_purchase_pet_table_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_last_purchase_pet_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3489,7 +4005,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint64 last_purchase_pet_id = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_last_purchase_pet_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3498,7 +4014,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // uint64 last_purchase_price_gold = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_last_purchase_price_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3507,11 +4023,33 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
   }
 
   // bool starter_pet_granted = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_starter_pet_granted() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           7, this_._internal_starter_pet_granted(), target);
+    }
+  }
+
+  // repeated .PetSquadPreset squad_presets = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_squad_presets_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_squad_presets().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              8, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint32 unlocked_squad_preset_slots = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_unlocked_squad_preset_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_unlocked_squad_preset_slots(), target);
     }
   }
 
@@ -3540,7 +4078,7 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated .PetInstance pets = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_pets_size();
@@ -3548,45 +4086,61 @@ PROTOBUF_NOINLINE void PlayerPetComp::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 active_pet_id = 2;
+    // repeated .PetSquadPreset squad_presets = 8;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_squad_presets_size();
+      for (const auto& msg : this_._internal_squad_presets()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // uint64 active_pet_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_active_pet_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_active_pet_id());
       }
     }
     // uint64 last_purchase_sequence = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_last_purchase_sequence() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_last_purchase_sequence());
       }
     }
     // uint64 last_purchase_pet_id = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_last_purchase_pet_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_last_purchase_pet_id());
       }
     }
     // uint32 last_purchase_pet_table_id = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_last_purchase_pet_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_last_purchase_pet_table_id());
       }
     }
     // bool starter_pet_granted = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_starter_pet_granted() != 0) {
         total_size += 2;
       }
     }
     // uint64 last_purchase_price_gold = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_last_purchase_price_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_last_purchase_price_gold());
+      }
+    }
+  }
+   {
+    // uint32 unlocked_squad_preset_slots = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_unlocked_squad_preset_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unlocked_squad_preset_slots());
       }
     }
   }
@@ -3608,41 +4162,51 @@ void PlayerPetComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_pets()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_pets());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_squad_presets()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_squad_presets());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_active_pet_id() != 0) {
         _this->_impl_.active_pet_id_ = from._impl_.active_pet_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_last_purchase_sequence() != 0) {
         _this->_impl_.last_purchase_sequence_ = from._impl_.last_purchase_sequence_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_last_purchase_pet_id() != 0) {
         _this->_impl_.last_purchase_pet_id_ = from._impl_.last_purchase_pet_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_last_purchase_pet_table_id() != 0) {
         _this->_impl_.last_purchase_pet_table_id_ = from._impl_.last_purchase_pet_table_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_starter_pet_granted() != 0) {
         _this->_impl_.starter_pet_granted_ = from._impl_.starter_pet_granted_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_last_purchase_price_gold() != 0) {
         _this->_impl_.last_purchase_price_gold_ = from._impl_.last_purchase_price_gold_;
       }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_unlocked_squad_preset_slots() != 0) {
+      _this->_impl_.unlocked_squad_preset_slots_ = from._impl_.unlocked_squad_preset_slots_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3663,9 +4227,10 @@ void PlayerPetComp::InternalSwap(PlayerPetComp* PROTOBUF_RESTRICT PROTOBUF_NONNU
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.pets_.InternalSwap(&other->_impl_.pets_);
+  _impl_.squad_presets_.InternalSwap(&other->_impl_.squad_presets_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.last_purchase_price_gold_)
-      + sizeof(PlayerPetComp::_impl_.last_purchase_price_gold_)
+      PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.unlocked_squad_preset_slots_)
+      + sizeof(PlayerPetComp::_impl_.unlocked_squad_preset_slots_)
       - PROTOBUF_FIELD_OFFSET(PlayerPetComp, _impl_.active_pet_id_)>(
           reinterpret_cast<char*>(&_impl_.active_pet_id_),
           reinterpret_cast<char*>(&other->_impl_.active_pet_id_));

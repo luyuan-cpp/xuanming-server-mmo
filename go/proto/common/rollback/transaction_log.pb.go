@@ -133,6 +133,22 @@ const (
 	TransactionType_TX_JIANGHU_DUEL_FEE          TransactionType = 49
 	TransactionType_TX_JIANGHU_DUEL_REFUND       TransactionType = 50
 	TransactionType_TX_JIANGHU_CLEAR_DEFEAT_MARK TransactionType = 51
+	// 衣柜收藏系列 Steam 式按缺口 8.5 折补齐扣真实灵石（correlation_id = client_request_id）。只追加,不复用旧编号。
+	TransactionType_TX_APPEARANCE_SERIES_BUNDLE TransactionType = 52
+	// 仙途轻享卡/季享卡开卡一次性直赠绑定配套礼（correlation_id = client_request_id）。只追加,不复用旧编号。
+	TransactionType_TX_AFK_PASS_BONUS_GRANT TransactionType = 53
+	// 主城全城同乐社交气氛道具施放销毁与同图路人领取绑定银两（仅 CURRENCY_TYPE_BIND_GOLD=3）。只追加,不复用旧编号。
+	TransactionType_TX_SOCIAL_CELEBRATION_CAST  TransactionType = 54
+	TransactionType_TX_SOCIAL_CELEBRATION_CLAIM TransactionType = 55
+	// 好友间纯绑定外观/手记典藏真实灵石赠礼、竞态原路退还与支付撤单连坐回收。只追加,不复用旧编号。
+	TransactionType_TX_COSMETIC_GIFT_SEND   TransactionType = 56
+	TransactionType_TX_COSMETIC_GIFT_REFUND TransactionType = 57
+	TransactionType_TX_COSMETIC_GIFT_REVOKE TransactionType = 58
+	// 无焦虑扩容便利（仓库扩容 / 灵宠编队预设位 / 战报配装收藏位 / 帮主自愿买断帮会徽记，均仅扣真实充值灵石）。只追加,不复用旧编号。
+	TransactionType_TX_BAG_EXPAND            TransactionType = 59
+	TransactionType_TX_PET_SQUAD_SLOT_UNLOCK TransactionType = 60
+	TransactionType_TX_BUILD_BOOKMARK_EXPAND TransactionType = 61
+	TransactionType_TX_GUILD_EMBLEM_UNLOCK   TransactionType = 62
 )
 
 // Enum value maps for TransactionType.
@@ -190,6 +206,17 @@ var (
 		49: "TX_JIANGHU_DUEL_FEE",
 		50: "TX_JIANGHU_DUEL_REFUND",
 		51: "TX_JIANGHU_CLEAR_DEFEAT_MARK",
+		52: "TX_APPEARANCE_SERIES_BUNDLE",
+		53: "TX_AFK_PASS_BONUS_GRANT",
+		54: "TX_SOCIAL_CELEBRATION_CAST",
+		55: "TX_SOCIAL_CELEBRATION_CLAIM",
+		56: "TX_COSMETIC_GIFT_SEND",
+		57: "TX_COSMETIC_GIFT_REFUND",
+		58: "TX_COSMETIC_GIFT_REVOKE",
+		59: "TX_BAG_EXPAND",
+		60: "TX_PET_SQUAD_SLOT_UNLOCK",
+		61: "TX_BUILD_BOOKMARK_EXPAND",
+		62: "TX_GUILD_EMBLEM_UNLOCK",
 	}
 	TransactionType_value = map[string]int32{
 		"TX_UNKNOWN":                   0,
@@ -244,6 +271,17 @@ var (
 		"TX_JIANGHU_DUEL_FEE":          49,
 		"TX_JIANGHU_DUEL_REFUND":       50,
 		"TX_JIANGHU_CLEAR_DEFEAT_MARK": 51,
+		"TX_APPEARANCE_SERIES_BUNDLE":  52,
+		"TX_AFK_PASS_BONUS_GRANT":      53,
+		"TX_SOCIAL_CELEBRATION_CAST":   54,
+		"TX_SOCIAL_CELEBRATION_CLAIM":  55,
+		"TX_COSMETIC_GIFT_SEND":        56,
+		"TX_COSMETIC_GIFT_REFUND":      57,
+		"TX_COSMETIC_GIFT_REVOKE":      58,
+		"TX_BAG_EXPAND":                59,
+		"TX_PET_SQUAD_SLOT_UNLOCK":     60,
+		"TX_BUILD_BOOKMARK_EXPAND":     61,
+		"TX_GUILD_EMBLEM_UNLOCK":       62,
 	}
 )
 
@@ -515,7 +553,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xd3\t\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\x92\f\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -570,7 +608,18 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x15TX_SKILL_LOADOUT_RENT\x100\x12\x17\n" +
 	"\x13TX_JIANGHU_DUEL_FEE\x101\x12\x1a\n" +
 	"\x16TX_JIANGHU_DUEL_REFUND\x102\x12 \n" +
-	"\x1cTX_JIANGHU_CLEAR_DEFEAT_MARK\x103B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\x1cTX_JIANGHU_CLEAR_DEFEAT_MARK\x103\x12\x1f\n" +
+	"\x1bTX_APPEARANCE_SERIES_BUNDLE\x104\x12\x1b\n" +
+	"\x17TX_AFK_PASS_BONUS_GRANT\x105\x12\x1e\n" +
+	"\x1aTX_SOCIAL_CELEBRATION_CAST\x106\x12\x1f\n" +
+	"\x1bTX_SOCIAL_CELEBRATION_CLAIM\x107\x12\x19\n" +
+	"\x15TX_COSMETIC_GIFT_SEND\x108\x12\x1b\n" +
+	"\x17TX_COSMETIC_GIFT_REFUND\x109\x12\x1b\n" +
+	"\x17TX_COSMETIC_GIFT_REVOKE\x10:\x12\x11\n" +
+	"\rTX_BAG_EXPAND\x10;\x12\x1c\n" +
+	"\x18TX_PET_SQUAD_SLOT_UNLOCK\x10<\x12\x1c\n" +
+	"\x18TX_BUILD_BOOKMARK_EXPAND\x10=\x12\x1a\n" +
+	"\x16TX_GUILD_EMBLEM_UNLOCK\x10>B\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

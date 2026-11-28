@@ -339,6 +339,22 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildWarFeudInvalidTarget = 14075;</code>
      */
     kGuildWarFeudInvalidTarget(14075),
+    /**
+     * <code>kGuildEmblemInvalid = 14076;</code>
+     */
+    kGuildEmblemInvalid(14076),
+    /**
+     * <code>kGuildEmblemAlreadyUnlocked = 14077;</code>
+     */
+    kGuildEmblemAlreadyUnlocked(14077),
+    /**
+     * <code>kGuildEmblemNotUnlocked = 14078;</code>
+     */
+    kGuildEmblemNotUnlocked(14078),
+    /**
+     * <code>kGuildEmblemPriceChanged = 14079;</code>
+     */
+    kGuildEmblemPriceChanged(14079),
     UNRECOGNIZED(-1),
     ;
 
@@ -659,6 +675,22 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildWarFeudInvalidTarget = 14075;</code>
      */
     public static final int kGuildWarFeudInvalidTarget_VALUE = 14075;
+    /**
+     * <code>kGuildEmblemInvalid = 14076;</code>
+     */
+    public static final int kGuildEmblemInvalid_VALUE = 14076;
+    /**
+     * <code>kGuildEmblemAlreadyUnlocked = 14077;</code>
+     */
+    public static final int kGuildEmblemAlreadyUnlocked_VALUE = 14077;
+    /**
+     * <code>kGuildEmblemNotUnlocked = 14078;</code>
+     */
+    public static final int kGuildEmblemNotUnlocked_VALUE = 14078;
+    /**
+     * <code>kGuildEmblemPriceChanged = 14079;</code>
+     */
+    public static final int kGuildEmblemPriceChanged_VALUE = 14079;
 
 
     public final int getNumber() {
@@ -762,6 +794,10 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14073: return kGuildWarFeudAlreadyActive;
         case 14074: return kGuildWarFeudNotFound;
         case 14075: return kGuildWarFeudInvalidTarget;
+        case 14076: return kGuildEmblemInvalid;
+        case 14077: return kGuildEmblemAlreadyUnlocked;
+        case 14078: return kGuildEmblemNotUnlocked;
+        case 14079: return kGuildEmblemPriceChanged;
         default: return null;
       }
     }
@@ -827,7 +863,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\237\021\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\230\022\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -882,8 +918,11 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "n\020\366m\022\031\n\024kGuildWarServiceBusy\020\367m\022\032\n\025kGuil" +
       "dWarFeudCooldown\020\370m\022\037\n\032kGuildWarFeudAlre" +
       "adyActive\020\371m\022\032\n\025kGuildWarFeudNotFound\020\372m" +
-      "\022\037\n\032kGuildWarFeudInvalidTarget\020\373mB$\n\016com" +
-      ".game.tableZ\022generated/pb/tableb\006proto3"
+      "\022\037\n\032kGuildWarFeudInvalidTarget\020\373m\022\030\n\023kGu" +
+      "ildEmblemInvalid\020\374m\022 \n\033kGuildEmblemAlrea" +
+      "dyUnlocked\020\375m\022\034\n\027kGuildEmblemNotUnlocked" +
+      "\020\376m\022\035\n\030kGuildEmblemPriceChanged\020\377mB$\n\016co" +
+      "m.game.tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

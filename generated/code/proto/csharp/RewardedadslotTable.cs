@@ -22,20 +22,20 @@ public static partial class RewardedadslotTableReflection {
   static RewardedadslotTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChpyZXdhcmRlZGFkc2xvdF90YWJsZS5wcm90byL6AQoTUmV3YXJkZWRBZFNs",
+          "ChpyZXdhcmRlZGFkc2xvdF90YWJsZS5wcm90byKPAgoTUmV3YXJkZWRBZFNs",
           "b3RUYWJsZRIKCgJpZBgBIAEoDRIPCgdlbmFibGVkGAIgASgNEhEKCW1pbl9s",
           "ZXZlbBgDIAEoDRITCgtkYWlseV9saW1pdBgEIAEoDRIUCgxjb29sZG93bl9z",
           "ZWMYBSABKA0SFQoNbWluX3dhdGNoX3NlYxgGIAEoDRIXCg9zZXNzaW9uX3R0",
           "bF9zZWMYByABKA0SFQoNY3VycmVuY3lfdHlwZRgIIAEoDRIVCg1yZXdhcmRf",
           "YW1vdW50GAkgASgEEhMKC3JlcXVpcmVfc3N2GAogASgNEhUKDXBsYXRmb3Jt",
-          "X21hc2sYCyABKA0iPQoXUmV3YXJkZWRBZFNsb3RUYWJsZURhdGESIgoEZGF0",
-          "YRgBIAMoCzIULlJld2FyZGVkQWRTbG90VGFibGVCRQoOY29tLmdhbWUudGFi",
-          "bGVCHVJld2FyZGVkQWRTbG90VGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRl",
-          "ZC9wYi90YWJsZWIGcHJvdG8z"));
+          "X21hc2sYCyABKA0SEwoLcmV3YXJkX2tpbmQYDCABKA0iPQoXUmV3YXJkZWRB",
+          "ZFNsb3RUYWJsZURhdGESIgoEZGF0YRgBIAMoCzIULlJld2FyZGVkQWRTbG90",
+          "VGFibGVCRQoOY29tLmdhbWUudGFibGVCHVJld2FyZGVkQWRTbG90VGFibGVP",
+          "dXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::RewardedAdSlotTable), global::RewardedAdSlotTable.Parser, new[]{ "Id", "Enabled", "MinLevel", "DailyLimit", "CooldownSec", "MinWatchSec", "SessionTtlSec", "CurrencyType", "RewardAmount", "RequireSsv", "PlatformMask" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::RewardedAdSlotTable), global::RewardedAdSlotTable.Parser, new[]{ "Id", "Enabled", "MinLevel", "DailyLimit", "CooldownSec", "MinWatchSec", "SessionTtlSec", "CurrencyType", "RewardAmount", "RequireSsv", "PlatformMask", "RewardKind" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::RewardedAdSlotTableData), global::RewardedAdSlotTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -89,6 +89,7 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
     rewardAmount_ = other.rewardAmount_;
     requireSsv_ = other.requireSsv_;
     platformMask_ = other.platformMask_;
+    rewardKind_ = other.rewardKind_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -230,6 +231,18 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
     }
   }
 
+  /// <summary>Field number for the "reward_kind" field.</summary>
+  public const int RewardKindFieldNumber = 12;
+  private uint rewardKind_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint RewardKind {
+    get { return rewardKind_; }
+    set {
+      rewardKind_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -256,6 +269,7 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
     if (RewardAmount != other.RewardAmount) return false;
     if (RequireSsv != other.RequireSsv) return false;
     if (PlatformMask != other.PlatformMask) return false;
+    if (RewardKind != other.RewardKind) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -274,6 +288,7 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
     if (RewardAmount != 0UL) hash ^= RewardAmount.GetHashCode();
     if (RequireSsv != 0) hash ^= RequireSsv.GetHashCode();
     if (PlatformMask != 0) hash ^= PlatformMask.GetHashCode();
+    if (RewardKind != 0) hash ^= RewardKind.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -336,6 +351,10 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
       output.WriteRawTag(88);
       output.WriteUInt32(PlatformMask);
     }
+    if (RewardKind != 0) {
+      output.WriteRawTag(96);
+      output.WriteUInt32(RewardKind);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -390,6 +409,10 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
       output.WriteRawTag(88);
       output.WriteUInt32(PlatformMask);
     }
+    if (RewardKind != 0) {
+      output.WriteRawTag(96);
+      output.WriteUInt32(RewardKind);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -432,6 +455,9 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
     }
     if (PlatformMask != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(PlatformMask);
+    }
+    if (RewardKind != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(RewardKind);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -477,6 +503,9 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
     }
     if (other.PlatformMask != 0) {
       PlatformMask = other.PlatformMask;
+    }
+    if (other.RewardKind != 0) {
+      RewardKind = other.RewardKind;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -541,6 +570,10 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
           PlatformMask = input.ReadUInt32();
           break;
         }
+        case 96: {
+          RewardKind = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -602,6 +635,10 @@ public sealed partial class RewardedAdSlotTable : pb::IMessage<RewardedAdSlotTab
         }
         case 88: {
           PlatformMask = input.ReadUInt32();
+          break;
+        }
+        case 96: {
+          RewardKind = input.ReadUInt32();
           break;
         }
       }

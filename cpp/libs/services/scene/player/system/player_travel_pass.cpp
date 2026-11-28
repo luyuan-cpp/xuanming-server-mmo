@@ -65,6 +65,8 @@ namespace
 		uint32_t premiumCurrencyType{1};
 		uint64_t premiumPrice{0};
 		uint32_t configRevision{1};
+		uint32_t sortOrder{0};
+		bool isArchived{false};
 	};
 
 	struct ResolvedTier
@@ -149,6 +151,8 @@ namespace
 		out.premiumCurrencyType = row.premium_currency_type();
 		out.premiumPrice = row.premium_price();
 		out.configRevision = row.config_revision();
+		out.sortOrder = row.sort_order() != 0 ? row.sort_order() : row.id();
+		out.isArchived = row.is_archived() != 0;
 		return true;
 	}
 
@@ -316,7 +320,152 @@ namespace
 		return CollectSortedTiers(outSeason.id, outSeason.maxPoints, outTiers, reason);
 	}
 
-	// 自动选择目标期次：优先当前开启期；否则回退至玩家最高期次中有已解锁典藏未满/未领完的历史期。
+	struct BookshelfItem
+	{
+		ResolvedSeason season;
+		std::vector<ResolvedTier> tiers;
+		bool windowOpen{false};
+		bool progressEligible{false};
+	};
+
+	uint32_t CountClaimableTracks(const std::vector<ResolvedTier> &tiers, const TravelPassSeasonProgress *progress,
+								  uint32_t maxPoints)
+	{
+		if (progress == nullptr)
+		{
+			return 0u;
+		}
+		const uint32_t points = std::min(progress->progress_points(), maxPoints);
+		uint32_t count = 0u;
+		for (const auto &tier : tiers)
+		{
+			if (points < tier.requiredPoints)
+			{
+				continue;
+			}
+			const bool hasFree = tier.freeItemId != 0 || tier.freeGold != 0 || !tier.freeCosmeticKey.empty();
+			if (hasFree && !travel_pass_rules::IsTierClaimed(progress->free_claimed_mask(), tier.tierIndex))
+			{
+				++count;
+			}
+			const bool hasPremium =
+				tier.premiumItemId != 0 || tier.premiumGold != 0 || !tier.premiumCosmeticKey.empty();
+			if (progress->premium_unlocked() && hasPremium &&
+				!travel_pass_rules::IsTierClaimed(progress->premium_claimed_mask(), tier.tierIndex))
+			{
+				++count;
+			}
+		}
+		return count;
+	}
+
+	std::vector<BookshelfItem> CollectBookshelf(const PlayerTravelPassComp &comp, uint64_t nowMs)
+	{
+		std::set<uint32_t> participatedIds;
+		for (const auto &prog : comp.seasons())
+		{
+			participatedIds.insert(prog.pass_id());
+		}
+
+		std::vector<BookshelfItem> shelf;
+		for (const auto &row : TravelPassSeasonTableManager::Instance().FindAll().data())
+		{
+			ResolvedSeason season;
+			const char *reason = "";
+			if (!ResolveSeasonRow(row, season, reason))
+			{
+				continue;
+			}
+			const bool windowOpen =
+				season.enabled != 0 && travel_pass_rules::IsWindowOpen(season.startsAtMs, season.endsAtMs, nowMs);
+			const auto *prog = travel_pass_rules::FindSeason(comp, season.id);
+			const bool participated = participatedIds.find(season.id) != participatedIds.end();
+			if (!windowOpen && !participated)
+			{
+				continue;
+			}
+			std::vector<ResolvedTier> tiers;
+			if (!CollectSortedTiers(season.id, season.maxPoints, tiers, reason))
+			{
+				continue;
+			}
+			const uint32_t curPoints = prog != nullptr ? std::min(prog->progress_points(), season.maxPoints) : 0u;
+			const bool progressEligible = windowOpen || (prog != nullptr && prog->premium_unlocked() && curPoints < season.maxPoints);
+			shelf.push_back(BookshelfItem{std::move(season), std::move(tiers), windowOpen, progressEligible});
+		}
+		std::sort(shelf.begin(), shelf.end(), [](const BookshelfItem &a, const BookshelfItem &b)
+				  {
+					  if (a.season.sortOrder != b.season.sortOrder)
+					  {
+						  return a.season.sortOrder < b.season.sortOrder;
+					  }
+					  return a.season.id < b.season.id;
+				  });
+		return shelf;
+	}
+
+	// 解析唯一在研期次 ID（防多期并发加点 M-1）：
+	// 1. 玩家显式选定且未满点的可用期次优先；
+	// 2. 否则按书架升序顺延至第一本未满点的可用期次；
+	// 3. 若全部已满点，保持已选期次或回退至书架末期/有未领奖励的历史期次。
+	uint32_t ResolveActivePassId(const PlayerTravelPassComp &comp, const std::vector<BookshelfItem> &shelf)
+	{
+		if (shelf.empty())
+		{
+			return 0u;
+		}
+		const auto isIncomplete = [&](const BookshelfItem &item) {
+			const auto *prog = travel_pass_rules::FindSeason(comp, item.season.id);
+			const uint32_t pts = prog != nullptr ? std::min(prog->progress_points(), item.season.maxPoints) : 0u;
+			return item.progressEligible && pts < item.season.maxPoints;
+		};
+
+		if (comp.active_pass_id() != 0)
+		{
+			for (const auto &item : shelf)
+			{
+				if (item.season.id == comp.active_pass_id() && isIncomplete(item))
+				{
+					return item.season.id;
+				}
+			}
+		}
+		for (const auto &item : shelf)
+		{
+			if (isIncomplete(item))
+			{
+				return item.season.id;
+			}
+		}
+		if (comp.active_pass_id() != 0)
+		{
+			for (const auto &item : shelf)
+			{
+				if (item.season.id == comp.active_pass_id())
+				{
+					return item.season.id;
+				}
+			}
+		}
+		for (const auto &item : shelf)
+		{
+			if (item.windowOpen)
+			{
+				return item.season.id;
+			}
+		}
+		for (auto it = shelf.rbegin(); it != shelf.rend(); ++it)
+		{
+			const auto *prog = travel_pass_rules::FindSeason(comp, it->season.id);
+			if (prog != nullptr && HasUnclaimedReward(it->tiers, *prog))
+			{
+				return it->season.id;
+			}
+		}
+		return shelf.front().season.id;
+	}
+
+	// 自动选择目标期次：requestedPassId != 0 精确查找；否则取唯一在研期次（或有未领奖励的历史期次）。
 	bool SelectTargetSeason(const PlayerTravelPassComp &comp, uint64_t nowMs, uint32_t requestedPassId,
 							ResolvedSeason &outSeason, std::vector<ResolvedTier> &outTiers)
 	{
@@ -324,72 +473,16 @@ namespace
 		{
 			return FindSeasonById(requestedPassId, outSeason, outTiers);
 		}
-		// 1. 当前开放的启用期次（取最高 id）。
-		bool found = false;
-		ResolvedSeason bestSeason;
-		std::vector<ResolvedTier> bestTiers;
-		for (const auto &row : TravelPassSeasonTableManager::Instance().FindAll().data())
+		auto shelf = CollectBookshelf(comp, nowMs);
+		const uint32_t targetId = ResolveActivePassId(comp, shelf);
+		for (auto &item : shelf)
 		{
-			if (row.enabled() == 0)
+			if (item.season.id == targetId)
 			{
-				continue;
+				outSeason = std::move(item.season);
+				outTiers = std::move(item.tiers);
+				return true;
 			}
-			ResolvedSeason candidate;
-			const char *reason = "";
-			if (!ResolveSeasonRow(row, candidate, reason))
-			{
-				continue;
-			}
-			if (!travel_pass_rules::IsWindowOpen(candidate.startsAtMs, candidate.endsAtMs, nowMs))
-			{
-				continue;
-			}
-			std::vector<ResolvedTier> tiers;
-			if (!CollectSortedTiers(candidate.id, candidate.maxPoints, tiers, reason))
-			{
-				continue;
-			}
-			if (!found || candidate.id > bestSeason.id)
-			{
-				bestSeason = std::move(candidate);
-				bestTiers = std::move(tiers);
-				found = true;
-			}
-		}
-		if (found)
-		{
-			outSeason = std::move(bestSeason);
-			outTiers = std::move(bestTiers);
-			return true;
-		}
-		// 2. 无开放期次时，优先展示玩家已解锁典藏或有未领奖励的历史期次（永不吞已购权益）。
-		for (const auto &progress : comp.seasons())
-		{
-			ResolvedSeason candidate;
-			std::vector<ResolvedTier> tiers;
-			if (!FindSeasonById(progress.pass_id(), candidate, tiers))
-			{
-				continue;
-			}
-			const bool retainForCarryover =
-				(progress.premium_unlocked() && progress.progress_points() < candidate.maxPoints) ||
-				HasUnclaimedReward(tiers, progress);
-			if (!retainForCarryover)
-			{
-				continue;
-			}
-			if (!found || candidate.id > bestSeason.id)
-			{
-				bestSeason = std::move(candidate);
-				bestTiers = std::move(tiers);
-				found = true;
-			}
-		}
-		if (found)
-		{
-			outSeason = std::move(bestSeason);
-			outTiers = std::move(bestTiers);
-			return true;
 		}
 		return false;
 	}
@@ -508,6 +601,10 @@ namespace
 		out.set_retroactive_premium_count(retroactivePremium);
 
 		std::set<std::string> cosmetics;
+		for (const auto &key : comp.bonus_cosmetic_keys())
+		{
+			cosmetics.insert(key);
+		}
 		for (const auto &s : comp.seasons())
 		{
 			for (const auto &key : s.unlocked_cosmetic_keys())
@@ -521,6 +618,30 @@ namespace
 		}
 		out.set_equipped_frame_key(comp.equipped_frame_key());
 		out.set_equipped_title_key(comp.equipped_title_key());
+
+		const auto shelf = CollectBookshelf(comp, nowMs);
+		const uint32_t activePassId = ResolveActivePassId(comp, shelf);
+		out.set_active_pass_id(activePassId);
+		for (const auto &item : shelf)
+		{
+			const auto *prog = travel_pass_rules::FindSeason(comp, item.season.id);
+			const uint32_t pts = prog != nullptr ? std::min(prog->progress_points(), item.season.maxPoints) : 0u;
+			const bool prem = prog != nullptr && prog->premium_unlocked();
+			auto *cat = out.add_bookshelf();
+			cat->set_pass_id(item.season.id);
+			cat->set_name(item.season.name);
+			cat->set_icon_key(item.season.iconKey);
+			cat->set_banner_asset_key(item.season.bannerAssetKey);
+			cat->set_sort_order(item.season.sortOrder);
+			cat->set_is_archived(item.season.isArchived);
+			cat->set_is_active(item.season.id == activePassId);
+			cat->set_progress_points(pts);
+			cat->set_max_points(item.season.maxPoints);
+			cat->set_premium_unlocked(prem);
+			cat->set_claimable_count(CountClaimableTracks(item.tiers, prog, item.season.maxPoints));
+			cat->set_open_for_progress(item.progressEligible);
+			cat->set_open_for_unlock(item.windowOpen && !prem);
+		}
 	}
 
 	uint32_t ComputeBattlePoints(const ResolvedSeason &season, const BattleSettlementData &settlement)
@@ -564,7 +685,6 @@ namespace
 bool PlayerTravelPassSystem::ValidateTables()
 {
 	bool allValid = true;
-	std::vector<ResolvedSeason> enabledSeasons;
 	std::set<uint32_t> seasonIds;
 	for (const auto &row : TravelPassSeasonTableManager::Instance().FindAll().data())
 	{
@@ -583,24 +703,6 @@ bool PlayerTravelPassSystem::ValidateTables()
 			LOG_ERROR << "[TravelPass] Invalid TravelPassTier rows for pass_id=" << season.id << " reason=" << reason;
 			allValid = false;
 			continue;
-		}
-		if (season.enabled != 0)
-		{
-			enabledSeasons.push_back(std::move(season));
-		}
-	}
-
-	for (std::size_t i = 0; i < enabledSeasons.size(); ++i)
-	{
-		for (std::size_t j = i + 1; j < enabledSeasons.size(); ++j)
-		{
-			if (travel_pass_rules::WindowsOverlap(enabledSeasons[i].startsAtMs, enabledSeasons[i].endsAtMs,
-												  enabledSeasons[j].startsAtMs, enabledSeasons[j].endsAtMs))
-			{
-				LOG_ERROR << "[TravelPass] Overlapping enabled seasons: pass_a=" << enabledSeasons[i].id
-						  << " pass_b=" << enabledSeasons[j].id;
-				allValid = false;
-			}
 		}
 	}
 
@@ -675,57 +777,40 @@ uint32_t PlayerTravelPassSystem::PrepareBattleCredit(const PlayerTravelPassComp 
 		return kTravelPassUnavailable;
 	}
 
-	std::set<uint32_t> eligiblePassIds;
-	for (const auto &row : TravelPassSeasonTableManager::Instance().FindAll().data())
+	// 永不绝版书架制（防多期并发加点 M-1）：单场战斗仅注入唯一解析出的在研期次；当前期次满点时自动顺延至下一未满期次。
+	const auto shelf = CollectBookshelf(current, nowMs);
+	const uint32_t targetPassId = ResolveActivePassId(current, shelf);
+	if (targetPassId == 0u)
 	{
-		if (row.enabled() == 0)
-		{
-			continue;
-		}
-		ResolvedSeason season;
-		const char *reason = "";
-		if (ResolveSeasonRow(row, season, reason) &&
-			travel_pass_rules::IsWindowOpen(season.startsAtMs, season.endsAtMs, nowMs))
-		{
-			eligiblePassIds.insert(season.id);
-		}
+		return kSuccess;
 	}
-	// 已解锁典藏的历史期次只要尚未满点，继续自动涨点（解锁后永不过期）。
-	for (const auto &prog : current.seasons())
+	for (const auto &item : shelf)
 	{
-		if (prog.premium_unlocked())
-		{
-			eligiblePassIds.insert(prog.pass_id());
-		}
-	}
-
-	for (const uint32_t passId : eligiblePassIds)
-	{
-		ResolvedSeason season;
-		std::vector<ResolvedTier> tiers;
-		if (!FindSeasonById(passId, season, tiers))
+		if (item.season.id != targetPassId || !item.progressEligible)
 		{
 			continue;
 		}
-		const uint32_t gain = ComputeBattlePoints(season, settlement);
-		if (gain == 0)
+		const uint32_t gain = ComputeBattlePoints(item.season, settlement);
+		if (gain == 0u)
 		{
-			continue;
+			break;
 		}
-		auto *prog = travel_pass_rules::FindOrAddSeason(candidate, passId);
+		auto *prog = travel_pass_rules::FindOrAddSeason(candidate, item.season.id);
 		if (prog == nullptr)
 		{
-			continue;
+			break;
 		}
-		const uint32_t before = std::min(prog->progress_points(), season.maxPoints);
-		if (before >= season.maxPoints)
+		const uint32_t before = std::min(prog->progress_points(), item.season.maxPoints);
+		if (before >= item.season.maxPoints)
 		{
-			continue;
+			break;
 		}
-		const uint32_t added = std::min(gain, season.maxPoints - before);
+		const uint32_t added = std::min(gain, item.season.maxPoints - before);
 		prog->set_progress_points(before + added);
 		prog->set_last_updated_at_ms(nowMs);
+		candidate.set_active_pass_id(item.season.id);
 		pointsIncreased = true;
+		break;
 	}
 
 	if (pointsIncreased)
@@ -1294,6 +1379,179 @@ uint32_t PlayerTravelPassSystem::EquipCosmetic(entt::entity player,
 	return kSuccess;
 }
 
+uint32_t PlayerTravelPassSystem::SelectActivePass(entt::entity player,
+												  uint64_t nowMs,
+												  const ::SelectActiveTravelPassRequest &request,
+												  ::SelectActiveTravelPassResponse &response)
+{
+	response.Clear();
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return kThisEntityIsInvalid;
+	}
+	if (request.pass_id() == 0u)
+	{
+		return kInvalidParameter;
+	}
+	if (!player_mutability::IsPlayerMutable(player))
+	{
+		return kTravelPassFrozen;
+	}
+	auto *comp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
+	if (comp == nullptr || !travel_pass_rules::ValidateComp(*comp).empty())
+	{
+		return kTravelPassUnavailable;
+	}
+
+	ResolvedSeason season;
+	std::vector<ResolvedTier> tiers;
+	if (!FindSeasonById(request.pass_id(), season, tiers))
+	{
+		return kTravelPassNotOpen;
+	}
+	const bool windowOpen =
+		season.enabled != 0 && travel_pass_rules::IsWindowOpen(season.startsAtMs, season.endsAtMs, nowMs);
+	const auto *existing = travel_pass_rules::FindSeason(*comp, season.id);
+	const bool unlockedCarryover = existing != nullptr && existing->premium_unlocked();
+	if (!windowOpen && !unlockedCarryover)
+	{
+		return kTravelPassNotOpen;
+	}
+
+	if (comp->active_pass_id() != season.id)
+	{
+		comp->set_active_pass_id(season.id);
+		if (comp->pass_revision() < std::numeric_limits<uint64_t>::max())
+		{
+			comp->set_pass_revision(comp->pass_revision() + 1u);
+		}
+		PlayerLifecycleSystem::RequestKeyProgressSave(player, "travel_pass_select_active");
+		LOG_INFO << "[TravelPass] metric=travel_pass_active_selected " << PlayerLogId(player)
+				 << " active_pass_id=" << season.id;
+	}
+	FillSnapshot(player, nowMs, *comp, season, tiers, *response.mutable_snapshot());
+	return kSuccess;
+}
+
+bool PlayerTravelPassSystem::GrantBonusCosmetic(entt::entity player, std::string_view cosmeticKey)
+{
+	if (cosmeticKey.empty())
+	{
+		return true;
+	}
+	if (!travel_pass_rules::IsValidCosmeticKey(cosmeticKey))
+	{
+		return false;
+	}
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return false;
+	}
+	auto *comp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
+	if (comp == nullptr)
+	{
+		return true; // 仅极简旧单测夹具无此组件；生产玩家加载必然携带 PlayerTravelPassComp
+	}
+	bool added = false;
+	if (!travel_pass_rules::AddBonusCosmeticKey(*comp, cosmeticKey, &added))
+	{
+		return false;
+	}
+	if (added && comp->pass_revision() < std::numeric_limits<uint64_t>::max())
+	{
+		comp->set_pass_revision(comp->pass_revision() + 1u);
+	}
+	return true;
+}
+
+bool PlayerTravelPassSystem::HasPremiumUnlocked(entt::entity player, uint32_t passId)
+{
+	if (!tlsEcs.actorRegistry.valid(player) || passId == 0)
+	{
+		return false;
+	}
+	const auto *comp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
+	if (comp == nullptr)
+	{
+		return false;
+	}
+	const auto *existing = travel_pass_rules::FindSeason(*comp, passId);
+	return existing != nullptr && existing->premium_unlocked();
+}
+
+uint32_t PlayerTravelPassSystem::GrantPremiumFromGift(entt::entity player, uint32_t passId, uint64_t nowMs,
+													  bool *alreadyOwned)
+{
+	if (alreadyOwned != nullptr)
+	{
+		*alreadyOwned = false;
+	}
+	if (!tlsEcs.actorRegistry.valid(player) || passId == 0)
+	{
+		return kInvalidParameter;
+	}
+	auto *comp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
+	if (comp == nullptr || !travel_pass_rules::ValidateComp(*comp).empty())
+	{
+		return kTravelPassUnavailable;
+	}
+	ResolvedSeason season;
+	std::vector<ResolvedTier> tiers;
+	if (!FindSeasonById(passId, season, tiers) || season.enabled == 0)
+	{
+		return kTravelPassNotOpen;
+	}
+	auto *prog = travel_pass_rules::FindOrAddSeason(*comp, passId);
+	if (prog == nullptr)
+	{
+		return kTravelPassUnavailable;
+	}
+	if (prog->premium_unlocked())
+	{
+		if (alreadyOwned != nullptr)
+		{
+			*alreadyOwned = true;
+		}
+		return kSuccess;
+	}
+	prog->set_premium_unlocked(true);
+	prog->set_premium_unlocked_at_ms(nowMs);
+	prog->set_last_updated_at_ms(nowMs);
+	if (comp->pass_revision() < std::numeric_limits<uint64_t>::max())
+	{
+		comp->set_pass_revision(comp->pass_revision() + 1u);
+	}
+	LOG_INFO << "[TravelPass] metric=travel_pass_gift_credited " << PlayerLogId(player) << " pass_id=" << passId;
+	return kSuccess;
+}
+
+bool PlayerTravelPassSystem::RevokePremiumFromChargeback(entt::entity player, uint32_t passId, uint64_t nowMs)
+{
+	if (!tlsEcs.actorRegistry.valid(player) || passId == 0)
+	{
+		return false;
+	}
+	auto *comp = tlsEcs.actorRegistry.try_get<PlayerTravelPassComp>(player);
+	if (comp == nullptr)
+	{
+		return false;
+	}
+	auto *prog = travel_pass_rules::FindMutableSeason(*comp, passId);
+	if (prog == nullptr || !prog->premium_unlocked())
+	{
+		return true;
+	}
+	prog->set_premium_unlocked(false);
+	prog->set_premium_unlocked_at_ms(0u);
+	prog->set_last_updated_at_ms(nowMs);
+	if (comp->pass_revision() < std::numeric_limits<uint64_t>::max())
+	{
+		comp->set_pass_revision(comp->pass_revision() + 1u);
+	}
+	LOG_WARN << "[TravelPass] metric=travel_pass_gift_revoked " << PlayerLogId(player) << " pass_id=" << passId;
+	return true;
+}
+
 void PlayerTravelPassSystem::AppendActivityCatalogEntries(entt::entity player, uint64_t nowMs,
 														  ::GetActivityListResponse &out)
 {
@@ -1311,7 +1569,15 @@ void PlayerTravelPassSystem::AppendActivityCatalogEntries(entt::entity player, u
 			auto *entry = out.add_activities();
 			entry->set_activity_id(travel_pass_rules::kActivityIdTravelPass);
 			entry->set_name(snap.name());
-			const uint32_t claimableTotal = snap.claimable_free_count() + snap.claimable_premium_count();
+			uint32_t claimableTotal = 0u;
+			for (const auto &book : snap.bookshelf())
+			{
+				claimableTotal += book.claimable_count();
+			}
+			if (claimableTotal == 0u)
+			{
+				claimableTotal = snap.claimable_free_count() + snap.claimable_premium_count();
+			}
 			if (claimableTotal > 0)
 			{
 				entry->set_description("有 " + std::to_string(claimableTotal) + " 档游历好礼待领取 · 免费轨可领，典藏轨可先玩满再补票");

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/season_error_tip.proto*\xb7\x03\n\x0cseason_error\x12\x13\n\x0fkSeason_errorOK\x10\x00\x12\x14\n\x0ekSeasonNotOpen\x10\xd0\x89\x02\x12\x15\n\x0fkSeasonMismatch\x10\xd1\x89\x02\x12\x18\n\x12kSeasonSealInvalid\x10\xd2\x89\x02\x12 \n\x1akSeasonSealAlreadyEquipped\x10\xd3\x89\x02\x12\x1b\n\x15kSeasonSealAlreadyMax\x10\xd4\x89\x02\x12\x1c\n\x16kSeasonCatchupDisabled\x10\xd5\x89\x02\x12 \n\x1akSeasonCatchupPriceChanged\x10\xd6\x89\x02\x12%\n\x1fkSeasonCatchupCurrencyNotEnough\x10\xd7\x89\x02\x12\x13\n\rkSeasonFrozen\x10\xd8\x89\x02\x12\x15\n\x0fkSeasonInBattle\x10\xd9\x89\x02\x12\x1b\n\x15kSeasonSkillNoUpgrade\x10\xda\x89\x02\x12\x18\n\x12kSeasonUnavailable\x10\xdb\x89\x02\x12!\n\x1bkSeasonHonorAlreadyUnlocked\x10\xdc\x89\x02\x12\x1f\n\x19kSeasonHonorTargetInvalid\x10\xdd\x89\x02\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/season_error_tip.proto*\x86\x04\n\x0cseason_error\x12\x13\n\x0fkSeason_errorOK\x10\x00\x12\x14\n\x0ekSeasonNotOpen\x10\xd0\x89\x02\x12\x15\n\x0fkSeasonMismatch\x10\xd1\x89\x02\x12\x18\n\x12kSeasonSealInvalid\x10\xd2\x89\x02\x12 \n\x1akSeasonSealAlreadyEquipped\x10\xd3\x89\x02\x12\x1b\n\x15kSeasonSealAlreadyMax\x10\xd4\x89\x02\x12\x1c\n\x16kSeasonCatchupDisabled\x10\xd5\x89\x02\x12 \n\x1akSeasonCatchupPriceChanged\x10\xd6\x89\x02\x12%\n\x1fkSeasonCatchupCurrencyNotEnough\x10\xd7\x89\x02\x12\x13\n\rkSeasonFrozen\x10\xd8\x89\x02\x12\x15\n\x0fkSeasonInBattle\x10\xd9\x89\x02\x12\x1b\n\x15kSeasonSkillNoUpgrade\x10\xda\x89\x02\x12\x18\n\x12kSeasonUnavailable\x10\xdb\x89\x02\x12!\n\x1bkSeasonHonorAlreadyUnlocked\x10\xdc\x89\x02\x12\x1f\n\x19kSeasonHonorTargetInvalid\x10\xdd\x89\x02\x12%\n\x1fkSeasonBuildBookmarkMaxExpanded\x10\xde\x89\x02\x12&\n kSeasonBuildBookmarkPriceChanged\x10\xdf\x89\x02\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_SEASON_ERROR']._serialized_start=31
-  _globals['_SEASON_ERROR']._serialized_end=470
+  _globals['_SEASON_ERROR']._serialized_end=549
 # @@protoc_insertion_point(module_scope)

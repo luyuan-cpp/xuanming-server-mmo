@@ -330,3 +330,26 @@ func (sceneSeasonClientPlayerRpc) decodeResolveWuxingRealmEvent(reply *base.Mess
 	}
 	return resp, nil
 }
+
+// ExpandSavedBuildSlots 异步调用 SceneSeasonClientPlayer.ExpandSavedBuildSlots(REQUEST),done 的契约见 SceneSeasonClientPlayer。
+func (r sceneSeasonClientPlayerRpc) ExpandSavedBuildSlots(c *pkg.GameClient, req *scene.ExpandSavedBuildSlotsRequest, timeout time.Duration, done func(*scene.ExpandSavedBuildSlotsResponse, error)) {
+	c.Call(game.SceneSeasonClientPlayerExpandSavedBuildSlotsMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeExpandSavedBuildSlots(reply, err))
+	})
+}
+
+// ExpandSavedBuildSlotsSync 同步调用 SceneSeasonClientPlayer.ExpandSavedBuildSlots(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneSeasonClientPlayerRpc) ExpandSavedBuildSlotsSync(ctx context.Context, c *pkg.GameClient, req *scene.ExpandSavedBuildSlotsRequest, timeout time.Duration) (*scene.ExpandSavedBuildSlotsResponse, error) {
+	return r.decodeExpandSavedBuildSlots(c.CallSync(ctx, game.SceneSeasonClientPlayerExpandSavedBuildSlotsMessageId, req, timeout))
+}
+
+func (sceneSeasonClientPlayerRpc) decodeExpandSavedBuildSlots(reply *base.MessageContent, err error) (*scene.ExpandSavedBuildSlotsResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ExpandSavedBuildSlotsResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneSeasonClientPlayer.ExpandSavedBuildSlots reply: %w", err)
+	}
+	return resp, nil
+}

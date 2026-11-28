@@ -19,4 +19,8 @@ enum afk_pass_error {
 
   kAfkPassUnavailable = 32004;
 
+  kAfkPassBagFull = 32005;
+
+  kAfkPassPlanInvalid = 32006;
+
 };

@@ -7422,6 +7422,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerChannelIdentityResponse fi
     kRetryFieldNumber = 7,
     kPlayerLevelFieldNumber = 6,
     kAccountCreatedMsFieldNumber = 5,
+    kChatBubbleSkinIdFieldNumber = 8,
+    kShareCardSkinIdFieldNumber = 9,
   };
   // string account = 2;
   void clear_account() ;
@@ -7508,12 +7510,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerChannelIdentityResponse fi
   void _internal_set_account_created_ms(::uint64_t value);
 
   public:
+  // uint32 chat_bubble_skin_id = 8;
+  void clear_chat_bubble_skin_id() ;
+  [[nodiscard]] ::uint32_t chat_bubble_skin_id() const;
+  void set_chat_bubble_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_chat_bubble_skin_id() const;
+  void _internal_set_chat_bubble_skin_id(::uint32_t value);
+
+  public:
+  // uint32 share_card_skin_id = 9;
+  void clear_share_card_skin_id() ;
+  [[nodiscard]] ::uint32_t share_card_skin_id() const;
+  void set_share_card_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_share_card_skin_id() const;
+  void _internal_set_share_card_skin_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:data_service.GetPlayerChannelIdentityResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 75,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 83,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -7548,6 +7570,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerChannelIdentityResponse fi
     bool retry_;
     ::uint32_t player_level_;
     ::uint64_t account_created_ms_;
+    ::uint32_t chat_bubble_skin_id_;
+    ::uint32_t share_card_skin_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -12015,6 +12039,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateRoleAppearanceRequest final :
     kAppearanceIdFieldNumber = 2,
     kAuthFieldNumber = 3,
     kPlayerIdFieldNumber = 1,
+    kChatBubbleSkinIdFieldNumber = 4,
+    kShareCardSkinIdFieldNumber = 5,
+    kSyncShowcaseSkinsFieldNumber = 6,
   };
   // string appearance_id = 2;
   void clear_appearance_id() ;
@@ -12057,11 +12084,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateRoleAppearanceRequest final :
   void _internal_set_player_id(::uint64_t value);
 
   public:
+  // uint32 chat_bubble_skin_id = 4;
+  void clear_chat_bubble_skin_id() ;
+  [[nodiscard]] ::uint32_t chat_bubble_skin_id() const;
+  void set_chat_bubble_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_chat_bubble_skin_id() const;
+  void _internal_set_chat_bubble_skin_id(::uint32_t value);
+
+  public:
+  // uint32 share_card_skin_id = 5;
+  void clear_share_card_skin_id() ;
+  [[nodiscard]] ::uint32_t share_card_skin_id() const;
+  void set_share_card_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_share_card_skin_id() const;
+  void _internal_set_share_card_skin_id(::uint32_t value);
+
+  public:
+  // bool sync_showcase_skins = 6;
+  void clear_sync_showcase_skins() ;
+  [[nodiscard]] bool sync_showcase_skins() const;
+  void set_sync_showcase_skins(bool value);
+
+  private:
+  bool _internal_sync_showcase_skins() const;
+  void _internal_set_sync_showcase_skins(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:data_service.UpdateRoleAppearanceRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           1, 62,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -12093,6 +12150,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateRoleAppearanceRequest final :
     ::google::protobuf::internal::ArenaStringPtr appearance_id_;
     ::common::base::ServiceCallAuth* PROTOBUF_NULLABLE auth_;
     ::uint64_t player_id_;
+    ::uint32_t chat_bubble_skin_id_;
+    ::uint32_t share_card_skin_id_;
+    bool sync_showcase_skins_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -39551,6 +39611,54 @@ inline void GetPlayerChannelIdentityResponse::_internal_set_retry(bool value) {
   _impl_.retry_ = value;
 }
 
+// uint32 chat_bubble_skin_id = 8;
+inline void GetPlayerChannelIdentityResponse::clear_chat_bubble_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.chat_bubble_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GetPlayerChannelIdentityResponse::chat_bubble_skin_id() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.chat_bubble_skin_id)
+  return _internal_chat_bubble_skin_id();
+}
+inline void GetPlayerChannelIdentityResponse::set_chat_bubble_skin_id(::uint32_t value) {
+  _internal_set_chat_bubble_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.chat_bubble_skin_id)
+}
+inline ::uint32_t GetPlayerChannelIdentityResponse::_internal_chat_bubble_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.chat_bubble_skin_id_;
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_chat_bubble_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.chat_bubble_skin_id_ = value;
+}
+
+// uint32 share_card_skin_id = 9;
+inline void GetPlayerChannelIdentityResponse::clear_share_card_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_card_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t GetPlayerChannelIdentityResponse::share_card_skin_id() const {
+  // @@protoc_insertion_point(field_get:data_service.GetPlayerChannelIdentityResponse.share_card_skin_id)
+  return _internal_share_card_skin_id();
+}
+inline void GetPlayerChannelIdentityResponse::set_share_card_skin_id(::uint32_t value) {
+  _internal_set_share_card_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:data_service.GetPlayerChannelIdentityResponse.share_card_skin_id)
+}
+inline ::uint32_t GetPlayerChannelIdentityResponse::_internal_share_card_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.share_card_skin_id_;
+}
+inline void GetPlayerChannelIdentityResponse::_internal_set_share_card_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_card_skin_id_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // UpdateRoleAppearanceRequest
@@ -39734,6 +39842,78 @@ inline void UpdateRoleAppearanceRequest::set_allocated_auth(::common::base::Serv
 
   _impl_.auth_ = reinterpret_cast<::common::base::ServiceCallAuth*>(value);
   // @@protoc_insertion_point(field_set_allocated:data_service.UpdateRoleAppearanceRequest.auth)
+}
+
+// uint32 chat_bubble_skin_id = 4;
+inline void UpdateRoleAppearanceRequest::clear_chat_bubble_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.chat_bubble_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t UpdateRoleAppearanceRequest::chat_bubble_skin_id() const {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceRequest.chat_bubble_skin_id)
+  return _internal_chat_bubble_skin_id();
+}
+inline void UpdateRoleAppearanceRequest::set_chat_bubble_skin_id(::uint32_t value) {
+  _internal_set_chat_bubble_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:data_service.UpdateRoleAppearanceRequest.chat_bubble_skin_id)
+}
+inline ::uint32_t UpdateRoleAppearanceRequest::_internal_chat_bubble_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.chat_bubble_skin_id_;
+}
+inline void UpdateRoleAppearanceRequest::_internal_set_chat_bubble_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.chat_bubble_skin_id_ = value;
+}
+
+// uint32 share_card_skin_id = 5;
+inline void UpdateRoleAppearanceRequest::clear_share_card_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_card_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t UpdateRoleAppearanceRequest::share_card_skin_id() const {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceRequest.share_card_skin_id)
+  return _internal_share_card_skin_id();
+}
+inline void UpdateRoleAppearanceRequest::set_share_card_skin_id(::uint32_t value) {
+  _internal_set_share_card_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:data_service.UpdateRoleAppearanceRequest.share_card_skin_id)
+}
+inline ::uint32_t UpdateRoleAppearanceRequest::_internal_share_card_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.share_card_skin_id_;
+}
+inline void UpdateRoleAppearanceRequest::_internal_set_share_card_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.share_card_skin_id_ = value;
+}
+
+// bool sync_showcase_skins = 6;
+inline void UpdateRoleAppearanceRequest::clear_sync_showcase_skins() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sync_showcase_skins_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline bool UpdateRoleAppearanceRequest::sync_showcase_skins() const {
+  // @@protoc_insertion_point(field_get:data_service.UpdateRoleAppearanceRequest.sync_showcase_skins)
+  return _internal_sync_showcase_skins();
+}
+inline void UpdateRoleAppearanceRequest::set_sync_showcase_skins(bool value) {
+  _internal_set_sync_showcase_skins(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:data_service.UpdateRoleAppearanceRequest.sync_showcase_skins)
+}
+inline bool UpdateRoleAppearanceRequest::_internal_sync_showcase_skins() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sync_showcase_skins_;
+}
+inline void UpdateRoleAppearanceRequest::_internal_set_sync_showcase_skins(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sync_showcase_skins_ = value;
 }
 
 // -------------------------------------------------------------------

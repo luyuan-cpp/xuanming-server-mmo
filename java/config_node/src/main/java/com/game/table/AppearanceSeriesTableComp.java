@@ -71,4 +71,16 @@ public final class AppearanceSeriesTableComp {
         }
     }
 
+    public record Bundle_discount_bps(int value) {
+        public static Bundle_discount_bps from(AppearanceSeriesTable row) {
+            return new Bundle_discount_bps(row.getBundleDiscountBps());
+        }
+    }
+
+    public record Unit_price_diamond(int value) {
+        public static Unit_price_diamond from(AppearanceSeriesTable row) {
+            return new Unit_price_diamond(row.getUnitPriceDiamond());
+        }
+    }
+
 }

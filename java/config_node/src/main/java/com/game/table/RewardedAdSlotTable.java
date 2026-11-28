@@ -169,6 +169,17 @@ private static final long serialVersionUID = 0L;
     return platformMask_;
   }
 
+  public static final int REWARD_KIND_FIELD_NUMBER = 12;
+  private int rewardKind_ = 0;
+  /**
+   * <code>uint32 reward_kind = 12;</code>
+   * @return The rewardKind.
+   */
+  @java.lang.Override
+  public int getRewardKind() {
+    return rewardKind_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -215,6 +226,9 @@ private static final long serialVersionUID = 0L;
     }
     if (platformMask_ != 0) {
       output.writeUInt32(11, platformMask_);
+    }
+    if (rewardKind_ != 0) {
+      output.writeUInt32(12, rewardKind_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -264,6 +278,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(11, platformMask_);
     }
+    if (rewardKind_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(12, rewardKind_);
+    }
     return size;
   }
   @java.lang.Override
@@ -310,6 +328,8 @@ private static final long serialVersionUID = 0L;
         != other.getRequireSsv()) return false;
     if (getPlatformMask()
         != other.getPlatformMask()) return false;
+    if (getRewardKind()
+        != other.getRewardKind()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -344,6 +364,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getRequireSsv();
     hash = (37 * hash) + PLATFORM_MASK_FIELD_NUMBER;
     hash = (53 * hash) + getPlatformMask();
+    hash = (37 * hash) + REWARD_KIND_FIELD_NUMBER;
+    hash = (53 * hash) + getRewardKind();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -486,6 +508,7 @@ private static final long serialVersionUID = 0L;
       rewardAmount_ = 0L;
       requireSsv_ = 0;
       platformMask_ = 0;
+      rewardKind_ = 0;
       return this;
     }
 
@@ -552,6 +575,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000400) != 0)) {
         result.platformMask_ = platformMask_;
       }
+      if (((from_bitField0_ & 0x00000800) != 0)) {
+        result.rewardKind_ = rewardKind_;
+      }
     }
 
     @java.lang.Override
@@ -598,6 +624,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getPlatformMask() != 0) {
         setPlatformMask(other.getPlatformMask());
+      }
+      if (other.getRewardKind() != 0) {
+        setRewardKind(other.getRewardKind());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -680,6 +709,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000400;
               break;
             } // case 88
+            case 96: {
+              rewardKind_ = input.readUInt32();
+              bitField0_ |= 0x00000800;
+              break;
+            } // case 96
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1045,6 +1079,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearPlatformMask() {
       bitField0_ = (bitField0_ & ~0x00000400);
       platformMask_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int rewardKind_ ;
+    /**
+     * <code>uint32 reward_kind = 12;</code>
+     * @return The rewardKind.
+     */
+    @java.lang.Override
+    public int getRewardKind() {
+      return rewardKind_;
+    }
+    /**
+     * <code>uint32 reward_kind = 12;</code>
+     * @param value The rewardKind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRewardKind(int value) {
+
+      rewardKind_ = value;
+      bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 reward_kind = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRewardKind() {
+      bitField0_ = (bitField0_ & ~0x00000800);
+      rewardKind_ = 0;
       onChanged();
       return this;
     }

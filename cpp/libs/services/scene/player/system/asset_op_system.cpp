@@ -125,8 +125,8 @@ struct AssetOpStreamRule
 };
 
 constexpr AssetOpStreamRule kAssetOpStreamRules[] = {
-	{ASSET_OP_STREAM_GUILD_DEBIT, AssetOpDirection::kDebit, 2,
-	 {TX_GUILD_DONATE, TX_GUILD_BOUNTY_ESCROW, TX_UNKNOWN, TX_UNKNOWN}},
+	{ASSET_OP_STREAM_GUILD_DEBIT, AssetOpDirection::kDebit, 3,
+	 {TX_GUILD_DONATE, TX_GUILD_BOUNTY_ESCROW, TX_GUILD_EMBLEM_UNLOCK, TX_UNKNOWN}},
 	{ASSET_OP_STREAM_GUILD_CREDIT, AssetOpDirection::kCredit, 4,
 	 {TX_GUILD_SHOP, TX_GUILD_ACTIVITY_REWARD, TX_GUILD_WAR_REWARD, TX_GUILD_BOUNTY_PAYOUT}},
 	// TX_PAYMENT_REVERSAL:真钱付款被渠道撤销后,把官方订单发放的物品或货币扣回(payment-recharge.md §22.6)。

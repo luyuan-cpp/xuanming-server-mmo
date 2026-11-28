@@ -700,7 +700,9 @@ func TestRegistryDomainsSorted(t *testing.T) {
 			}
 		}
 	}
-	if got := r.Domains(); len(got) != 2 || got[0] != gmDomain || got[1] != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT {
-		t.Errorf("登记域必须精确为升序 GM 与 Battle，不能漏域或夹带其它域: %v", got)
+	if got := r.Domains(); len(got) != 3 || got[0] != gmDomain ||
+		got[1] != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT ||
+		got[2] != inboxpb.PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT {
+		t.Errorf("登记域必须精确为升序 GM、Battle 与 CosmeticGift，不能漏域或夹带其它域: %v", got)
 	}
 }

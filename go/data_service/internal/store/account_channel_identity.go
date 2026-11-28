@@ -61,6 +61,10 @@ func (s *AccountDirectoryStore) ChannelIdentityOfPlayer(ctx context.Context, pla
 	if d := displays[player]; d != nil {
 		out.PlayerLevel = d.GetLevel()
 	}
+	if bubbleSkin, shareCardSkin, skinErr := s.ReadPlayerChatShowcaseSkins(ctx, player); skinErr == nil {
+		out.ChatBubbleSkinId = bubbleSkin
+		out.ShareCardSkinId = shareCardSkin
+	}
 	return out, nil
 }
 

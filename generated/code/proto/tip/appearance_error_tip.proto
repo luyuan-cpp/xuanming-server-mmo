@@ -29,4 +29,40 @@ enum appearance_error {
 
   kAppearanceNotOwned = 33009;
 
+  kAppearanceSeriesBundleUnavailable = 33010;
+
+  kAppearanceSeriesAlreadyCompleted = 33011;
+
+  kAppearanceSeriesBundlePriceChanged = 33012;
+
+  kAppearanceSeriesBundleCurrencyNotEnough = 33013;
+
+  kCityCelebrationNotSafeCity = 33014;
+
+  kCityCelebrationChannelFull = 33015;
+
+  kCityCelebrationNoItem = 33016;
+
+  kCityCelebrationNotFound = 33017;
+
+  kCityCelebrationAlreadyClaimed = 33018;
+
+  kCityCelebrationLevelTooLow = 33019;
+
+  kCityCelebrationWeeklyCapReached = 33020;
+
+  kCosmeticGiftNotFriend7Days = 33021;
+
+  kCosmeticGiftTargetAlreadyOwned = 33022;
+
+  kCosmeticGiftWeeklyLimitReached = 33023;
+
+  kCosmeticGiftInvalidTarget = 33024;
+
+  kCosmeticGiftCurrencyNotEnough = 33025;
+
+  kCosmeticGiftPriceChanged = 33026;
+
+  kCosmeticGiftServiceUnavailable = 33027;
+
 };

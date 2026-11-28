@@ -24,21 +24,23 @@ const (
 type SeasonError int32
 
 const (
-	SeasonError_kSeason_errorOK                 SeasonError = 0
-	SeasonError_kSeasonNotOpen                  SeasonError = 34000
-	SeasonError_kSeasonMismatch                 SeasonError = 34001
-	SeasonError_kSeasonSealInvalid              SeasonError = 34002
-	SeasonError_kSeasonSealAlreadyEquipped      SeasonError = 34003
-	SeasonError_kSeasonSealAlreadyMax           SeasonError = 34004
-	SeasonError_kSeasonCatchupDisabled          SeasonError = 34005
-	SeasonError_kSeasonCatchupPriceChanged      SeasonError = 34006
-	SeasonError_kSeasonCatchupCurrencyNotEnough SeasonError = 34007
-	SeasonError_kSeasonFrozen                   SeasonError = 34008
-	SeasonError_kSeasonInBattle                 SeasonError = 34009
-	SeasonError_kSeasonSkillNoUpgrade           SeasonError = 34010
-	SeasonError_kSeasonUnavailable              SeasonError = 34011
-	SeasonError_kSeasonHonorAlreadyUnlocked     SeasonError = 34012
-	SeasonError_kSeasonHonorTargetInvalid       SeasonError = 34013
+	SeasonError_kSeason_errorOK                  SeasonError = 0
+	SeasonError_kSeasonNotOpen                   SeasonError = 34000
+	SeasonError_kSeasonMismatch                  SeasonError = 34001
+	SeasonError_kSeasonSealInvalid               SeasonError = 34002
+	SeasonError_kSeasonSealAlreadyEquipped       SeasonError = 34003
+	SeasonError_kSeasonSealAlreadyMax            SeasonError = 34004
+	SeasonError_kSeasonCatchupDisabled           SeasonError = 34005
+	SeasonError_kSeasonCatchupPriceChanged       SeasonError = 34006
+	SeasonError_kSeasonCatchupCurrencyNotEnough  SeasonError = 34007
+	SeasonError_kSeasonFrozen                    SeasonError = 34008
+	SeasonError_kSeasonInBattle                  SeasonError = 34009
+	SeasonError_kSeasonSkillNoUpgrade            SeasonError = 34010
+	SeasonError_kSeasonUnavailable               SeasonError = 34011
+	SeasonError_kSeasonHonorAlreadyUnlocked      SeasonError = 34012
+	SeasonError_kSeasonHonorTargetInvalid        SeasonError = 34013
+	SeasonError_kSeasonBuildBookmarkMaxExpanded  SeasonError = 34014
+	SeasonError_kSeasonBuildBookmarkPriceChanged SeasonError = 34015
 )
 
 // Enum value maps for SeasonError.
@@ -59,23 +61,27 @@ var (
 		34011: "kSeasonUnavailable",
 		34012: "kSeasonHonorAlreadyUnlocked",
 		34013: "kSeasonHonorTargetInvalid",
+		34014: "kSeasonBuildBookmarkMaxExpanded",
+		34015: "kSeasonBuildBookmarkPriceChanged",
 	}
 	SeasonError_value = map[string]int32{
-		"kSeason_errorOK":                 0,
-		"kSeasonNotOpen":                  34000,
-		"kSeasonMismatch":                 34001,
-		"kSeasonSealInvalid":              34002,
-		"kSeasonSealAlreadyEquipped":      34003,
-		"kSeasonSealAlreadyMax":           34004,
-		"kSeasonCatchupDisabled":          34005,
-		"kSeasonCatchupPriceChanged":      34006,
-		"kSeasonCatchupCurrencyNotEnough": 34007,
-		"kSeasonFrozen":                   34008,
-		"kSeasonInBattle":                 34009,
-		"kSeasonSkillNoUpgrade":           34010,
-		"kSeasonUnavailable":              34011,
-		"kSeasonHonorAlreadyUnlocked":     34012,
-		"kSeasonHonorTargetInvalid":       34013,
+		"kSeason_errorOK":                  0,
+		"kSeasonNotOpen":                   34000,
+		"kSeasonMismatch":                  34001,
+		"kSeasonSealInvalid":               34002,
+		"kSeasonSealAlreadyEquipped":       34003,
+		"kSeasonSealAlreadyMax":            34004,
+		"kSeasonCatchupDisabled":           34005,
+		"kSeasonCatchupPriceChanged":       34006,
+		"kSeasonCatchupCurrencyNotEnough":  34007,
+		"kSeasonFrozen":                    34008,
+		"kSeasonInBattle":                  34009,
+		"kSeasonSkillNoUpgrade":            34010,
+		"kSeasonUnavailable":               34011,
+		"kSeasonHonorAlreadyUnlocked":      34012,
+		"kSeasonHonorTargetInvalid":        34013,
+		"kSeasonBuildBookmarkMaxExpanded":  34014,
+		"kSeasonBuildBookmarkPriceChanged": 34015,
 	}
 )
 
@@ -110,7 +116,7 @@ var File_season_error_tip_proto protoreflect.FileDescriptor
 
 const file_season_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x16season_error_tip.proto*\xb7\x03\n" +
+	"\x16season_error_tip.proto*\x86\x04\n" +
 	"\fseason_error\x12\x13\n" +
 	"\x0fkSeason_errorOK\x10\x00\x12\x14\n" +
 	"\x0ekSeasonNotOpen\x10Љ\x02\x12\x15\n" +
@@ -126,7 +132,9 @@ const file_season_error_tip_proto_rawDesc = "" +
 	"\x15kSeasonSkillNoUpgrade\x10ډ\x02\x12\x18\n" +
 	"\x12kSeasonUnavailable\x10ۉ\x02\x12!\n" +
 	"\x1bkSeasonHonorAlreadyUnlocked\x10܉\x02\x12\x1f\n" +
-	"\x19kSeasonHonorTargetInvalid\x10݉\x02B$\n" +
+	"\x19kSeasonHonorTargetInvalid\x10݉\x02\x12%\n" +
+	"\x1fkSeasonBuildBookmarkMaxExpanded\x10މ\x02\x12&\n" +
+	" kSeasonBuildBookmarkPriceChanged\x10߉\x02B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

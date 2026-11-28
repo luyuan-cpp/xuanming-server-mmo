@@ -122,6 +122,9 @@ message SeasonStateSnapshot {
   uint32 cycle_pool_size = 37;              // 自动循环主题池大小（0 = 固定单季模式，>0 = 循环池季数）
   uint32 retro_honor_target_season_id = 38; // 当前生效的往季徽章追忆目标赛季 ID（0 = 全部已解锁或无可用往季）
   bool retro_honor_target_explicit = 39;    // true = 玩家手动选定；false = 自动顺延首个未解锁往季
+  uint32 saved_build_capacity = 40;         // 战报配装收藏夹当前容量（默认 12，每次 +12 封顶 48）
+  uint32 max_saved_build_capacity = 41;     // 战报配装收藏夹最大容量（48）
+  uint64 next_saved_build_expand_price_diamond = 42; // 下一次扩容 +12 位报价（真实灵石 60；已满为 0）
 }
 
 message SavedBattleBuildBookmarkView {
@@ -138,6 +141,7 @@ message SavedBattleBuildBookmarkView {
   repeated uint32 skill_table_ids = 11;
   repeated uint32 wuxing_sigil_ids = 12;
   uint64 saved_at_ms = 13;
+  bool pin_replay = 14;
 }
 
 message EquipWuxingFormationRequest {
@@ -321,6 +325,23 @@ message SetRetroHonorTargetResponse {
   SeasonStateSnapshot state = 2;
 }
 
+// 扩容战报与配装收藏夹容量（12 -> 24 -> 36 -> 48，每次 +12 条、60 真实灵石，零战力纯收藏便利）。
+message ExpandSavedBuildSlotsRequest {
+  uint64 client_request_id = 1;
+  uint32 expected_capacity = 2;
+  uint64 expected_price_diamond = 3;
+}
+
+message ExpandSavedBuildSlotsResponse {
+  TipInfoMessage error_message = 1;
+  bool replayed = 2;
+  uint32 new_capacity = 3;
+  uint32 max_capacity = 4;
+  uint64 spent_diamond = 5;
+  uint64 diamond_balance = 6;
+  SeasonStateSnapshot state = 7;
+}
+
 service SceneSeasonClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -339,4 +360,5 @@ service SceneSeasonClientPlayer {
   rpc SetRetroHonorTarget (SetRetroHonorTargetRequest) returns (SetRetroHonorTargetResponse);
   rpc ChooseWuxingRealmBranch (ChooseWuxingRealmBranchRequest) returns (ChooseWuxingRealmBranchResponse);
   rpc ResolveWuxingRealmEvent (ResolveWuxingRealmEventRequest) returns (ResolveWuxingRealmEventResponse);
+  rpc ExpandSavedBuildSlots (ExpandSavedBuildSlotsRequest) returns (ExpandSavedBuildSlotsResponse);
 }

@@ -10,28 +10,39 @@
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/currency/comp/player_currency_comp.h"
+#include "modules/currency/constants/currency.h"
+#include "modules/currency/system/currency_system.h"
 #include "proto/battle/battle_data.pb.h"
+#include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
+#include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_item_hold_comp.pb.h"
 #include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
+#include "proto/common/component/player_travel_pass_comp.pb.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/data_service/data_service.pb.h"
+#include "proto/player_inbox/player_inbox.pb.h"
 #include "proto/scene/player_appearance.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/appearance_rules.h"
 #include "services/scene/player/system/player_appearance.h"
+#include "services/scene/player/system/player_travel_pass.h"
 #include "table/code/appearancerule_table.h"
 #include "table/code/appearanceseries_table.h"
 #include "table/code/characterappearance_table.h"
+#include "table/code/cosmeticshowcase_table.h"
 #include "table/code/item_table.h"
 #include "table/code/pet_table.h"
 #include "table/code/petcosmetic_table.h"
 #include "table/code/skill_table.h"
 #include "table/code/skillvfxcosmetic_table.h"
 #include "table/code/spiritshopgoods_table.h"
+#include "table/code/travelpassseason_table.h"
+#include "table/code/travelpasstier_table.h"
 #include "table/proto/tip/appearance_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/pet_error_tip.pb.h"
@@ -122,7 +133,10 @@ protected:
 		AppearanceRuleTableManager::Instance().Load();
 		PetCosmeticTableManager::Instance().Load();
 		SkillVfxCosmeticTableManager::Instance().Load();
+		CosmeticShowcaseTableManager::Instance().Load();
 		SpiritShopGoodsTableManager::Instance().Load();
+		TravelPassSeasonTableManager::Instance().Load();
+		TravelPassTierTableManager::Instance().Load();
 		ASSERT_TRUE(PlayerAppearanceSystem::ValidateTables());
 
 		const auto &ruleRow = *AppearanceRuleTableManager::Instance().FindAll().data().begin();
@@ -186,7 +200,17 @@ protected:
 			bags.bags[kInventory].InsertItemForRestore((uint64_t{1} << 60) + 8801, cardItemId, cards, 0);
 		}
 		tlsEcs.actorRegistry.emplace<PlayerItemHoldComp>(entity);
+		tlsEcs.actorRegistry.emplace<PlayerUint64Comp>(entity);
+		auto &currency = tlsEcs.actorRegistry.emplace<CurrencyComp>(entity);
+		while (currency.values_size() < static_cast<int>(kCurrencyMax))
+		{
+			currency.add_values(0);
+		}
+		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(entity);
 		tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(entity);
+		auto &lvl = tlsEcs.actorRegistry.emplace<LevelComp>(entity);
+		lvl.set_level(20);
+		tlsEcs.actorRegistry.emplace<PlayerTravelPassComp>(entity);
 		tlsEcs.playerList.emplace(guid, entity);
 		return entity;
 	}
@@ -808,5 +832,371 @@ TEST_F(PlayerAppearanceSystemTest, PetAndSkillCosmeticVoucherUnlockIdempotencyAn
 	EquipSkillVfxRequest badVfxReq = vfxReq;
 	badVfxReq.set_cosmetic_id(0);
 	EXPECT_EQ(PlayerAppearanceSystem::EquipSkillVfx(player, badVfxReq, kNowSec + 8, vfxResp), kInvalidParameter);
+}
+
+TEST_F(PlayerAppearanceSystemTest, SteamSeriesBundleQuotesEnforcesRealDiamondAndGuardsConcurrentChange)
+{
+	// 初始拥有 00_reference_topright_boy（系列 1 留灯院旧友 3 人中已拥 1 人，缺 2 人：09_bamboo_archer_girl, 10_crimson_spear_girl）。
+	PlayerAppearanceInfo info;
+	PlayerAppearanceSystem::FillInfo(player, kNowSec, info);
+	ASSERT_GE(info.series_progress_size(), 1);
+	const auto &s1 = info.series_progress(0);
+	EXPECT_EQ(s1.series_id(), 1u);
+	EXPECT_EQ(s1.missing_unlockable_count(), 2u);
+	EXPECT_EQ(s1.bundle_discount_bps(), 8500u);
+	EXPECT_EQ(s1.bundle_original_diamond(), 200u);
+	EXPECT_EQ(s1.bundle_discount_diamond(), 170u);
+	ASSERT_EQ(s1.missing_appearance_ids_size(), 2);
+
+	// 1. 绑定灵石不可抵扣系列补齐包。
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyBindDiamond, 500, TX_GM_GRANT, 1));
+	BuyAppearanceSeriesBundleRequest buyReq;
+	buyReq.set_client_request_id(9701);
+	buyReq.set_series_id(1);
+	buyReq.add_expected_missing_appearance_ids("09_bamboo_archer_girl");
+	buyReq.add_expected_missing_appearance_ids("10_crimson_spear_girl");
+	buyReq.set_expected_price_diamond(170);
+	BuyAppearanceSeriesBundleResponse buyResp;
+	EXPECT_EQ(PlayerAppearanceSystem::BuySeriesBundle(player, buyReq, kNowSec, buyResp),
+			  static_cast<uint32_t>(kAppearanceSeriesBundleCurrencyNotEnough));
+
+	// 2. 充真实灵石后，若并发已获其中 1 人，旧缺失清单报价被 M-3 防线拒绝（绝不多扣钱）。
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyDiamond, 300, TX_GM_GRANT, 2));
+	ASSERT_EQ(kSuccess, PlayerAppearanceSystem::GrantAppearance(player, "09_bamboo_archer_girl", kNowSec));
+	EXPECT_EQ(PlayerAppearanceSystem::BuySeriesBundle(player, buyReq, kNowSec, buyResp),
+			  static_cast<uint32_t>(kAppearanceSeriesBundlePriceChanged));
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 300u);
+
+	// 3. 仅差最后 1 人时同样享受 8.5 折 = 85 灵石，且保留未知高位 bit + 幂等重放不双扣。
+	auto &profile = tlsEcs.actorRegistry.get<PlayerProfileComp>(player);
+	std::string ownedWithHighBit = profile.appearance_owned_bits();
+	if (ownedWithHighBit.size() < 4)
+	{
+		ownedWithHighBit.resize(4, '\0');
+	}
+	ownedWithHighBit[3] = static_cast<char>(0x40u);
+	profile.set_appearance_owned_bits(ownedWithHighBit);
+
+	BuyAppearanceSeriesBundleRequest buyLast;
+	buyLast.set_client_request_id(9702);
+	buyLast.set_series_id(1);
+	buyLast.add_expected_missing_appearance_ids("10_crimson_spear_girl");
+	buyLast.set_expected_price_diamond(85);
+	ASSERT_EQ(PlayerAppearanceSystem::BuySeriesBundle(player, buyLast, kNowSec, buyResp), kSuccess);
+	EXPECT_FALSE(buyResp.replayed());
+	EXPECT_EQ(buyResp.unlocked_count(), 1u);
+	EXPECT_EQ(buyResp.spent_diamond(), 85u);
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 215u);
+	EXPECT_TRUE(buyResp.info().series_progress(0).completed());
+	EXPECT_EQ(static_cast<unsigned char>(profile.appearance_owned_bits()[3]), 0x40u);
+
+	BuyAppearanceSeriesBundleResponse replayResp;
+	ASSERT_EQ(PlayerAppearanceSystem::BuySeriesBundle(player, buyLast, kNowSec + 1, replayResp), kSuccess);
+	EXPECT_TRUE(replayResp.replayed());
+	EXPECT_EQ(replayResp.unlocked_count(), 1u);
+	EXPECT_EQ(replayResp.spent_diamond(), 85u);
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 215u);
+
+	BuyAppearanceSeriesBundleRequest alreadyDone = buyLast;
+	alreadyDone.set_client_request_id(9703);
+	EXPECT_EQ(PlayerAppearanceSystem::BuySeriesBundle(player, alreadyDone, kNowSec + 2, replayResp),
+			  static_cast<uint32_t>(kAppearanceSeriesAlreadyCompleted));
+}
+
+TEST_F(PlayerAppearanceSystemTest, LightCardGrantsWeeklyExtraWardrobeTrialsWithoutGrantingOwnership)
+{
+	// 1. 首次免费试穿 01_ice_sword_girl 消耗终身免费位。
+	StartAppearanceTrialRequest req;
+	req.set_client_request_id(9801);
+	req.set_appearance_id("01_ice_sword_girl");
+	StartAppearanceTrialResponse resp;
+	ASSERT_EQ(PlayerAppearanceSystem::StartTrial(player, req, kNowSec, resp), kSuccess);
+
+	// 无轻享卡时再次试穿同一形象被拒。
+	req.set_client_request_id(9802);
+	EXPECT_EQ(PlayerAppearanceSystem::StartTrial(player, req, kNowSec + 10, resp),
+			  static_cast<uint32_t>(kAppearanceTrialAlreadyUsed));
+
+	// 2. 激活仙途轻享卡后，每周享有 3 次随心试穿，绝不授予永久权，第 4 次被拒。
+	tlsEcs.actorRegistry.get<PlayerUint64Comp>(player).set_afk_pass_expires_at(kNowSec + 30 * 86400ull);
+	for (uint32_t i = 1; i <= 3; ++i)
+	{
+		req.set_client_request_id(9810 + i);
+		ASSERT_EQ(PlayerAppearanceSystem::StartTrial(player, req, kNowSec + 100 + i, resp), kSuccess);
+		EXPECT_EQ(resp.info().light_card_trial_quota(), 3u);
+		EXPECT_EQ(resp.info().light_card_trial_used(), i);
+		EXPECT_FALSE(player_appearance::IsOwned(
+			tlsEcs.actorRegistry.get<PlayerProfileComp>(player).appearance_owned_bits(), 3,
+			"00_reference_topright_boy", "01_ice_sword_girl"));
+	}
+	req.set_client_request_id(9814);
+	EXPECT_EQ(PlayerAppearanceSystem::StartTrial(player, req, kNowSec + 200, resp),
+			  static_cast<uint32_t>(kAppearanceTrialAlreadyUsed));
+
+	// 3. 跨周（+7 天）重置，且时钟回拨不重置。
+	const uint64_t nextWeekSec = kNowSec + 7 * 86400ull;
+	req.set_client_request_id(9815);
+	ASSERT_EQ(PlayerAppearanceSystem::StartTrial(player, req, nextWeekSec, resp), kSuccess);
+	EXPECT_EQ(resp.info().light_card_trial_used(), 1u);
+}
+
+TEST_F(PlayerAppearanceSystemTest, ShowcaseCosmeticsVoucherUnlockBattleSnapshotAndM6AuthoritativeFilter)
+{
+	// 1. 发放 2 张 3417 排面装饰券
+	auto &inv = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+	inv.InsertItemForRestore((uint64_t{1} << 60) + 9901, 3417, 2, 1);
+
+	// 专属限定 #13（支持者包）不可用 3417 解锁
+	EquipShowcaseCosmeticRequest exclReq;
+	exclReq.set_client_request_id(12001);
+	exclReq.set_slot_kind(player_appearance::kShowcaseSlotFormation);
+	exclReq.set_cosmetic_id(13);
+	EquipShowcaseCosmeticResponse exclResp;
+	EXPECT_EQ(PlayerAppearanceSystem::EquipShowcaseCosmetic(player, exclReq, kNowSec, exclResp),
+			  static_cast<uint32_t>(kAppearanceNotCardUnlockable));
+
+	// 耗 1 张 3417 解锁并装备 #1 金芒八卦阵纹，耗 1 张解锁 #6 青锋破阵旗
+	EquipShowcaseCosmeticRequest formReq;
+	formReq.set_client_request_id(12002);
+	formReq.set_slot_kind(player_appearance::kShowcaseSlotFormation);
+	formReq.set_cosmetic_id(1);
+	EquipShowcaseCosmeticResponse formResp;
+	ASSERT_EQ(PlayerAppearanceSystem::EquipShowcaseCosmetic(player, formReq, kNowSec, formResp), kSuccess);
+	EXPECT_FALSE(formResp.replayed());
+	EXPECT_EQ(formResp.equipped_cosmetic_id(), 1u);
+	EXPECT_EQ(inv.GetTotalItemCount(3417), 1u);
+
+	// 同键幂等重放不二次扣券
+	EquipShowcaseCosmeticResponse formReplay;
+	ASSERT_EQ(PlayerAppearanceSystem::EquipShowcaseCosmetic(player, formReq, kNowSec, formReplay), kSuccess);
+	EXPECT_TRUE(formReplay.replayed());
+	EXPECT_EQ(inv.GetTotalItemCount(3417), 1u);
+
+	EquipShowcaseCosmeticRequest bannerReq;
+	bannerReq.set_client_request_id(12003);
+	bannerReq.set_slot_kind(player_appearance::kShowcaseSlotEntranceVictory);
+	bannerReq.set_cosmetic_id(6);
+	EquipShowcaseCosmeticResponse bannerResp;
+	ASSERT_EQ(PlayerAppearanceSystem::EquipShowcaseCosmetic(player, bannerReq, kNowSec, bannerResp), kSuccess);
+	EXPECT_EQ(inv.GetTotalItemCount(3417), 0u);
+
+	// 2. 战斗快照权威透传 formation_skin_id=1, entrance_victory_skin_id=6
+	BattlePlayerSnapshot snap;
+	PlayerAppearanceSystem::FillBattleSkillVfx(player, snap);
+	EXPECT_EQ(snap.formation_skin_id(), 1u);
+	EXPECT_EQ(snap.entrance_victory_skin_id(), 6u);
+
+	// 3. M-6 防伪造：若存档被篡改写入未拥有的 #2 阵纹，快照必须静默回落 0
+	auto &profile = tlsEcs.actorRegistry.get<PlayerProfileComp>(player);
+	(*profile.mutable_equipped_showcase_cosmetics())[player_appearance::kShowcaseSlotFormation] = 2u;
+	BattlePlayerSnapshot forgedSnap;
+	PlayerAppearanceSystem::FillBattleSkillVfx(player, forgedSnap);
+	EXPECT_EQ(forgedSnap.formation_skin_id(), 0u);
+	EXPECT_EQ(forgedSnap.entrance_victory_skin_id(), 6u);
+}
+
+TEST_F(PlayerAppearanceSystemTest, CityCelebrationSafeCityLimit5AndWeeklyBindGoldCapM5)
+{
+	auto &inv = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+	inv.InsertItemForRestore((uint64_t{1} << 60) + 9911, 3418, 10, 1); // 天墉灵灯 150 绑银
+	inv.InsertItemForRestore((uint64_t{1} << 60) + 9912, 3420, 10, 1); // 仙茶同乐席 400 绑银
+
+	// 非安全主城（scene_config_id=2 野外）禁止施放
+	PlayerAppearanceSystem::TestHooks hooks;
+	hooks.overrideSceneId = 5001;
+	hooks.overrideSceneConfigId = 2;
+	std::vector<CityCelebrationNotify> celebNotifies;
+	hooks.celebrationBroadcast = [&](uint64_t, const CityCelebrationNotify &n) { celebNotifies.push_back(n); };
+	hooks.save = [this](entt::entity, const char *r) { saveReasons.emplace_back(r); };
+	PlayerAppearanceSystem::SetTestHooks(hooks);
+
+	CastCityCelebrationRequest badCityReq;
+	badCityReq.set_client_request_id(13001);
+	badCityReq.set_item_config_id(3418);
+	CastCityCelebrationResponse badCityResp;
+	EXPECT_EQ(PlayerAppearanceSystem::CastCityCelebration(player, badCityReq, kNowSec, badCityResp),
+			  static_cast<uint32_t>(kCityCelebrationNotSafeCity));
+
+	// 切回顾元城主城（scene_config_id=1），连续施放 5 场成功，第 6 场受并发上限 5 拦截且不扣道具
+	hooks.overrideSceneConfigId = 1;
+	PlayerAppearanceSystem::SetTestHooks(hooks);
+	uint64_t firstCelebId = 0;
+	for (uint32_t i = 0; i < 5u; ++i)
+	{
+		CastCityCelebrationRequest cReq;
+		cReq.set_client_request_id(13010 + i);
+		cReq.set_item_config_id(3420);
+		CastCityCelebrationResponse cResp;
+		ASSERT_EQ(PlayerAppearanceSystem::CastCityCelebration(player, cReq, kNowSec, cResp), kSuccess);
+		if (i == 0) firstCelebId = cResp.celebration().celebration_id();
+	}
+	EXPECT_EQ(celebNotifies.size(), 5u);
+	EXPECT_EQ(inv.GetTotalItemCount(3420), 5u);
+
+	CastCityCelebrationRequest sixthReq;
+	sixthReq.set_client_request_id(13020);
+	sixthReq.set_item_config_id(3420);
+	CastCityCelebrationResponse sixthResp;
+	EXPECT_EQ(PlayerAppearanceSystem::CastCityCelebration(player, sixthReq, kNowSec, sixthResp),
+			  static_cast<uint32_t>(kCityCelebrationChannelFull));
+	EXPECT_EQ(inv.GetTotalItemCount(3420), 5u);
+
+	// 低等级 (<10) 拒领；满 10 级正常领取 400 绑定银两（CURRENCY_TYPE_BIND_GOLD=3），重复领拒回
+	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(9);
+	ClaimCityCelebrationGiftRequest claimReq;
+	claimReq.set_client_request_id(13030);
+	claimReq.set_celebration_id(firstCelebId);
+	ClaimCityCelebrationGiftResponse claimResp;
+	EXPECT_EQ(PlayerAppearanceSystem::ClaimCityCelebrationGift(player, claimReq, kNowSec, claimResp),
+			  static_cast<uint32_t>(kCityCelebrationLevelTooLow));
+
+	tlsEcs.actorRegistry.get<LevelComp>(player).set_level(20);
+	ASSERT_EQ(PlayerAppearanceSystem::ClaimCityCelebrationGift(player, claimReq, kNowSec, claimResp), kSuccess);
+	EXPECT_EQ(claimResp.granted_bind_gold(), 400u);
+	EXPECT_EQ(claimResp.weekly_claimed_total(), 400u);
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyBindGold), 400u);
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 0u); // 绝不发流通银两
+
+	// 同一演出换键二次领拒回
+	claimReq.set_client_request_id(13031);
+	EXPECT_EQ(PlayerAppearanceSystem::ClaimCityCelebrationGift(player, claimReq, kNowSec, claimResp),
+			  static_cast<uint32_t>(kCityCelebrationAlreadyClaimed));
+
+	// 模拟本周已领 2900 绑银：领下一场 400 绑银应截断至 100（总 3000），再领第 3 场拒回上限
+	tlsEcs.actorRegistry.get<PlayerProfileComp>(player).set_celebration_bind_gold_claimed(2900u);
+	claimReq.set_client_request_id(13032);
+	claimReq.set_celebration_id(firstCelebId + 1);
+	ASSERT_EQ(PlayerAppearanceSystem::ClaimCityCelebrationGift(player, claimReq, kNowSec, claimResp), kSuccess);
+	EXPECT_EQ(claimResp.granted_bind_gold(), 100u);
+	EXPECT_EQ(claimResp.weekly_claimed_total(), 3000u);
+
+	claimReq.set_client_request_id(13033);
+	claimReq.set_celebration_id(firstCelebId + 2);
+	EXPECT_EQ(PlayerAppearanceSystem::ClaimCityCelebrationGift(player, claimReq, kNowSec, claimResp),
+			  static_cast<uint32_t>(kCityCelebrationWeeklyCapReached));
+}
+
+TEST_F(PlayerAppearanceSystemTest, FriendCosmeticGiftRealDiamondOnlyInboxCreditRaceRefundAndChargebackRevokeM4)
+{
+	// 给发送方 500 绑定灵石 + 0 真实灵石：验证绝不混扣绑定灵石
+	ASSERT_EQ(CurrencySystem::AddCurrency(player, kCurrencyBindDiamond, 500, TX_GM_GRANT, 1), kSuccess);
+
+	std::vector<player_inbox::CosmeticGiftCreditPayload> dispatchedCredits;
+	std::vector<player_inbox::CosmeticGiftRefundPayload> dispatchedRefunds;
+	PlayerAppearanceSystem::GiftSocialVerdict social{true, false, true, false};
+
+	PlayerAppearanceSystem::TestHooks hooks;
+	hooks.save = [this](entt::entity, const char *r) { saveReasons.emplace_back(r); };
+	hooks.notify = [this](entt::entity, const AppearanceStateNotify &n) { stateNotifies.push_back(n); };
+	hooks.giftSocialCheck = [&](Guid, Guid, uint32_t, uint32_t, std::string_view) { return social; };
+	hooks.giftCreditDispatch = [&](Guid, const player_inbox::CosmeticGiftCreditPayload &p)
+	{
+		dispatchedCredits.push_back(p);
+		return true;
+	};
+	hooks.giftRefundDispatch = [&](Guid, const player_inbox::CosmeticGiftRefundPayload &p)
+	{
+		dispatchedRefunds.push_back(p);
+		return true;
+	};
+	PlayerAppearanceSystem::SetTestHooks(hooks);
+
+	SendCosmeticGiftRequest req;
+	req.set_client_request_id(14001);
+	req.set_target_player_id(960300099);
+	req.set_target_kind(COSMETIC_GIFT_TARGET_SHOWCASE);
+	req.set_target_id_u32(1);
+	req.set_expected_price_diamond(80);
+	SendCosmeticGiftResponse resp;
+
+	// 仅持绑定灵石 -> 严拒
+	EXPECT_EQ(PlayerAppearanceSystem::SendCosmeticGift(player, req, kNowSec, resp),
+			  static_cast<uint32_t>(kCosmeticGiftCurrencyNotEnough));
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyBindDiamond), 500u);
+
+	// 补真实灵石，但非 7 天好友 -> 严拒
+	ASSERT_EQ(CurrencySystem::AddCurrency(player, kCurrencyDiamond, 500, TX_GM_GRANT, 2), kSuccess);
+	social.friendsFor7Days = false;
+	EXPECT_EQ(PlayerAppearanceSystem::SendCosmeticGift(player, req, kNowSec, resp),
+			  static_cast<uint32_t>(kCosmeticGiftNotFriend7Days));
+
+	// 专属不可买断项 #13 -> 严拒
+	social.friendsFor7Days = true;
+	SendCosmeticGiftRequest exclReq = req;
+	exclReq.set_target_id_u32(13);
+	EXPECT_EQ(PlayerAppearanceSystem::SendCosmeticGift(player, exclReq, kNowSec, resp),
+			  static_cast<uint32_t>(kCosmeticGiftInvalidTarget));
+
+	// 正常赠送 #1 排面阵纹 -> 扣 80 真实灵石、发收件箱载荷、同键重放幂等
+	ASSERT_EQ(PlayerAppearanceSystem::SendCosmeticGift(player, req, kNowSec, resp), kSuccess);
+	EXPECT_FALSE(resp.replayed());
+	EXPECT_EQ(resp.spent_diamond(), 80u);
+	EXPECT_EQ(resp.sent_this_week(), 1u);
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 420u);
+	ASSERT_EQ(dispatchedCredits.size(), 1u);
+
+	SendCosmeticGiftResponse replayResp;
+	ASSERT_EQ(PlayerAppearanceSystem::SendCosmeticGift(player, req, kNowSec, replayResp), kSuccess);
+	EXPECT_TRUE(replayResp.replayed());
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 420u);
+
+	// 受赠方（复用本测试实体）通过 PlayerInbox 到账授予 #1，再重复到账模拟竞态已拥有 -> 触发原路退款载荷
+	std::string creditBytes;
+	ASSERT_TRUE(dispatchedCredits[0].SerializeToString(&creditBytes));
+	auto r1 = PlayerAppearanceSystem::ApplyCosmeticGiftCredit(player, creditBytes);
+	EXPECT_EQ(r1.kind, PlayerInboxExecKind::kApplied);
+	EXPECT_TRUE(player_appearance::IsShowcaseCosmeticOwned(
+		tlsEcs.actorRegistry.get<PlayerProfileComp>(player).showcase_cosmetic_owned_bits(), 1));
+	EXPECT_TRUE(dispatchedRefunds.empty());
+
+	auto r2 = PlayerAppearanceSystem::ApplyCosmeticGiftCredit(player, creditBytes);
+	EXPECT_EQ(r2.kind, PlayerInboxExecKind::kApplied);
+	ASSERT_EQ(dispatchedRefunds.size(), 1u);
+	EXPECT_EQ(dispatchedRefunds[0].refund_diamond(), 80u);
+
+	// 发送方收到退款载荷 -> 原路退回 80 真实灵石（420 -> 500）
+	std::string refundBytes;
+	ASSERT_TRUE(dispatchedRefunds[0].SerializeToString(&refundBytes));
+	auto r3 = PlayerAppearanceSystem::ApplyCosmeticGiftRefund(player, refundBytes);
+	EXPECT_EQ(r3.kind, PlayerInboxExecKind::kApplied);
+	EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 500u);
+
+	// M-4 黑卡撤单精准回收：穿戴 #1 后执行 REVOKE -> 位图清零且自动卸下
+	(*tlsEcs.actorRegistry.get<PlayerProfileComp>(player).mutable_equipped_showcase_cosmetics())[1] = 1u;
+	player_inbox::CosmeticGiftRevokePayload revoke;
+	revoke.set_gift_id(dispatchedCredits[0].gift_id());
+	revoke.set_sender_player_id(kPlayerGuid);
+	revoke.set_target_kind(COSMETIC_GIFT_TARGET_SHOWCASE);
+	revoke.set_target_id_u32(1);
+	revoke.set_reason("chargeback");
+	std::string revokeBytes;
+	ASSERT_TRUE(revoke.SerializeToString(&revokeBytes));
+	auto r4 = PlayerAppearanceSystem::ApplyCosmeticGiftRevoke(player, revokeBytes);
+	EXPECT_EQ(r4.kind, PlayerInboxExecKind::kApplied);
+	EXPECT_FALSE(player_appearance::IsShowcaseCosmeticOwned(
+		tlsEcs.actorRegistry.get<PlayerProfileComp>(player).showcase_cosmetic_owned_bits(), 1));
+	EXPECT_TRUE(tlsEcs.actorRegistry.get<PlayerProfileComp>(player).equipped_showcase_cosmetics().empty());
+
+	// 手记典藏赠礼 + 撤单回退验证
+	player_inbox::CosmeticGiftCreditPayload passGift;
+	passGift.set_gift_id(99002);
+	passGift.set_sender_player_id(kPlayerGuid);
+	passGift.set_target_kind(COSMETIC_GIFT_TARGET_TRAVEL_PASS);
+	passGift.set_target_id_u32(2);
+	passGift.set_paid_diamond(180);
+	std::string passBytes;
+	ASSERT_TRUE(passGift.SerializeToString(&passBytes));
+	EXPECT_EQ(PlayerAppearanceSystem::ApplyCosmeticGiftCredit(player, passBytes).kind, PlayerInboxExecKind::kApplied);
+	EXPECT_TRUE(PlayerTravelPassSystem::HasPremiumUnlocked(player, 2));
+
+	player_inbox::CosmeticGiftRevokePayload passRevoke;
+	passRevoke.set_gift_id(99002);
+	passRevoke.set_sender_player_id(kPlayerGuid);
+	passRevoke.set_target_kind(COSMETIC_GIFT_TARGET_TRAVEL_PASS);
+	passRevoke.set_target_id_u32(2);
+	std::string passRevokeBytes;
+	ASSERT_TRUE(passRevoke.SerializeToString(&passRevokeBytes));
+	EXPECT_EQ(PlayerAppearanceSystem::ApplyCosmeticGiftRevoke(player, passRevokeBytes).kind, PlayerInboxExecKind::kApplied);
+	EXPECT_FALSE(PlayerTravelPassSystem::HasPremiumUnlocked(player, 2));
 }
 } // namespace

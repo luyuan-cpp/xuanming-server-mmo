@@ -161,4 +161,12 @@ enum guild_error {
 
   kGuildWarFeudInvalidTarget = 14075;
 
+  kGuildEmblemInvalid = 14076;
+
+  kGuildEmblemAlreadyUnlocked = 14077;
+
+  kGuildEmblemNotUnlocked = 14078;
+
+  kGuildEmblemPriceChanged = 14079;
+
 };

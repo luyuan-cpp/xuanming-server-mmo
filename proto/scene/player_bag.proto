@@ -635,6 +635,23 @@ message UnlockEquipLoadoutResponse {
   EquipLoadoutSnapshot snapshot = 12;
 }
 
+// 仓库容量扩容（仅支持 bag_type=1 仓库，每次 +20 格、最多扩 5 次至 300 格，60 真实灵石/次，零战力纯整理便利）。
+message ExpandBagCapacityRequest {
+  uint64 client_request_id = 1;       // 持久化幂等键（必须非 0）
+  uint32 bag_type = 2;                // 必须为 1（kWarehouse 仓库）
+  uint32 expected_capacity = 3;       // 客户端看到的当前仓库格数（防连点连扩）
+  uint64 expected_price_diamond = 4;  // 客户端看到的本次报价（真实灵石，防价差）
+}
+message ExpandBagCapacityResponse {
+  TipInfoMessage error_message = 1;
+  bool replayed = 2;
+  uint32 new_capacity = 3;
+  uint32 max_capacity = 4;
+  uint64 spent_diamond = 5;
+  uint64 diamond_balance = 6;
+  BagInfo bag = 7;                    // 扩容后的最新仓库全量
+}
+
 service SceneBagClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -665,4 +682,6 @@ service SceneBagClientPlayer {
   rpc SaveEquipLoadout (SaveEquipLoadoutRequest) returns (SaveEquipLoadoutResponse);
   rpc SwitchEquipLoadout (SwitchEquipLoadoutRequest) returns (SwitchEquipLoadoutResponse);
   rpc UnlockEquipLoadout (UnlockEquipLoadoutRequest) returns (UnlockEquipLoadoutResponse);
+  // ── 仓库扩容（method index 18）──
+  rpc ExpandBagCapacity (ExpandBagCapacityRequest) returns (ExpandBagCapacityResponse);
 }

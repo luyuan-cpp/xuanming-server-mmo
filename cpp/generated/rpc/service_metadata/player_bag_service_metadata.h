@@ -74,3 +74,7 @@ constexpr uint32_t SceneBagClientPlayerSwitchEquipLoadoutIndex = 16;
 constexpr uint32_t SceneBagClientPlayerUnlockEquipLoadoutMessageId = 539;
 constexpr uint32_t SceneBagClientPlayerUnlockEquipLoadoutIndex = 17;
 #define SceneBagClientPlayerUnlockEquipLoadoutMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(17)
+
+constexpr uint32_t SceneBagClientPlayerExpandBagCapacityMessageId = 600;
+constexpr uint32_t SceneBagClientPlayerExpandBagCapacityIndex = 18;
+#define SceneBagClientPlayerExpandBagCapacityMethod  ::SceneBagClientPlayer_Stub::descriptor()->method(18)

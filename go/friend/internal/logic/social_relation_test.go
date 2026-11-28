@@ -43,6 +43,31 @@ func TestBatchCheckSocialRelations(t *testing.T) {
 		assert.False(t, resp.GetAllAreFriends())
 	})
 
+	t.Run("min_friend_duration_forwarded_and_negative_rejected", func(t *testing.T) {
+		f := newFixture(t, nil)
+		f.store.socialBlocked = false
+		f.store.socialAllFriends = true
+		const sevenDaysMs = int64(7 * 86400 * 1000)
+
+		resp, err := f.logic().BatchCheckSocialRelations(context.Background(), &pb.BatchCheckSocialRelationsRequest{
+			SideAPlayerIds:      []uint64{101},
+			SideBPlayerIds:      []uint64{201},
+			MinFriendDurationMs: sevenDaysMs,
+		})
+		require.NoError(t, err)
+		assert.Nil(t, resp.ErrorMessage)
+		assert.Equal(t, sevenDaysMs, f.store.lastMinFriendDurationMs)
+
+		badResp, err := f.logic().BatchCheckSocialRelations(context.Background(), &pb.BatchCheckSocialRelationsRequest{
+			SideAPlayerIds:      []uint64{101},
+			SideBPlayerIds:      []uint64{201},
+			MinFriendDurationMs: -1,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, badResp.ErrorMessage)
+		assert.Equal(t, constants.ErrInvalidParameter, badResp.ErrorMessage.GetId())
+	})
+
 	t.Run("invalid_params_rejected_in_band", func(t *testing.T) {
 		f := newFixture(t, nil)
 		cases := []*pb.BatchCheckSocialRelationsRequest{

@@ -11,6 +11,49 @@
    "platform_mask": 3,
    "require_ssv": 0,
    "reward_amount": 300,
+   "reward_kind": 1,
+   "session_ttl_sec": 300
+  },
+  {
+   "cooldown_sec": 60,
+   "currency_type": 3,
+   "daily_limit": 7,
+   "enabled": 0,
+   "id": 2,
+   "min_level": 20,
+   "min_watch_sec": 15,
+   "platform_mask": 3,
+   "require_ssv": 0,
+   "reward_amount": 0,
+   "reward_kind": 2,
+   "session_ttl_sec": 300
+  },
+  {
+   "cooldown_sec": 60,
+   "currency_type": 3,
+   "daily_limit": 7,
+   "enabled": 0,
+   "id": 3,
+   "min_level": 10,
+   "min_watch_sec": 15,
+   "platform_mask": 3,
+   "require_ssv": 0,
+   "reward_amount": 0,
+   "reward_kind": 3,
+   "session_ttl_sec": 300
+  },
+  {
+   "cooldown_sec": 60,
+   "currency_type": 3,
+   "daily_limit": 5,
+   "enabled": 0,
+   "id": 4,
+   "min_level": 10,
+   "min_watch_sec": 15,
+   "platform_mask": 3,
+   "require_ssv": 0,
+   "reward_amount": 0,
+   "reward_kind": 4,
    "session_ttl_sec": 300
   }
  ]

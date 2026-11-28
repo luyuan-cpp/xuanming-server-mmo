@@ -399,3 +399,12 @@ void SceneBagClientPlayerHandler::UnlockEquipLoadout(entt::entity player,const :
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneBagClientPlayerHandler::ExpandBagCapacity(entt::entity player,const ::ExpandBagCapacityRequest* request,
+	::ExpandBagCapacityResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerBagSystem::ExpandCapacity(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

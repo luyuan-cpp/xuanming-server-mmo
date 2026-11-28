@@ -23,6 +23,65 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 好友赠礼目标类别白名单（严格仅限永久绑定纯外观与手记典藏，永久禁止材料/银两/月卡）。
+type CosmeticGiftTargetKind int32
+
+const (
+	CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_UNSPECIFIED  CosmeticGiftTargetKind = 0
+	CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_CHARACTER    CosmeticGiftTargetKind = 1 // target_id_str = CharacterAppearance.appearance_id
+	CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_PET_COSMETIC CosmeticGiftTargetKind = 2 // target_id_u32 = PetCosmetic.id
+	CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_SKILL_VFX    CosmeticGiftTargetKind = 3 // target_id_u32 = SkillVfxCosmetic.id
+	CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_TRAVEL_PASS  CosmeticGiftTargetKind = 4 // target_id_u32 = TravelPassSeason.id
+	CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_SHOWCASE     CosmeticGiftTargetKind = 5 // target_id_u32 = CosmeticShowcase.id
+)
+
+// Enum value maps for CosmeticGiftTargetKind.
+var (
+	CosmeticGiftTargetKind_name = map[int32]string{
+		0: "COSMETIC_GIFT_TARGET_UNSPECIFIED",
+		1: "COSMETIC_GIFT_TARGET_CHARACTER",
+		2: "COSMETIC_GIFT_TARGET_PET_COSMETIC",
+		3: "COSMETIC_GIFT_TARGET_SKILL_VFX",
+		4: "COSMETIC_GIFT_TARGET_TRAVEL_PASS",
+		5: "COSMETIC_GIFT_TARGET_SHOWCASE",
+	}
+	CosmeticGiftTargetKind_value = map[string]int32{
+		"COSMETIC_GIFT_TARGET_UNSPECIFIED":  0,
+		"COSMETIC_GIFT_TARGET_CHARACTER":    1,
+		"COSMETIC_GIFT_TARGET_PET_COSMETIC": 2,
+		"COSMETIC_GIFT_TARGET_SKILL_VFX":    3,
+		"COSMETIC_GIFT_TARGET_TRAVEL_PASS":  4,
+		"COSMETIC_GIFT_TARGET_SHOWCASE":     5,
+	}
+)
+
+func (x CosmeticGiftTargetKind) Enum() *CosmeticGiftTargetKind {
+	p := new(CosmeticGiftTargetKind)
+	*p = x
+	return p
+}
+
+func (x CosmeticGiftTargetKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CosmeticGiftTargetKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_scene_player_appearance_proto_enumTypes[0].Descriptor()
+}
+
+func (CosmeticGiftTargetKind) Type() protoreflect.EnumType {
+	return &file_proto_scene_player_appearance_proto_enumTypes[0]
+}
+
+func (x CosmeticGiftTargetKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CosmeticGiftTargetKind.Descriptor instead.
+func (CosmeticGiftTargetKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{0}
+}
+
 type CharacterAppearanceEntry struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ConfigId       uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"`                   // CharacterAppearance.id(永久主键)
@@ -125,19 +184,24 @@ func (x *CharacterAppearanceEntry) GetSeriesId() uint32 {
 
 // 角色收藏系列图鉴进度(由服务端按权威拥有位图与配表实时派生,不单独落盘;纯外观印章与合篇故事,零属性加成)。
 type CharacterAppearanceSeriesProgress struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	SeriesId            uint32                 `protobuf:"varint,1,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`                                    // AppearanceSeries.id
-	SeriesKey           string                 `protobuf:"bytes,2,opt,name=series_key,json=seriesKey,proto3" json:"series_key,omitempty"`                                  // 稳定系列标识符(如 "lantern_courtyard")
-	Name                string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                             // 系列中文名
-	SortOrder           uint32                 `protobuf:"varint,4,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`                                 // 图鉴展示排序(升序)
-	OwnedCount          uint32                 `protobuf:"varint,5,opt,name=owned_count,json=ownedCount,proto3" json:"owned_count,omitempty"`                              // 该系列当前已永久拥有的现役成员数(试用不计入)
-	TotalCount          uint32                 `protobuf:"varint,6,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`                              // 该系列当前启用的现役成员总数
-	Completed           bool                   `protobuf:"varint,7,opt,name=completed,proto3" json:"completed,omitempty"`                                                  // total_count > 0 && owned_count >= total_count(集齐即点亮印章与解锁合篇)
-	CompletionBadgeName string                 `protobuf:"bytes,8,opt,name=completion_badge_name,json=completionBadgeName,proto3" json:"completion_badge_name,omitempty"`  // 集齐印章/铭牌展示名(纯装饰,无数值)
-	EpilogueTitle       string                 `protobuf:"bytes,9,opt,name=epilogue_title,json=epilogueTitle,proto3" json:"epilogue_title,omitempty"`                      // 集齐解锁合篇故事篇名(正文由客户端查 AppearanceSeries 本地配表)
-	MemberAppearanceIds []string               `protobuf:"bytes,10,rep,name=member_appearance_ids,json=memberAppearanceIds,proto3" json:"member_appearance_ids,omitempty"` // 该系列当前启用的成员 appearance_id(按 sort_order 升序)
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	SeriesId               uint32                 `protobuf:"varint,1,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`                                              // AppearanceSeries.id
+	SeriesKey              string                 `protobuf:"bytes,2,opt,name=series_key,json=seriesKey,proto3" json:"series_key,omitempty"`                                            // 稳定系列标识符(如 "lantern_courtyard")
+	Name                   string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                                                       // 系列中文名
+	SortOrder              uint32                 `protobuf:"varint,4,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`                                           // 图鉴展示排序(升序)
+	OwnedCount             uint32                 `protobuf:"varint,5,opt,name=owned_count,json=ownedCount,proto3" json:"owned_count,omitempty"`                                        // 该系列当前已永久拥有的现役成员数(试用不计入)
+	TotalCount             uint32                 `protobuf:"varint,6,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`                                        // 该系列当前启用的现役成员总数
+	Completed              bool                   `protobuf:"varint,7,opt,name=completed,proto3" json:"completed,omitempty"`                                                            // total_count > 0 && owned_count >= total_count(集齐即点亮印章与解锁合篇)
+	CompletionBadgeName    string                 `protobuf:"bytes,8,opt,name=completion_badge_name,json=completionBadgeName,proto3" json:"completion_badge_name,omitempty"`            // 集齐印章/铭牌展示名(纯装饰,无数值)
+	EpilogueTitle          string                 `protobuf:"bytes,9,opt,name=epilogue_title,json=epilogueTitle,proto3" json:"epilogue_title,omitempty"`                                // 集齐解锁合篇故事篇名(正文由客户端查 AppearanceSeries 本地配表)
+	MemberAppearanceIds    []string               `protobuf:"bytes,10,rep,name=member_appearance_ids,json=memberAppearanceIds,proto3" json:"member_appearance_ids,omitempty"`           // 该系列当前启用的成员 appearance_id(按 sort_order 升序)
+	MissingUnlockableCount uint32                 `protobuf:"varint,11,opt,name=missing_unlockable_count,json=missingUnlockableCount,proto3" json:"missing_unlockable_count,omitempty"` // 该系列中当前缺失且可卡换解锁的成员数
+	BundleOriginalDiamond  uint64                 `protobuf:"varint,12,opt,name=bundle_original_diamond,json=bundleOriginalDiamond,proto3" json:"bundle_original_diamond,omitempty"`    // 补齐缺失成员折前原价(真实灵石)
+	BundleDiscountDiamond  uint64                 `protobuf:"varint,13,opt,name=bundle_discount_diamond,json=bundleDiscountDiamond,proto3" json:"bundle_discount_diamond,omitempty"`    // Steam 式按缺口补齐折后总价(真实灵石，向上取整防 0 元)
+	BundleDiscountBps      uint32                 `protobuf:"varint,14,opt,name=bundle_discount_bps,json=bundleDiscountBps,proto3" json:"bundle_discount_bps,omitempty"`                // 补齐折扣万分比（如 8500 = 8.5 折；0 = 不支持补齐）
+	MissingAppearanceIds   []string               `protobuf:"bytes,15,rep,name=missing_appearance_ids,json=missingAppearanceIds,proto3" json:"missing_appearance_ids,omitempty"`        // 当前缺失且可补齐的 appearance_id（排序去重，客户端下单原样回传做报价防呆）
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *CharacterAppearanceSeriesProgress) Reset() {
@@ -240,31 +304,77 @@ func (x *CharacterAppearanceSeriesProgress) GetMemberAppearanceIds() []string {
 	return nil
 }
 
+func (x *CharacterAppearanceSeriesProgress) GetMissingUnlockableCount() uint32 {
+	if x != nil {
+		return x.MissingUnlockableCount
+	}
+	return 0
+}
+
+func (x *CharacterAppearanceSeriesProgress) GetBundleOriginalDiamond() uint64 {
+	if x != nil {
+		return x.BundleOriginalDiamond
+	}
+	return 0
+}
+
+func (x *CharacterAppearanceSeriesProgress) GetBundleDiscountDiamond() uint64 {
+	if x != nil {
+		return x.BundleDiscountDiamond
+	}
+	return 0
+}
+
+func (x *CharacterAppearanceSeriesProgress) GetBundleDiscountBps() uint32 {
+	if x != nil {
+		return x.BundleDiscountBps
+	}
+	return 0
+}
+
+func (x *CharacterAppearanceSeriesProgress) GetMissingAppearanceIds() []string {
+	if x != nil {
+		return x.MissingAppearanceIds
+	}
+	return nil
+}
+
 type PlayerAppearanceInfo struct {
-	state                 protoimpl.MessageState               `protogen:"open.v1"`
-	PermanentAppearanceId string                               `protobuf:"bytes,1,opt,name=permanent_appearance_id,json=permanentAppearanceId,proto3" json:"permanent_appearance_id,omitempty"`                                                               // 当前永久使用的形象
-	ActiveAppearanceId    string                               `protobuf:"bytes,2,opt,name=active_appearance_id,json=activeAppearanceId,proto3" json:"active_appearance_id,omitempty"`                                                                        // 此刻实际生效展示的形象(试用中为试用形象,否则为永久形象)
-	TrialAppearanceId     string                               `protobuf:"bytes,3,opt,name=trial_appearance_id,json=trialAppearanceId,proto3" json:"trial_appearance_id,omitempty"`                                                                           // 当前正在试用的形象;空串 = 未试用
-	TrialExpiresAt        uint64                               `protobuf:"varint,4,opt,name=trial_expires_at,json=trialExpiresAt,proto3" json:"trial_expires_at,omitempty"`                                                                                   // 试用到期 Unix 秒;0 = 未试用
-	ServerNow             uint64                               `protobuf:"varint,5,opt,name=server_now,json=serverNow,proto3" json:"server_now,omitempty"`                                                                                                    // 服务器墙钟 Unix 秒(客户端据此算倒计时,不信本机墙钟)
-	CardItemId            uint32                               `protobuf:"varint,6,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"`                                                                                               // 形象卡道具 ID(AppearanceRule.card_item_id, 默认 3402)
-	CardItemCount         uint32                               `protobuf:"varint,7,opt,name=card_item_count,json=cardItemCount,proto3" json:"card_item_count,omitempty"`                                                                                      // 每次解锁消耗张数(默认 1)
-	OwnedCardCount        uint32                               `protobuf:"varint,8,opt,name=owned_card_count,json=ownedCardCount,proto3" json:"owned_card_count,omitempty"`                                                                                   // 玩家人物背包当前可用形象卡张数(已扣预留)
-	TrialDurationSeconds  uint32                               `protobuf:"varint,9,opt,name=trial_duration_seconds,json=trialDurationSeconds,proto3" json:"trial_duration_seconds,omitempty"`                                                                 // 免费试用时长秒数(默认 3600)
-	MallSkuId             uint64                               `protobuf:"varint,10,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`                                                                                                 // 商城对应 SKU ID(快捷跳转购买用)
-	MallPriceFen          uint64                               `protobuf:"varint,11,opt,name=mall_price_fen,json=mallPriceFen,proto3" json:"mall_price_fen,omitempty"`                                                                                        // 商城标价(人民币分, 默认 1000 = 10 元)
-	TrialUsedBits         []byte                               `protobuf:"bytes,12,opt,name=trial_used_bits,json=trialUsedBits,proto3" json:"trial_used_bits,omitempty"`                                                                                      // 试用紧凑位图原样(低位在前,与 CharacterAppearance bit_index 对应)
-	Appearances           []*CharacterAppearanceEntry          `protobuf:"bytes,13,rep,name=appearances,proto3" json:"appearances,omitempty"`                                                                                                                 // 当前可用形象列表(按 sort_order 升序)
-	OwnedBits             []byte                               `protobuf:"bytes,14,opt,name=owned_bits,json=ownedBits,proto3" json:"owned_bits,omitempty"`                                                                                                    // 已永久拥有紧凑位图(低位在前,含当前永久形象对应位,保留未知高位)
-	SeriesProgress        []*CharacterAppearanceSeriesProgress `protobuf:"bytes,15,rep,name=series_progress,json=seriesProgress,proto3" json:"series_progress,omitempty"`                                                                                     // 收藏系列图鉴进度(按 sort_order 升序,纯外观零属性)
-	PetCosmeticOwnedBits  []byte                               `protobuf:"bytes,16,opt,name=pet_cosmetic_owned_bits,json=petCosmeticOwnedBits,proto3" json:"pet_cosmetic_owned_bits,omitempty"`                                                               // 已永久拥有的灵宠幻化位图(低位在前,与 PetCosmetic bit_index 对应)
-	PetCosmetics          []*PetCosmeticEntry                  `protobuf:"bytes,17,rep,name=pet_cosmetics,json=petCosmetics,proto3" json:"pet_cosmetics,omitempty"`                                                                                           // 当前开放的灵宠幻化目录(按 sort_order 升序,纯外观零数值)
-	EquippedPetCosmetics  []*PetEquippedCosmetic               `protobuf:"bytes,18,rep,name=equipped_pet_cosmetics,json=equippedPetCosmetics,proto3" json:"equipped_pet_cosmetics,omitempty"`                                                                 // 当前玩家各灵宠实例实际穿戴的幻化映射
-	SkillVfxOwnedBits     []byte                               `protobuf:"bytes,19,opt,name=skill_vfx_owned_bits,json=skillVfxOwnedBits,proto3" json:"skill_vfx_owned_bits,omitempty"`                                                                        // 已永久拥有的技能特效位图(低位在前,与 SkillVfxCosmetic bit_index 对应)
-	SkillVfxCosmetics     []*SkillVfxCosmeticEntry             `protobuf:"bytes,20,rep,name=skill_vfx_cosmetics,json=skillVfxCosmetics,proto3" json:"skill_vfx_cosmetics,omitempty"`                                                                          // 当前开放的技能特效目录(按 sort_order 升序,纯画面零数值)
-	EquippedSkillVfx      map[uint32]uint32                    `protobuf:"bytes,21,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 当前实际生效的技能特效映射(skill_table_id -> SkillVfxCosmetic.id)
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	state                        protoimpl.MessageState               `protogen:"open.v1"`
+	PermanentAppearanceId        string                               `protobuf:"bytes,1,opt,name=permanent_appearance_id,json=permanentAppearanceId,proto3" json:"permanent_appearance_id,omitempty"`                                                                                          // 当前永久使用的形象
+	ActiveAppearanceId           string                               `protobuf:"bytes,2,opt,name=active_appearance_id,json=activeAppearanceId,proto3" json:"active_appearance_id,omitempty"`                                                                                                   // 此刻实际生效展示的形象(试用中为试用形象,否则为永久形象)
+	TrialAppearanceId            string                               `protobuf:"bytes,3,opt,name=trial_appearance_id,json=trialAppearanceId,proto3" json:"trial_appearance_id,omitempty"`                                                                                                      // 当前正在试用的形象;空串 = 未试用
+	TrialExpiresAt               uint64                               `protobuf:"varint,4,opt,name=trial_expires_at,json=trialExpiresAt,proto3" json:"trial_expires_at,omitempty"`                                                                                                              // 试用到期 Unix 秒;0 = 未试用
+	ServerNow                    uint64                               `protobuf:"varint,5,opt,name=server_now,json=serverNow,proto3" json:"server_now,omitempty"`                                                                                                                               // 服务器墙钟 Unix 秒(客户端据此算倒计时,不信本机墙钟)
+	CardItemId                   uint32                               `protobuf:"varint,6,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"`                                                                                                                          // 形象卡道具 ID(AppearanceRule.card_item_id, 默认 3402)
+	CardItemCount                uint32                               `protobuf:"varint,7,opt,name=card_item_count,json=cardItemCount,proto3" json:"card_item_count,omitempty"`                                                                                                                 // 每次解锁消耗张数(默认 1)
+	OwnedCardCount               uint32                               `protobuf:"varint,8,opt,name=owned_card_count,json=ownedCardCount,proto3" json:"owned_card_count,omitempty"`                                                                                                              // 玩家人物背包当前可用形象卡张数(已扣预留)
+	TrialDurationSeconds         uint32                               `protobuf:"varint,9,opt,name=trial_duration_seconds,json=trialDurationSeconds,proto3" json:"trial_duration_seconds,omitempty"`                                                                                            // 免费试用时长秒数(默认 3600)
+	MallSkuId                    uint64                               `protobuf:"varint,10,opt,name=mall_sku_id,json=mallSkuId,proto3" json:"mall_sku_id,omitempty"`                                                                                                                            // 商城对应 SKU ID(快捷跳转购买用)
+	MallPriceFen                 uint64                               `protobuf:"varint,11,opt,name=mall_price_fen,json=mallPriceFen,proto3" json:"mall_price_fen,omitempty"`                                                                                                                   // 商城标价(人民币分, 默认 1000 = 10 元)
+	TrialUsedBits                []byte                               `protobuf:"bytes,12,opt,name=trial_used_bits,json=trialUsedBits,proto3" json:"trial_used_bits,omitempty"`                                                                                                                 // 试用紧凑位图原样(低位在前,与 CharacterAppearance bit_index 对应)
+	Appearances                  []*CharacterAppearanceEntry          `protobuf:"bytes,13,rep,name=appearances,proto3" json:"appearances,omitempty"`                                                                                                                                            // 当前可用形象列表(按 sort_order 升序)
+	OwnedBits                    []byte                               `protobuf:"bytes,14,opt,name=owned_bits,json=ownedBits,proto3" json:"owned_bits,omitempty"`                                                                                                                               // 已永久拥有紧凑位图(低位在前,含当前永久形象对应位,保留未知高位)
+	SeriesProgress               []*CharacterAppearanceSeriesProgress `protobuf:"bytes,15,rep,name=series_progress,json=seriesProgress,proto3" json:"series_progress,omitempty"`                                                                                                                // 收藏系列图鉴进度(按 sort_order 升序,纯外观零属性)
+	PetCosmeticOwnedBits         []byte                               `protobuf:"bytes,16,opt,name=pet_cosmetic_owned_bits,json=petCosmeticOwnedBits,proto3" json:"pet_cosmetic_owned_bits,omitempty"`                                                                                          // 已永久拥有的灵宠幻化位图(低位在前,与 PetCosmetic bit_index 对应)
+	PetCosmetics                 []*PetCosmeticEntry                  `protobuf:"bytes,17,rep,name=pet_cosmetics,json=petCosmetics,proto3" json:"pet_cosmetics,omitempty"`                                                                                                                      // 当前开放的灵宠幻化目录(按 sort_order 升序,纯外观零数值)
+	EquippedPetCosmetics         []*PetEquippedCosmetic               `protobuf:"bytes,18,rep,name=equipped_pet_cosmetics,json=equippedPetCosmetics,proto3" json:"equipped_pet_cosmetics,omitempty"`                                                                                            // 当前玩家各灵宠实例实际穿戴的幻化映射
+	SkillVfxOwnedBits            []byte                               `protobuf:"bytes,19,opt,name=skill_vfx_owned_bits,json=skillVfxOwnedBits,proto3" json:"skill_vfx_owned_bits,omitempty"`                                                                                                   // 已永久拥有的技能特效位图(低位在前,与 SkillVfxCosmetic bit_index 对应)
+	SkillVfxCosmetics            []*SkillVfxCosmeticEntry             `protobuf:"bytes,20,rep,name=skill_vfx_cosmetics,json=skillVfxCosmetics,proto3" json:"skill_vfx_cosmetics,omitempty"`                                                                                                     // 当前开放的技能特效目录(按 sort_order 升序,纯画面零数值)
+	EquippedSkillVfx             map[uint32]uint32                    `protobuf:"bytes,21,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`                            // 当前实际生效的技能特效映射(skill_table_id -> SkillVfxCosmetic.id)
+	LightCardTrialQuota          uint32                               `protobuf:"varint,22,opt,name=light_card_trial_quota,json=lightCardTrialQuota,proto3" json:"light_card_trial_quota,omitempty"`                                                                                            // 仙途轻享卡本周额外随心试穿额度（未生效 0 / 生效 3）
+	LightCardTrialUsed           uint32                               `protobuf:"varint,23,opt,name=light_card_trial_used,json=lightCardTrialUsed,proto3" json:"light_card_trial_used,omitempty"`                                                                                               // 仙途轻享卡本周已用随心试穿次数
+	DiamondBalance               uint64                               `protobuf:"varint,24,opt,name=diamond_balance,json=diamondBalance,proto3" json:"diamond_balance,omitempty"`                                                                                                               // 玩家当前真实充值灵石余额（系列补齐包仅扣真实灵石）
+	BindDiamondBalance           uint64                               `protobuf:"varint,25,opt,name=bind_diamond_balance,json=bindDiamondBalance,proto3" json:"bind_diamond_balance,omitempty"`                                                                                                 // 玩家当前绑定灵石余额（只供展示，不可抵扣系列补齐包）
+	ShowcaseCosmeticOwnedBits    []byte                               `protobuf:"bytes,26,opt,name=showcase_cosmetic_owned_bits,json=showcaseCosmeticOwnedBits,proto3" json:"showcase_cosmetic_owned_bits,omitempty"`                                                                           // 已永久拥有的排面外观位图（CosmeticShowcase bit_index）
+	ShowcaseCosmetics            []*ShowcaseCosmeticEntry             `protobuf:"bytes,27,rep,name=showcase_cosmetics,json=showcaseCosmetics,proto3" json:"showcase_cosmetics,omitempty"`                                                                                                       // 当前开放的排面装饰目录（阵纹/入场/气泡/分享卡，纯视觉零数值）
+	EquippedShowcaseCosmetics    map[uint32]uint32                    `protobuf:"bytes,28,rep,name=equipped_showcase_cosmetics,json=equippedShowcaseCosmetics,proto3" json:"equipped_showcase_cosmetics,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 当前穿戴的排面装饰（slot_kind -> CosmeticShowcase.id）
+	CelebrationBindGoldClaimed   uint32                               `protobuf:"varint,29,opt,name=celebration_bind_gold_claimed,json=celebrationBindGoldClaimed,proto3" json:"celebration_bind_gold_claimed,omitempty"`                                                                       // 本周全城同乐已领绑定银两（上限 3000）
+	CelebrationBindGoldWeeklyCap uint32                               `protobuf:"varint,30,opt,name=celebration_bind_gold_weekly_cap,json=celebrationBindGoldWeeklyCap,proto3" json:"celebration_bind_gold_weekly_cap,omitempty"`                                                               // 本周全城同乐绑定银两周上限（3000）
+	CosmeticGiftSentThisWeek     uint32                               `protobuf:"varint,31,opt,name=cosmetic_gift_sent_this_week,json=cosmeticGiftSentThisWeek,proto3" json:"cosmetic_gift_sent_this_week,omitempty"`                                                                           // 本周已送出的好友纯外观/手记赠礼笔数
+	CosmeticGiftWeeklyLimit      uint32                               `protobuf:"varint,32,opt,name=cosmetic_gift_weekly_limit,json=cosmeticGiftWeeklyLimit,proto3" json:"cosmetic_gift_weekly_limit,omitempty"`                                                                                // 每周好友赠礼上限（5）
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *PlayerAppearanceInfo) Reset() {
@@ -444,6 +554,232 @@ func (x *PlayerAppearanceInfo) GetEquippedSkillVfx() map[uint32]uint32 {
 	return nil
 }
 
+func (x *PlayerAppearanceInfo) GetLightCardTrialQuota() uint32 {
+	if x != nil {
+		return x.LightCardTrialQuota
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetLightCardTrialUsed() uint32 {
+	if x != nil {
+		return x.LightCardTrialUsed
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetDiamondBalance() uint64 {
+	if x != nil {
+		return x.DiamondBalance
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetBindDiamondBalance() uint64 {
+	if x != nil {
+		return x.BindDiamondBalance
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetShowcaseCosmeticOwnedBits() []byte {
+	if x != nil {
+		return x.ShowcaseCosmeticOwnedBits
+	}
+	return nil
+}
+
+func (x *PlayerAppearanceInfo) GetShowcaseCosmetics() []*ShowcaseCosmeticEntry {
+	if x != nil {
+		return x.ShowcaseCosmetics
+	}
+	return nil
+}
+
+func (x *PlayerAppearanceInfo) GetEquippedShowcaseCosmetics() map[uint32]uint32 {
+	if x != nil {
+		return x.EquippedShowcaseCosmetics
+	}
+	return nil
+}
+
+func (x *PlayerAppearanceInfo) GetCelebrationBindGoldClaimed() uint32 {
+	if x != nil {
+		return x.CelebrationBindGoldClaimed
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetCelebrationBindGoldWeeklyCap() uint32 {
+	if x != nil {
+		return x.CelebrationBindGoldWeeklyCap
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetCosmeticGiftSentThisWeek() uint32 {
+	if x != nil {
+		return x.CosmeticGiftSentThisWeek
+	}
+	return 0
+}
+
+func (x *PlayerAppearanceInfo) GetCosmeticGiftWeeklyLimit() uint32 {
+	if x != nil {
+		return x.CosmeticGiftWeeklyLimit
+	}
+	return 0
+}
+
+// 战斗排面与社交外观目录项（阵纹/入场横幅/聊天气泡/分享卡底纹，纯视觉零数值）。
+type ShowcaseCosmeticEntry struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ConfigId          uint32                 `protobuf:"varint,1,opt,name=config_id,json=configId,proto3" json:"config_id,omitempty"` // CosmeticShowcase.id
+	CosmeticKey       string                 `protobuf:"bytes,2,opt,name=cosmetic_key,json=cosmeticKey,proto3" json:"cosmetic_key,omitempty"`
+	SlotKind          uint32                 `protobuf:"varint,3,opt,name=slot_kind,json=slotKind,proto3" json:"slot_kind,omitempty"` // 1=脚底阵纹 2=入场/胜利横幅 3=聊天气泡 4=分享卡底纹 5=名片底纹
+	Name              string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	AssetKey          string                 `protobuf:"bytes,5,opt,name=asset_key,json=assetKey,proto3" json:"asset_key,omitempty"`
+	SecondaryAssetKey string                 `protobuf:"bytes,6,opt,name=secondary_asset_key,json=secondaryAssetKey,proto3" json:"secondary_asset_key,omitempty"`
+	SortOrder         uint32                 `protobuf:"varint,7,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
+	Owned             bool                   `protobuf:"varint,8,opt,name=owned,proto3" json:"owned,omitempty"`
+	CardItemId        uint32                 `protobuf:"varint,9,opt,name=card_item_id,json=cardItemId,proto3" json:"card_item_id,omitempty"` // 3417 排面装饰券；0=仅专属获取
+	CardItemCount     uint32                 `protobuf:"varint,10,opt,name=card_item_count,json=cardItemCount,proto3" json:"card_item_count,omitempty"`
+	OwnedCardCount    uint32                 `protobuf:"varint,11,opt,name=owned_card_count,json=ownedCardCount,proto3" json:"owned_card_count,omitempty"`
+	SpiritShopGoodsId uint32                 `protobuf:"varint,12,opt,name=spirit_shop_goods_id,json=spiritShopGoodsId,proto3" json:"spirit_shop_goods_id,omitempty"` // 默认 305
+	AcquireHint       string                 `protobuf:"bytes,13,opt,name=acquire_hint,json=acquireHint,proto3" json:"acquire_hint,omitempty"`
+	Desc              string                 `protobuf:"bytes,14,opt,name=desc,proto3" json:"desc,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ShowcaseCosmeticEntry) Reset() {
+	*x = ShowcaseCosmeticEntry{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShowcaseCosmeticEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShowcaseCosmeticEntry) ProtoMessage() {}
+
+func (x *ShowcaseCosmeticEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShowcaseCosmeticEntry.ProtoReflect.Descriptor instead.
+func (*ShowcaseCosmeticEntry) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ShowcaseCosmeticEntry) GetConfigId() uint32 {
+	if x != nil {
+		return x.ConfigId
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetCosmeticKey() string {
+	if x != nil {
+		return x.CosmeticKey
+	}
+	return ""
+}
+
+func (x *ShowcaseCosmeticEntry) GetSlotKind() uint32 {
+	if x != nil {
+		return x.SlotKind
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ShowcaseCosmeticEntry) GetAssetKey() string {
+	if x != nil {
+		return x.AssetKey
+	}
+	return ""
+}
+
+func (x *ShowcaseCosmeticEntry) GetSecondaryAssetKey() string {
+	if x != nil {
+		return x.SecondaryAssetKey
+	}
+	return ""
+}
+
+func (x *ShowcaseCosmeticEntry) GetSortOrder() uint32 {
+	if x != nil {
+		return x.SortOrder
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetOwned() bool {
+	if x != nil {
+		return x.Owned
+	}
+	return false
+}
+
+func (x *ShowcaseCosmeticEntry) GetCardItemId() uint32 {
+	if x != nil {
+		return x.CardItemId
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetCardItemCount() uint32 {
+	if x != nil {
+		return x.CardItemCount
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetOwnedCardCount() uint32 {
+	if x != nil {
+		return x.OwnedCardCount
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetSpiritShopGoodsId() uint32 {
+	if x != nil {
+		return x.SpiritShopGoodsId
+	}
+	return 0
+}
+
+func (x *ShowcaseCosmeticEntry) GetAcquireHint() string {
+	if x != nil {
+		return x.AcquireHint
+	}
+	return ""
+}
+
+func (x *ShowcaseCosmeticEntry) GetDesc() string {
+	if x != nil {
+		return x.Desc
+	}
+	return ""
+}
+
 // 灵宠幻化目录项（纯外观表现，零战斗/成长属性）。
 type PetCosmeticEntry struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
@@ -468,7 +804,7 @@ type PetCosmeticEntry struct {
 
 func (x *PetCosmeticEntry) Reset() {
 	*x = PetCosmeticEntry{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[3]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -480,7 +816,7 @@ func (x *PetCosmeticEntry) String() string {
 func (*PetCosmeticEntry) ProtoMessage() {}
 
 func (x *PetCosmeticEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[3]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -493,7 +829,7 @@ func (x *PetCosmeticEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetCosmeticEntry.ProtoReflect.Descriptor instead.
 func (*PetCosmeticEntry) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{3}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PetCosmeticEntry) GetConfigId() uint32 {
@@ -612,7 +948,7 @@ type PetEquippedCosmetic struct {
 
 func (x *PetEquippedCosmetic) Reset() {
 	*x = PetEquippedCosmetic{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[4]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -624,7 +960,7 @@ func (x *PetEquippedCosmetic) String() string {
 func (*PetEquippedCosmetic) ProtoMessage() {}
 
 func (x *PetEquippedCosmetic) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[4]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -637,7 +973,7 @@ func (x *PetEquippedCosmetic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PetEquippedCosmetic.ProtoReflect.Descriptor instead.
 func (*PetEquippedCosmetic) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{4}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *PetEquippedCosmetic) GetPetId() uint64 {
@@ -680,7 +1016,7 @@ type SkillVfxCosmeticEntry struct {
 
 func (x *SkillVfxCosmeticEntry) Reset() {
 	*x = SkillVfxCosmeticEntry{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[5]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -692,7 +1028,7 @@ func (x *SkillVfxCosmeticEntry) String() string {
 func (*SkillVfxCosmeticEntry) ProtoMessage() {}
 
 func (x *SkillVfxCosmeticEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[5]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -705,7 +1041,7 @@ func (x *SkillVfxCosmeticEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillVfxCosmeticEntry.ProtoReflect.Descriptor instead.
 func (*SkillVfxCosmeticEntry) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{5}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SkillVfxCosmeticEntry) GetConfigId() uint32 {
@@ -840,7 +1176,7 @@ type EquipPetCosmeticRequest struct {
 
 func (x *EquipPetCosmeticRequest) Reset() {
 	*x = EquipPetCosmeticRequest{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[6]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +1188,7 @@ func (x *EquipPetCosmeticRequest) String() string {
 func (*EquipPetCosmeticRequest) ProtoMessage() {}
 
 func (x *EquipPetCosmeticRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[6]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +1201,7 @@ func (x *EquipPetCosmeticRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipPetCosmeticRequest.ProtoReflect.Descriptor instead.
 func (*EquipPetCosmeticRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{6}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *EquipPetCosmeticRequest) GetClientRequestId() uint64 {
@@ -909,7 +1245,7 @@ type EquipPetCosmeticResponse struct {
 
 func (x *EquipPetCosmeticResponse) Reset() {
 	*x = EquipPetCosmeticResponse{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[7]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -921,7 +1257,7 @@ func (x *EquipPetCosmeticResponse) String() string {
 func (*EquipPetCosmeticResponse) ProtoMessage() {}
 
 func (x *EquipPetCosmeticResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[7]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -934,7 +1270,7 @@ func (x *EquipPetCosmeticResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipPetCosmeticResponse.ProtoReflect.Descriptor instead.
 func (*EquipPetCosmeticResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *EquipPetCosmeticResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -985,7 +1321,7 @@ type EquipSkillVfxRequest struct {
 
 func (x *EquipSkillVfxRequest) Reset() {
 	*x = EquipSkillVfxRequest{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[8]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -997,7 +1333,7 @@ func (x *EquipSkillVfxRequest) String() string {
 func (*EquipSkillVfxRequest) ProtoMessage() {}
 
 func (x *EquipSkillVfxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[8]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,7 +1346,7 @@ func (x *EquipSkillVfxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipSkillVfxRequest.ProtoReflect.Descriptor instead.
 func (*EquipSkillVfxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *EquipSkillVfxRequest) GetClientRequestId() uint64 {
@@ -1054,7 +1390,7 @@ type EquipSkillVfxResponse struct {
 
 func (x *EquipSkillVfxResponse) Reset() {
 	*x = EquipSkillVfxResponse{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[9]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1066,7 +1402,7 @@ func (x *EquipSkillVfxResponse) String() string {
 func (*EquipSkillVfxResponse) ProtoMessage() {}
 
 func (x *EquipSkillVfxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[9]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1079,7 +1415,7 @@ func (x *EquipSkillVfxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipSkillVfxResponse.ProtoReflect.Descriptor instead.
 func (*EquipSkillVfxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{9}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *EquipSkillVfxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1125,7 +1461,7 @@ type GetAppearanceInfoRequest struct {
 
 func (x *GetAppearanceInfoRequest) Reset() {
 	*x = GetAppearanceInfoRequest{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[10]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1137,7 +1473,7 @@ func (x *GetAppearanceInfoRequest) String() string {
 func (*GetAppearanceInfoRequest) ProtoMessage() {}
 
 func (x *GetAppearanceInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[10]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1150,7 +1486,7 @@ func (x *GetAppearanceInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAppearanceInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetAppearanceInfoRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{11}
 }
 
 type GetAppearanceInfoResponse struct {
@@ -1163,7 +1499,7 @@ type GetAppearanceInfoResponse struct {
 
 func (x *GetAppearanceInfoResponse) Reset() {
 	*x = GetAppearanceInfoResponse{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[11]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1175,7 +1511,7 @@ func (x *GetAppearanceInfoResponse) String() string {
 func (*GetAppearanceInfoResponse) ProtoMessage() {}
 
 func (x *GetAppearanceInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[11]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1188,7 +1524,7 @@ func (x *GetAppearanceInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAppearanceInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetAppearanceInfoResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetAppearanceInfoResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1217,7 +1553,7 @@ type SwitchAppearanceRequest struct {
 
 func (x *SwitchAppearanceRequest) Reset() {
 	*x = SwitchAppearanceRequest{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[12]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1229,7 +1565,7 @@ func (x *SwitchAppearanceRequest) String() string {
 func (*SwitchAppearanceRequest) ProtoMessage() {}
 
 func (x *SwitchAppearanceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[12]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1242,7 +1578,7 @@ func (x *SwitchAppearanceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchAppearanceRequest.ProtoReflect.Descriptor instead.
 func (*SwitchAppearanceRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{12}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SwitchAppearanceRequest) GetClientRequestId() uint64 {
@@ -1277,7 +1613,7 @@ type SwitchAppearanceResponse struct {
 
 func (x *SwitchAppearanceResponse) Reset() {
 	*x = SwitchAppearanceResponse{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[13]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1289,7 +1625,7 @@ func (x *SwitchAppearanceResponse) String() string {
 func (*SwitchAppearanceResponse) ProtoMessage() {}
 
 func (x *SwitchAppearanceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[13]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1302,7 +1638,7 @@ func (x *SwitchAppearanceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchAppearanceResponse.ProtoReflect.Descriptor instead.
 func (*SwitchAppearanceResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{13}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SwitchAppearanceResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1337,7 +1673,7 @@ type StartAppearanceTrialRequest struct {
 
 func (x *StartAppearanceTrialRequest) Reset() {
 	*x = StartAppearanceTrialRequest{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[14]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1349,7 +1685,7 @@ func (x *StartAppearanceTrialRequest) String() string {
 func (*StartAppearanceTrialRequest) ProtoMessage() {}
 
 func (x *StartAppearanceTrialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[14]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1362,7 +1698,7 @@ func (x *StartAppearanceTrialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartAppearanceTrialRequest.ProtoReflect.Descriptor instead.
 func (*StartAppearanceTrialRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{14}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *StartAppearanceTrialRequest) GetClientRequestId() uint64 {
@@ -1390,7 +1726,7 @@ type StartAppearanceTrialResponse struct {
 
 func (x *StartAppearanceTrialResponse) Reset() {
 	*x = StartAppearanceTrialResponse{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[15]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1402,7 +1738,7 @@ func (x *StartAppearanceTrialResponse) String() string {
 func (*StartAppearanceTrialResponse) ProtoMessage() {}
 
 func (x *StartAppearanceTrialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[15]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1415,7 +1751,7 @@ func (x *StartAppearanceTrialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartAppearanceTrialResponse.ProtoReflect.Descriptor instead.
 func (*StartAppearanceTrialResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{15}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *StartAppearanceTrialResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1448,7 +1784,7 @@ type CancelAppearanceTrialRequest struct {
 
 func (x *CancelAppearanceTrialRequest) Reset() {
 	*x = CancelAppearanceTrialRequest{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[16]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1460,7 +1796,7 @@ func (x *CancelAppearanceTrialRequest) String() string {
 func (*CancelAppearanceTrialRequest) ProtoMessage() {}
 
 func (x *CancelAppearanceTrialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[16]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1473,7 +1809,7 @@ func (x *CancelAppearanceTrialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAppearanceTrialRequest.ProtoReflect.Descriptor instead.
 func (*CancelAppearanceTrialRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{16}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{17}
 }
 
 type CancelAppearanceTrialResponse struct {
@@ -1486,7 +1822,7 @@ type CancelAppearanceTrialResponse struct {
 
 func (x *CancelAppearanceTrialResponse) Reset() {
 	*x = CancelAppearanceTrialResponse{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[17]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1498,7 +1834,7 @@ func (x *CancelAppearanceTrialResponse) String() string {
 func (*CancelAppearanceTrialResponse) ProtoMessage() {}
 
 func (x *CancelAppearanceTrialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[17]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1511,7 +1847,7 @@ func (x *CancelAppearanceTrialResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelAppearanceTrialResponse.ProtoReflect.Descriptor instead.
 func (*CancelAppearanceTrialResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{17}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CancelAppearanceTrialResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1542,7 +1878,7 @@ type ActorAppearanceChangedS2C struct {
 
 func (x *ActorAppearanceChangedS2C) Reset() {
 	*x = ActorAppearanceChangedS2C{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[18]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1554,7 +1890,7 @@ func (x *ActorAppearanceChangedS2C) String() string {
 func (*ActorAppearanceChangedS2C) ProtoMessage() {}
 
 func (x *ActorAppearanceChangedS2C) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[18]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1567,7 +1903,7 @@ func (x *ActorAppearanceChangedS2C) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActorAppearanceChangedS2C.ProtoReflect.Descriptor instead.
 func (*ActorAppearanceChangedS2C) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{18}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ActorAppearanceChangedS2C) GetEntity() uint64 {
@@ -1616,7 +1952,7 @@ type AppearanceStateNotify struct {
 
 func (x *AppearanceStateNotify) Reset() {
 	*x = AppearanceStateNotify{}
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[19]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1628,7 +1964,7 @@ func (x *AppearanceStateNotify) String() string {
 func (*AppearanceStateNotify) ProtoMessage() {}
 
 func (x *AppearanceStateNotify) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_appearance_proto_msgTypes[19]
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1641,7 +1977,7 @@ func (x *AppearanceStateNotify) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppearanceStateNotify.ProtoReflect.Descriptor instead.
 func (*AppearanceStateNotify) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{19}
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *AppearanceStateNotify) GetInfo() *PlayerAppearanceInfo {
@@ -1654,6 +1990,884 @@ func (x *AppearanceStateNotify) GetInfo() *PlayerAppearanceInfo {
 func (x *AppearanceStateNotify) GetTrialExpired() bool {
 	if x != nil {
 		return x.TrialExpired
+	}
+	return false
+}
+
+// Steam 式按缺口 8.5 折一键补齐收藏系列缺失角色（仅扣真实充值灵石，强制幂等键与报价防呆）。
+type BuyAppearanceSeriesBundleRequest struct {
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId              uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`                                         // 必须非 0
+	SeriesId                     uint32                 `protobuf:"varint,2,opt,name=series_id,json=seriesId,proto3" json:"series_id,omitempty"`                                                                // AppearanceSeries.id
+	ExpectedMissingAppearanceIds []string               `protobuf:"bytes,3,rep,name=expected_missing_appearance_ids,json=expectedMissingAppearanceIds,proto3" json:"expected_missing_appearance_ids,omitempty"` // 客户端预览的缺失角色 ID 列表（防并发已获导致多扣）
+	ExpectedPriceDiamond         uint64                 `protobuf:"varint,4,opt,name=expected_price_diamond,json=expectedPriceDiamond,proto3" json:"expected_price_diamond,omitempty"`                          // 客户端预览的折后灵石总价
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *BuyAppearanceSeriesBundleRequest) Reset() {
+	*x = BuyAppearanceSeriesBundleRequest{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuyAppearanceSeriesBundleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuyAppearanceSeriesBundleRequest) ProtoMessage() {}
+
+func (x *BuyAppearanceSeriesBundleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuyAppearanceSeriesBundleRequest.ProtoReflect.Descriptor instead.
+func (*BuyAppearanceSeriesBundleRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *BuyAppearanceSeriesBundleRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *BuyAppearanceSeriesBundleRequest) GetSeriesId() uint32 {
+	if x != nil {
+		return x.SeriesId
+	}
+	return 0
+}
+
+func (x *BuyAppearanceSeriesBundleRequest) GetExpectedMissingAppearanceIds() []string {
+	if x != nil {
+		return x.ExpectedMissingAppearanceIds
+	}
+	return nil
+}
+
+func (x *BuyAppearanceSeriesBundleRequest) GetExpectedPriceDiamond() uint64 {
+	if x != nil {
+		return x.ExpectedPriceDiamond
+	}
+	return 0
+}
+
+type BuyAppearanceSeriesBundleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Info          *PlayerAppearanceInfo  `protobuf:"bytes,2,opt,name=info,proto3" json:"info,omitempty"`
+	Replayed      bool                   `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	UnlockedCount uint32                 `protobuf:"varint,4,opt,name=unlocked_count,json=unlockedCount,proto3" json:"unlocked_count,omitempty"`
+	SpentDiamond  uint64                 `protobuf:"varint,5,opt,name=spent_diamond,json=spentDiamond,proto3" json:"spent_diamond,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) Reset() {
+	*x = BuyAppearanceSeriesBundleResponse{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BuyAppearanceSeriesBundleResponse) ProtoMessage() {}
+
+func (x *BuyAppearanceSeriesBundleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BuyAppearanceSeriesBundleResponse.ProtoReflect.Descriptor instead.
+func (*BuyAppearanceSeriesBundleResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) GetInfo() *PlayerAppearanceInfo {
+	if x != nil {
+		return x.Info
+	}
+	return nil
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) GetUnlockedCount() uint32 {
+	if x != nil {
+		return x.UnlockedCount
+	}
+	return 0
+}
+
+func (x *BuyAppearanceSeriesBundleResponse) GetSpentDiamond() uint64 {
+	if x != nil {
+		return x.SpentDiamond
+	}
+	return 0
+}
+
+// 为指定排面槽位穿戴或卸下外观（cosmetic_id=0 恢复默认；未拥有且 expect_free_equip=false 且允许券换时原子耗券解锁并穿戴）。
+type EquipShowcaseCosmeticRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0
+	SlotKind        uint32                 `protobuf:"varint,2,opt,name=slot_kind,json=slotKind,proto3" json:"slot_kind,omitempty"`                        // 1..5
+	CosmeticId      uint32                 `protobuf:"varint,3,opt,name=cosmetic_id,json=cosmeticId,proto3" json:"cosmetic_id,omitempty"`                  // 目标 CosmeticShowcase.id；0 = 卸下恢复默认
+	ExpectFreeEquip bool                   `protobuf:"varint,4,opt,name=expect_free_equip,json=expectFreeEquip,proto3" json:"expect_free_equip,omitempty"` // true = 仅限已拥有免费切换，绝不误扣券
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *EquipShowcaseCosmeticRequest) Reset() {
+	*x = EquipShowcaseCosmeticRequest{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipShowcaseCosmeticRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipShowcaseCosmeticRequest) ProtoMessage() {}
+
+func (x *EquipShowcaseCosmeticRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipShowcaseCosmeticRequest.ProtoReflect.Descriptor instead.
+func (*EquipShowcaseCosmeticRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *EquipShowcaseCosmeticRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *EquipShowcaseCosmeticRequest) GetSlotKind() uint32 {
+	if x != nil {
+		return x.SlotKind
+	}
+	return 0
+}
+
+func (x *EquipShowcaseCosmeticRequest) GetCosmeticId() uint32 {
+	if x != nil {
+		return x.CosmeticId
+	}
+	return 0
+}
+
+func (x *EquipShowcaseCosmeticRequest) GetExpectFreeEquip() bool {
+	if x != nil {
+		return x.ExpectFreeEquip
+	}
+	return false
+}
+
+type EquipShowcaseCosmeticResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage       *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Info               *PlayerAppearanceInfo  `protobuf:"bytes,2,opt,name=info,proto3" json:"info,omitempty"`
+	SlotKind           uint32                 `protobuf:"varint,3,opt,name=slot_kind,json=slotKind,proto3" json:"slot_kind,omitempty"`
+	EquippedCosmeticId uint32                 `protobuf:"varint,4,opt,name=equipped_cosmetic_id,json=equippedCosmeticId,proto3" json:"equipped_cosmetic_id,omitempty"`
+	Replayed           bool                   `protobuf:"varint,5,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *EquipShowcaseCosmeticResponse) Reset() {
+	*x = EquipShowcaseCosmeticResponse{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipShowcaseCosmeticResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipShowcaseCosmeticResponse) ProtoMessage() {}
+
+func (x *EquipShowcaseCosmeticResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipShowcaseCosmeticResponse.ProtoReflect.Descriptor instead.
+func (*EquipShowcaseCosmeticResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *EquipShowcaseCosmeticResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *EquipShowcaseCosmeticResponse) GetInfo() *PlayerAppearanceInfo {
+	if x != nil {
+		return x.Info
+	}
+	return nil
+}
+
+func (x *EquipShowcaseCosmeticResponse) GetSlotKind() uint32 {
+	if x != nil {
+		return x.SlotKind
+	}
+	return 0
+}
+
+func (x *EquipShowcaseCosmeticResponse) GetEquippedCosmeticId() uint32 {
+	if x != nil {
+		return x.EquippedCosmeticId
+	}
+	return 0
+}
+
+func (x *EquipShowcaseCosmeticResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+// 主城和平分线施放「全城同乐」社交气氛耗材（3418 天墉灵灯 / 3419 庆功烟花 / 3420 仙茶同乐席）。
+type CastCityCelebrationRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0
+	ItemConfigId    uint32                 `protobuf:"varint,2,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`          // 3418 / 3419 / 3420
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *CastCityCelebrationRequest) Reset() {
+	*x = CastCityCelebrationRequest{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CastCityCelebrationRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CastCityCelebrationRequest) ProtoMessage() {}
+
+func (x *CastCityCelebrationRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CastCityCelebrationRequest.ProtoReflect.Descriptor instead.
+func (*CastCityCelebrationRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CastCityCelebrationRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *CastCityCelebrationRequest) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+type CityCelebrationView struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CelebrationId  uint64                 `protobuf:"varint,1,opt,name=celebration_id,json=celebrationId,proto3" json:"celebration_id,omitempty"`
+	CasterPlayerId uint64                 `protobuf:"varint,2,opt,name=caster_player_id,json=casterPlayerId,proto3" json:"caster_player_id,omitempty"`
+	CasterName     string                 `protobuf:"bytes,3,opt,name=caster_name,json=casterName,proto3" json:"caster_name,omitempty"`
+	ItemConfigId   uint32                 `protobuf:"varint,4,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	BindGoldReward uint32                 `protobuf:"varint,5,opt,name=bind_gold_reward,json=bindGoldReward,proto3" json:"bind_gold_reward,omitempty"`
+	StartedAtSec   uint64                 `protobuf:"varint,6,opt,name=started_at_sec,json=startedAtSec,proto3" json:"started_at_sec,omitempty"`
+	ExpiresAtSec   uint64                 `protobuf:"varint,7,opt,name=expires_at_sec,json=expiresAtSec,proto3" json:"expires_at_sec,omitempty"`
+	SceneConfigId  uint32                 `protobuf:"varint,8,opt,name=scene_config_id,json=sceneConfigId,proto3" json:"scene_config_id,omitempty"`
+	ClaimedByMe    bool                   `protobuf:"varint,9,opt,name=claimed_by_me,json=claimedByMe,proto3" json:"claimed_by_me,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CityCelebrationView) Reset() {
+	*x = CityCelebrationView{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityCelebrationView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityCelebrationView) ProtoMessage() {}
+
+func (x *CityCelebrationView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityCelebrationView.ProtoReflect.Descriptor instead.
+func (*CityCelebrationView) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *CityCelebrationView) GetCelebrationId() uint64 {
+	if x != nil {
+		return x.CelebrationId
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetCasterPlayerId() uint64 {
+	if x != nil {
+		return x.CasterPlayerId
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetCasterName() string {
+	if x != nil {
+		return x.CasterName
+	}
+	return ""
+}
+
+func (x *CityCelebrationView) GetItemConfigId() uint32 {
+	if x != nil {
+		return x.ItemConfigId
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetBindGoldReward() uint32 {
+	if x != nil {
+		return x.BindGoldReward
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetStartedAtSec() uint64 {
+	if x != nil {
+		return x.StartedAtSec
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetExpiresAtSec() uint64 {
+	if x != nil {
+		return x.ExpiresAtSec
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetSceneConfigId() uint32 {
+	if x != nil {
+		return x.SceneConfigId
+	}
+	return 0
+}
+
+func (x *CityCelebrationView) GetClaimedByMe() bool {
+	if x != nil {
+		return x.ClaimedByMe
+	}
+	return false
+}
+
+type CastCityCelebrationResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Celebration   *CityCelebrationView   `protobuf:"bytes,2,opt,name=celebration,proto3" json:"celebration,omitempty"`
+	Replayed      bool                   `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CastCityCelebrationResponse) Reset() {
+	*x = CastCityCelebrationResponse{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CastCityCelebrationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CastCityCelebrationResponse) ProtoMessage() {}
+
+func (x *CastCityCelebrationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CastCityCelebrationResponse.ProtoReflect.Descriptor instead.
+func (*CastCityCelebrationResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *CastCityCelebrationResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *CastCityCelebrationResponse) GetCelebration() *CityCelebrationView {
+	if x != nil {
+		return x.Celebration
+	}
+	return nil
+}
+
+func (x *CastCityCelebrationResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+// 同分线 >= 10 级玩家点击正在进行的全城同乐演出领取绑定银两（CURRENCY_TYPE_BIND_GOLD=3，每场限 1 次，周上限 3000）。
+type ClaimCityCelebrationGiftRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0
+	CelebrationId   uint64                 `protobuf:"varint,2,opt,name=celebration_id,json=celebrationId,proto3" json:"celebration_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ClaimCityCelebrationGiftRequest) Reset() {
+	*x = ClaimCityCelebrationGiftRequest{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimCityCelebrationGiftRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimCityCelebrationGiftRequest) ProtoMessage() {}
+
+func (x *ClaimCityCelebrationGiftRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimCityCelebrationGiftRequest.ProtoReflect.Descriptor instead.
+func (*ClaimCityCelebrationGiftRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ClaimCityCelebrationGiftRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *ClaimCityCelebrationGiftRequest) GetCelebrationId() uint64 {
+	if x != nil {
+		return x.CelebrationId
+	}
+	return 0
+}
+
+type ClaimCityCelebrationGiftResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage       *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	CelebrationId      uint64                 `protobuf:"varint,2,opt,name=celebration_id,json=celebrationId,proto3" json:"celebration_id,omitempty"`
+	GrantedBindGold    uint32                 `protobuf:"varint,3,opt,name=granted_bind_gold,json=grantedBindGold,proto3" json:"granted_bind_gold,omitempty"`
+	WeeklyClaimedTotal uint32                 `protobuf:"varint,4,opt,name=weekly_claimed_total,json=weeklyClaimedTotal,proto3" json:"weekly_claimed_total,omitempty"`
+	WeeklyCap          uint32                 `protobuf:"varint,5,opt,name=weekly_cap,json=weeklyCap,proto3" json:"weekly_cap,omitempty"`
+	Replayed           bool                   `protobuf:"varint,6,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ClaimCityCelebrationGiftResponse) Reset() {
+	*x = ClaimCityCelebrationGiftResponse{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimCityCelebrationGiftResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimCityCelebrationGiftResponse) ProtoMessage() {}
+
+func (x *ClaimCityCelebrationGiftResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimCityCelebrationGiftResponse.ProtoReflect.Descriptor instead.
+func (*ClaimCityCelebrationGiftResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ClaimCityCelebrationGiftResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *ClaimCityCelebrationGiftResponse) GetCelebrationId() uint64 {
+	if x != nil {
+		return x.CelebrationId
+	}
+	return 0
+}
+
+func (x *ClaimCityCelebrationGiftResponse) GetGrantedBindGold() uint32 {
+	if x != nil {
+		return x.GrantedBindGold
+	}
+	return 0
+}
+
+func (x *ClaimCityCelebrationGiftResponse) GetWeeklyClaimedTotal() uint32 {
+	if x != nil {
+		return x.WeeklyClaimedTotal
+	}
+	return 0
+}
+
+func (x *ClaimCityCelebrationGiftResponse) GetWeeklyCap() uint32 {
+	if x != nil {
+		return x.WeeklyCap
+	}
+	return 0
+}
+
+func (x *ClaimCityCelebrationGiftResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+// 全城同乐分线内广播（纯演出与路人领礼入口，绝不阻塞战斗）。
+type CityCelebrationNotify struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Celebration        *CityCelebrationView   `protobuf:"bytes,1,opt,name=celebration,proto3" json:"celebration,omitempty"`
+	ActiveCountInScene uint32                 `protobuf:"varint,2,opt,name=active_count_in_scene,json=activeCountInScene,proto3" json:"active_count_in_scene,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *CityCelebrationNotify) Reset() {
+	*x = CityCelebrationNotify{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CityCelebrationNotify) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CityCelebrationNotify) ProtoMessage() {}
+
+func (x *CityCelebrationNotify) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CityCelebrationNotify.ProtoReflect.Descriptor instead.
+func (*CityCelebrationNotify) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *CityCelebrationNotify) GetCelebration() *CityCelebrationView {
+	if x != nil {
+		return x.Celebration
+	}
+	return nil
+}
+
+func (x *CityCelebrationNotify) GetActiveCountInScene() uint32 {
+	if x != nil {
+		return x.ActiveCountInScene
+	}
+	return 0
+}
+
+// 好友间真实灵石纯外观/手记典藏赠礼（仅扣真实充值灵石，强制 7 天好友无拉黑、周上限 5 笔与报价防呆）。
+type SendCosmeticGiftRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId      uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"` // 必须非 0
+	TargetPlayerId       uint64                 `protobuf:"varint,2,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`    // 受赠好友 player_id
+	TargetKind           CosmeticGiftTargetKind `protobuf:"varint,3,opt,name=target_kind,json=targetKind,proto3,enum=CosmeticGiftTargetKind" json:"target_kind,omitempty"`
+	TargetIdU32          uint32                 `protobuf:"varint,4,opt,name=target_id_u32,json=targetIdU32,proto3" json:"target_id_u32,omitempty"`
+	TargetIdStr          string                 `protobuf:"bytes,5,opt,name=target_id_str,json=targetIdStr,proto3" json:"target_id_str,omitempty"`
+	ExpectedPriceDiamond uint64                 `protobuf:"varint,6,opt,name=expected_price_diamond,json=expectedPriceDiamond,proto3" json:"expected_price_diamond,omitempty"` // 报价防呆：与服务端实时标价不一致即拒
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *SendCosmeticGiftRequest) Reset() {
+	*x = SendCosmeticGiftRequest{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendCosmeticGiftRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendCosmeticGiftRequest) ProtoMessage() {}
+
+func (x *SendCosmeticGiftRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendCosmeticGiftRequest.ProtoReflect.Descriptor instead.
+func (*SendCosmeticGiftRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *SendCosmeticGiftRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftRequest) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftRequest) GetTargetKind() CosmeticGiftTargetKind {
+	if x != nil {
+		return x.TargetKind
+	}
+	return CosmeticGiftTargetKind_COSMETIC_GIFT_TARGET_UNSPECIFIED
+}
+
+func (x *SendCosmeticGiftRequest) GetTargetIdU32() uint32 {
+	if x != nil {
+		return x.TargetIdU32
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftRequest) GetTargetIdStr() string {
+	if x != nil {
+		return x.TargetIdStr
+	}
+	return ""
+}
+
+func (x *SendCosmeticGiftRequest) GetExpectedPriceDiamond() uint64 {
+	if x != nil {
+		return x.ExpectedPriceDiamond
+	}
+	return 0
+}
+
+type SendCosmeticGiftResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage   *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	GiftOrderId    uint64                 `protobuf:"varint,2,opt,name=gift_order_id,json=giftOrderId,proto3" json:"gift_order_id,omitempty"`
+	SpentDiamond   uint64                 `protobuf:"varint,3,opt,name=spent_diamond,json=spentDiamond,proto3" json:"spent_diamond,omitempty"`
+	DiamondBalance uint64                 `protobuf:"varint,4,opt,name=diamond_balance,json=diamondBalance,proto3" json:"diamond_balance,omitempty"`
+	SentThisWeek   uint32                 `protobuf:"varint,5,opt,name=sent_this_week,json=sentThisWeek,proto3" json:"sent_this_week,omitempty"`
+	WeeklyLimit    uint32                 `protobuf:"varint,6,opt,name=weekly_limit,json=weeklyLimit,proto3" json:"weekly_limit,omitempty"`
+	Replayed       bool                   `protobuf:"varint,7,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SendCosmeticGiftResponse) Reset() {
+	*x = SendCosmeticGiftResponse{}
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendCosmeticGiftResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendCosmeticGiftResponse) ProtoMessage() {}
+
+func (x *SendCosmeticGiftResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_appearance_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendCosmeticGiftResponse.ProtoReflect.Descriptor instead.
+func (*SendCosmeticGiftResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_appearance_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *SendCosmeticGiftResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SendCosmeticGiftResponse) GetGiftOrderId() uint64 {
+	if x != nil {
+		return x.GiftOrderId
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftResponse) GetSpentDiamond() uint64 {
+	if x != nil {
+		return x.SpentDiamond
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftResponse) GetDiamondBalance() uint64 {
+	if x != nil {
+		return x.DiamondBalance
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftResponse) GetSentThisWeek() uint32 {
+	if x != nil {
+		return x.SentThisWeek
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftResponse) GetWeeklyLimit() uint32 {
+	if x != nil {
+		return x.WeeklyLimit
+	}
+	return 0
+}
+
+func (x *SendCosmeticGiftResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
 	}
 	return false
 }
@@ -1673,7 +2887,7 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"trial_used\x18\x05 \x01(\bR\ttrialUsed\x12\x14\n" +
 	"\x05owned\x18\x06 \x01(\bR\x05owned\x12'\n" +
 	"\x0fcard_unlockable\x18\a \x01(\bR\x0ecardUnlockable\x12\x1b\n" +
-	"\tseries_id\x18\b \x01(\rR\bseriesId\"\x81\x03\n" +
+	"\tseries_id\x18\b \x01(\rR\bseriesId\"\x91\x05\n" +
 	"!CharacterAppearanceSeriesProgress\x12\x1b\n" +
 	"\tseries_id\x18\x01 \x01(\rR\bseriesId\x12\x1d\n" +
 	"\n" +
@@ -1689,7 +2903,12 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"\x15completion_badge_name\x18\b \x01(\tR\x13completionBadgeName\x12%\n" +
 	"\x0eepilogue_title\x18\t \x01(\tR\repilogueTitle\x122\n" +
 	"\x15member_appearance_ids\x18\n" +
-	" \x03(\tR\x13memberAppearanceIds\"\x8e\t\n" +
+	" \x03(\tR\x13memberAppearanceIds\x128\n" +
+	"\x18missing_unlockable_count\x18\v \x01(\rR\x16missingUnlockableCount\x126\n" +
+	"\x17bundle_original_diamond\x18\f \x01(\x04R\x15bundleOriginalDiamond\x126\n" +
+	"\x17bundle_discount_diamond\x18\r \x01(\x04R\x15bundleDiscountDiamond\x12.\n" +
+	"\x13bundle_discount_bps\x18\x0e \x01(\rR\x11bundleDiscountBps\x124\n" +
+	"\x16missing_appearance_ids\x18\x0f \x03(\tR\x14missingAppearanceIds\"\xa5\x0f\n" +
 	"\x14PlayerAppearanceInfo\x126\n" +
 	"\x17permanent_appearance_id\x18\x01 \x01(\tR\x15permanentAppearanceId\x120\n" +
 	"\x14active_appearance_id\x18\x02 \x01(\tR\x12activeAppearanceId\x12.\n" +
@@ -1715,10 +2934,42 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"\x16equipped_pet_cosmetics\x18\x12 \x03(\v2\x14.PetEquippedCosmeticR\x14equippedPetCosmetics\x12/\n" +
 	"\x14skill_vfx_owned_bits\x18\x13 \x01(\fR\x11skillVfxOwnedBits\x12F\n" +
 	"\x13skill_vfx_cosmetics\x18\x14 \x03(\v2\x16.SkillVfxCosmeticEntryR\x11skillVfxCosmetics\x12Y\n" +
-	"\x12equipped_skill_vfx\x18\x15 \x03(\v2+.PlayerAppearanceInfo.EquippedSkillVfxEntryR\x10equippedSkillVfx\x1aC\n" +
+	"\x12equipped_skill_vfx\x18\x15 \x03(\v2+.PlayerAppearanceInfo.EquippedSkillVfxEntryR\x10equippedSkillVfx\x123\n" +
+	"\x16light_card_trial_quota\x18\x16 \x01(\rR\x13lightCardTrialQuota\x121\n" +
+	"\x15light_card_trial_used\x18\x17 \x01(\rR\x12lightCardTrialUsed\x12'\n" +
+	"\x0fdiamond_balance\x18\x18 \x01(\x04R\x0ediamondBalance\x120\n" +
+	"\x14bind_diamond_balance\x18\x19 \x01(\x04R\x12bindDiamondBalance\x12?\n" +
+	"\x1cshowcase_cosmetic_owned_bits\x18\x1a \x01(\fR\x19showcaseCosmeticOwnedBits\x12E\n" +
+	"\x12showcase_cosmetics\x18\x1b \x03(\v2\x16.ShowcaseCosmeticEntryR\x11showcaseCosmetics\x12t\n" +
+	"\x1bequipped_showcase_cosmetics\x18\x1c \x03(\v24.PlayerAppearanceInfo.EquippedShowcaseCosmeticsEntryR\x19equippedShowcaseCosmetics\x12A\n" +
+	"\x1dcelebration_bind_gold_claimed\x18\x1d \x01(\rR\x1acelebrationBindGoldClaimed\x12F\n" +
+	" celebration_bind_gold_weekly_cap\x18\x1e \x01(\rR\x1ccelebrationBindGoldWeeklyCap\x12>\n" +
+	"\x1ccosmetic_gift_sent_this_week\x18\x1f \x01(\rR\x18cosmeticGiftSentThisWeek\x12;\n" +
+	"\x1acosmetic_gift_weekly_limit\x18  \x01(\rR\x17cosmeticGiftWeeklyLimit\x1aC\n" +
 	"\x15EquippedSkillVfxEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x9b\x04\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aL\n" +
+	"\x1eEquippedShowcaseCosmeticsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe6\x03\n" +
+	"\x15ShowcaseCosmeticEntry\x12\x1b\n" +
+	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12!\n" +
+	"\fcosmetic_key\x18\x02 \x01(\tR\vcosmeticKey\x12\x1b\n" +
+	"\tslot_kind\x18\x03 \x01(\rR\bslotKind\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1b\n" +
+	"\tasset_key\x18\x05 \x01(\tR\bassetKey\x12.\n" +
+	"\x13secondary_asset_key\x18\x06 \x01(\tR\x11secondaryAssetKey\x12\x1d\n" +
+	"\n" +
+	"sort_order\x18\a \x01(\rR\tsortOrder\x12\x14\n" +
+	"\x05owned\x18\b \x01(\bR\x05owned\x12 \n" +
+	"\fcard_item_id\x18\t \x01(\rR\n" +
+	"cardItemId\x12&\n" +
+	"\x0fcard_item_count\x18\n" +
+	" \x01(\rR\rcardItemCount\x12(\n" +
+	"\x10owned_card_count\x18\v \x01(\rR\x0eownedCardCount\x12/\n" +
+	"\x14spirit_shop_goods_id\x18\f \x01(\rR\x11spiritShopGoodsId\x12!\n" +
+	"\facquire_hint\x18\r \x01(\tR\vacquireHint\x12\x12\n" +
+	"\x04desc\x18\x0e \x01(\tR\x04desc\"\x9b\x04\n" +
 	"\x10PetCosmeticEntry\x12\x1b\n" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12!\n" +
 	"\fcosmetic_key\x18\x02 \x01(\tR\vcosmeticKey\x12\x12\n" +
@@ -1818,7 +3069,85 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"\x10trial_expires_at\x18\x05 \x01(\x04R\x0etrialExpiresAt\"g\n" +
 	"\x15AppearanceStateNotify\x12)\n" +
 	"\x04info\x18\x01 \x01(\v2\x15.PlayerAppearanceInfoR\x04info\x12#\n" +
-	"\rtrial_expired\x18\x02 \x01(\bR\ftrialExpired2\xff\x04\n" +
+	"\rtrial_expired\x18\x02 \x01(\bR\ftrialExpired\"\xe8\x01\n" +
+	" BuyAppearanceSeriesBundleRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12\x1b\n" +
+	"\tseries_id\x18\x02 \x01(\rR\bseriesId\x12E\n" +
+	"\x1fexpected_missing_appearance_ids\x18\x03 \x03(\tR\x1cexpectedMissingAppearanceIds\x124\n" +
+	"\x16expected_price_diamond\x18\x04 \x01(\x04R\x14expectedPriceDiamond\"\xec\x01\n" +
+	"!BuyAppearanceSeriesBundleResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
+	"\x04info\x18\x02 \x01(\v2\x15.PlayerAppearanceInfoR\x04info\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12%\n" +
+	"\x0eunlocked_count\x18\x04 \x01(\rR\runlockedCount\x12#\n" +
+	"\rspent_diamond\x18\x05 \x01(\x04R\fspentDiamond\"\xb4\x01\n" +
+	"\x1cEquipShowcaseCosmeticRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12\x1b\n" +
+	"\tslot_kind\x18\x02 \x01(\rR\bslotKind\x12\x1f\n" +
+	"\vcosmetic_id\x18\x03 \x01(\rR\n" +
+	"cosmeticId\x12*\n" +
+	"\x11expect_free_equip\x18\x04 \x01(\bR\x0fexpectFreeEquip\"\xeb\x01\n" +
+	"\x1dEquipShowcaseCosmeticResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12)\n" +
+	"\x04info\x18\x02 \x01(\v2\x15.PlayerAppearanceInfoR\x04info\x12\x1b\n" +
+	"\tslot_kind\x18\x03 \x01(\rR\bslotKind\x120\n" +
+	"\x14equipped_cosmetic_id\x18\x04 \x01(\rR\x12equippedCosmeticId\x12\x1a\n" +
+	"\breplayed\x18\x05 \x01(\bR\breplayed\"n\n" +
+	"\x1aCastCityCelebrationRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12$\n" +
+	"\x0eitem_config_id\x18\x02 \x01(\rR\fitemConfigId\"\xef\x02\n" +
+	"\x13CityCelebrationView\x12%\n" +
+	"\x0ecelebration_id\x18\x01 \x01(\x04R\rcelebrationId\x12(\n" +
+	"\x10caster_player_id\x18\x02 \x01(\x04R\x0ecasterPlayerId\x12\x1f\n" +
+	"\vcaster_name\x18\x03 \x01(\tR\n" +
+	"casterName\x12$\n" +
+	"\x0eitem_config_id\x18\x04 \x01(\rR\fitemConfigId\x12(\n" +
+	"\x10bind_gold_reward\x18\x05 \x01(\rR\x0ebindGoldReward\x12$\n" +
+	"\x0estarted_at_sec\x18\x06 \x01(\x04R\fstartedAtSec\x12$\n" +
+	"\x0eexpires_at_sec\x18\a \x01(\x04R\fexpiresAtSec\x12&\n" +
+	"\x0fscene_config_id\x18\b \x01(\rR\rsceneConfigId\x12\"\n" +
+	"\rclaimed_by_me\x18\t \x01(\bR\vclaimedByMe\"\xa7\x01\n" +
+	"\x1bCastCityCelebrationResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x126\n" +
+	"\vcelebration\x18\x02 \x01(\v2\x14.CityCelebrationViewR\vcelebration\x12\x1a\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\"t\n" +
+	"\x1fClaimCityCelebrationGiftRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12%\n" +
+	"\x0ecelebration_id\x18\x02 \x01(\x04R\rcelebrationId\"\x98\x02\n" +
+	" ClaimCityCelebrationGiftResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12%\n" +
+	"\x0ecelebration_id\x18\x02 \x01(\x04R\rcelebrationId\x12*\n" +
+	"\x11granted_bind_gold\x18\x03 \x01(\rR\x0fgrantedBindGold\x120\n" +
+	"\x14weekly_claimed_total\x18\x04 \x01(\rR\x12weeklyClaimedTotal\x12\x1d\n" +
+	"\n" +
+	"weekly_cap\x18\x05 \x01(\rR\tweeklyCap\x12\x1a\n" +
+	"\breplayed\x18\x06 \x01(\bR\breplayed\"\x82\x01\n" +
+	"\x15CityCelebrationNotify\x126\n" +
+	"\vcelebration\x18\x01 \x01(\v2\x14.CityCelebrationViewR\vcelebration\x121\n" +
+	"\x15active_count_in_scene\x18\x02 \x01(\rR\x12activeCountInScene\"\xa7\x02\n" +
+	"\x17SendCosmeticGiftRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12(\n" +
+	"\x10target_player_id\x18\x02 \x01(\x04R\x0etargetPlayerId\x128\n" +
+	"\vtarget_kind\x18\x03 \x01(\x0e2\x17.CosmeticGiftTargetKindR\n" +
+	"targetKind\x12\"\n" +
+	"\rtarget_id_u32\x18\x04 \x01(\rR\vtargetIdU32\x12\"\n" +
+	"\rtarget_id_str\x18\x05 \x01(\tR\vtargetIdStr\x124\n" +
+	"\x16expected_price_diamond\x18\x06 \x01(\x04R\x14expectedPriceDiamond\"\xa7\x02\n" +
+	"\x18SendCosmeticGiftResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
+	"\rgift_order_id\x18\x02 \x01(\x04R\vgiftOrderId\x12#\n" +
+	"\rspent_diamond\x18\x03 \x01(\x04R\fspentDiamond\x12'\n" +
+	"\x0fdiamond_balance\x18\x04 \x01(\x04R\x0ediamondBalance\x12$\n" +
+	"\x0esent_this_week\x18\x05 \x01(\rR\fsentThisWeek\x12!\n" +
+	"\fweekly_limit\x18\x06 \x01(\rR\vweeklyLimit\x12\x1a\n" +
+	"\breplayed\x18\a \x01(\bR\breplayed*\xf6\x01\n" +
+	"\x16CosmeticGiftTargetKind\x12$\n" +
+	" COSMETIC_GIFT_TARGET_UNSPECIFIED\x10\x00\x12\"\n" +
+	"\x1eCOSMETIC_GIFT_TARGET_CHARACTER\x10\x01\x12%\n" +
+	"!COSMETIC_GIFT_TARGET_PET_COSMETIC\x10\x02\x12\"\n" +
+	"\x1eCOSMETIC_GIFT_TARGET_SKILL_VFX\x10\x03\x12$\n" +
+	" COSMETIC_GIFT_TARGET_TRAVEL_PASS\x10\x04\x12!\n" +
+	"\x1dCOSMETIC_GIFT_TARGET_SHOWCASE\x10\x052\xf7\b\n" +
 	"\x1bSceneAppearanceClientPlayer\x12J\n" +
 	"\x11GetAppearanceInfo\x12\x19.GetAppearanceInfoRequest\x1a\x1a.GetAppearanceInfoResponse\x12G\n" +
 	"\x10SwitchAppearance\x12\x18.SwitchAppearanceRequest\x1a\x19.SwitchAppearanceResponse\x12S\n" +
@@ -1827,7 +3156,13 @@ const file_proto_scene_player_appearance_proto_rawDesc = "" +
 	"\x1cNotifyActorAppearanceChanged\x12\x1a.ActorAppearanceChangedS2C\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12>\n" +
 	"\x15NotifyAppearanceState\x12\x16.AppearanceStateNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12G\n" +
 	"\x10EquipPetCosmetic\x12\x18.EquipPetCosmeticRequest\x1a\x19.EquipPetCosmeticResponse\x12>\n" +
-	"\rEquipSkillVfx\x12\x15.EquipSkillVfxRequest\x1a\x16.EquipSkillVfxResponse\x1a\n" +
+	"\rEquipSkillVfx\x12\x15.EquipSkillVfxRequest\x1a\x16.EquipSkillVfxResponse\x12b\n" +
+	"\x19BuyAppearanceSeriesBundle\x12!.BuyAppearanceSeriesBundleRequest\x1a\".BuyAppearanceSeriesBundleResponse\x12V\n" +
+	"\x15EquipShowcaseCosmetic\x12\x1d.EquipShowcaseCosmeticRequest\x1a\x1e.EquipShowcaseCosmeticResponse\x12P\n" +
+	"\x13CastCityCelebration\x12\x1b.CastCityCelebrationRequest\x1a\x1c.CastCityCelebrationResponse\x12_\n" +
+	"\x18ClaimCityCelebrationGift\x12 .ClaimCityCelebrationGiftRequest\x1a!.ClaimCityCelebrationGiftResponse\x12>\n" +
+	"\x15NotifyCityCelebration\x12\x16.CityCelebrationNotify\x1a\x06.Empty\"\x05\x88\x99\xc8\x01\x02\x12G\n" +
+	"\x10SendCosmeticGift\x12\x18.SendCosmeticGiftRequest\x1a\x19.SendCosmeticGiftResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -1842,73 +3177,113 @@ func file_proto_scene_player_appearance_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_appearance_proto_rawDescData
 }
 
-var file_proto_scene_player_appearance_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_proto_scene_player_appearance_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_proto_scene_player_appearance_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_proto_scene_player_appearance_proto_goTypes = []any{
-	(*CharacterAppearanceEntry)(nil),          // 0: CharacterAppearanceEntry
-	(*CharacterAppearanceSeriesProgress)(nil), // 1: CharacterAppearanceSeriesProgress
-	(*PlayerAppearanceInfo)(nil),              // 2: PlayerAppearanceInfo
-	(*PetCosmeticEntry)(nil),                  // 3: PetCosmeticEntry
-	(*PetEquippedCosmetic)(nil),               // 4: PetEquippedCosmetic
-	(*SkillVfxCosmeticEntry)(nil),             // 5: SkillVfxCosmeticEntry
-	(*EquipPetCosmeticRequest)(nil),           // 6: EquipPetCosmeticRequest
-	(*EquipPetCosmeticResponse)(nil),          // 7: EquipPetCosmeticResponse
-	(*EquipSkillVfxRequest)(nil),              // 8: EquipSkillVfxRequest
-	(*EquipSkillVfxResponse)(nil),             // 9: EquipSkillVfxResponse
-	(*GetAppearanceInfoRequest)(nil),          // 10: GetAppearanceInfoRequest
-	(*GetAppearanceInfoResponse)(nil),         // 11: GetAppearanceInfoResponse
-	(*SwitchAppearanceRequest)(nil),           // 12: SwitchAppearanceRequest
-	(*SwitchAppearanceResponse)(nil),          // 13: SwitchAppearanceResponse
-	(*StartAppearanceTrialRequest)(nil),       // 14: StartAppearanceTrialRequest
-	(*StartAppearanceTrialResponse)(nil),      // 15: StartAppearanceTrialResponse
-	(*CancelAppearanceTrialRequest)(nil),      // 16: CancelAppearanceTrialRequest
-	(*CancelAppearanceTrialResponse)(nil),     // 17: CancelAppearanceTrialResponse
-	(*ActorAppearanceChangedS2C)(nil),         // 18: ActorAppearanceChangedS2C
-	(*AppearanceStateNotify)(nil),             // 19: AppearanceStateNotify
-	nil,                                       // 20: PlayerAppearanceInfo.EquippedSkillVfxEntry
-	(*base.TipInfoMessage)(nil),               // 21: TipInfoMessage
-	(*base.Empty)(nil),                        // 22: Empty
+	(CosmeticGiftTargetKind)(0),               // 0: CosmeticGiftTargetKind
+	(*CharacterAppearanceEntry)(nil),          // 1: CharacterAppearanceEntry
+	(*CharacterAppearanceSeriesProgress)(nil), // 2: CharacterAppearanceSeriesProgress
+	(*PlayerAppearanceInfo)(nil),              // 3: PlayerAppearanceInfo
+	(*ShowcaseCosmeticEntry)(nil),             // 4: ShowcaseCosmeticEntry
+	(*PetCosmeticEntry)(nil),                  // 5: PetCosmeticEntry
+	(*PetEquippedCosmetic)(nil),               // 6: PetEquippedCosmetic
+	(*SkillVfxCosmeticEntry)(nil),             // 7: SkillVfxCosmeticEntry
+	(*EquipPetCosmeticRequest)(nil),           // 8: EquipPetCosmeticRequest
+	(*EquipPetCosmeticResponse)(nil),          // 9: EquipPetCosmeticResponse
+	(*EquipSkillVfxRequest)(nil),              // 10: EquipSkillVfxRequest
+	(*EquipSkillVfxResponse)(nil),             // 11: EquipSkillVfxResponse
+	(*GetAppearanceInfoRequest)(nil),          // 12: GetAppearanceInfoRequest
+	(*GetAppearanceInfoResponse)(nil),         // 13: GetAppearanceInfoResponse
+	(*SwitchAppearanceRequest)(nil),           // 14: SwitchAppearanceRequest
+	(*SwitchAppearanceResponse)(nil),          // 15: SwitchAppearanceResponse
+	(*StartAppearanceTrialRequest)(nil),       // 16: StartAppearanceTrialRequest
+	(*StartAppearanceTrialResponse)(nil),      // 17: StartAppearanceTrialResponse
+	(*CancelAppearanceTrialRequest)(nil),      // 18: CancelAppearanceTrialRequest
+	(*CancelAppearanceTrialResponse)(nil),     // 19: CancelAppearanceTrialResponse
+	(*ActorAppearanceChangedS2C)(nil),         // 20: ActorAppearanceChangedS2C
+	(*AppearanceStateNotify)(nil),             // 21: AppearanceStateNotify
+	(*BuyAppearanceSeriesBundleRequest)(nil),  // 22: BuyAppearanceSeriesBundleRequest
+	(*BuyAppearanceSeriesBundleResponse)(nil), // 23: BuyAppearanceSeriesBundleResponse
+	(*EquipShowcaseCosmeticRequest)(nil),      // 24: EquipShowcaseCosmeticRequest
+	(*EquipShowcaseCosmeticResponse)(nil),     // 25: EquipShowcaseCosmeticResponse
+	(*CastCityCelebrationRequest)(nil),        // 26: CastCityCelebrationRequest
+	(*CityCelebrationView)(nil),               // 27: CityCelebrationView
+	(*CastCityCelebrationResponse)(nil),       // 28: CastCityCelebrationResponse
+	(*ClaimCityCelebrationGiftRequest)(nil),   // 29: ClaimCityCelebrationGiftRequest
+	(*ClaimCityCelebrationGiftResponse)(nil),  // 30: ClaimCityCelebrationGiftResponse
+	(*CityCelebrationNotify)(nil),             // 31: CityCelebrationNotify
+	(*SendCosmeticGiftRequest)(nil),           // 32: SendCosmeticGiftRequest
+	(*SendCosmeticGiftResponse)(nil),          // 33: SendCosmeticGiftResponse
+	nil,                                       // 34: PlayerAppearanceInfo.EquippedSkillVfxEntry
+	nil,                                       // 35: PlayerAppearanceInfo.EquippedShowcaseCosmeticsEntry
+	(*base.TipInfoMessage)(nil),               // 36: TipInfoMessage
+	(*base.Empty)(nil),                        // 37: Empty
 }
 var file_proto_scene_player_appearance_proto_depIdxs = []int32{
-	0,  // 0: PlayerAppearanceInfo.appearances:type_name -> CharacterAppearanceEntry
-	1,  // 1: PlayerAppearanceInfo.series_progress:type_name -> CharacterAppearanceSeriesProgress
-	3,  // 2: PlayerAppearanceInfo.pet_cosmetics:type_name -> PetCosmeticEntry
-	4,  // 3: PlayerAppearanceInfo.equipped_pet_cosmetics:type_name -> PetEquippedCosmetic
-	5,  // 4: PlayerAppearanceInfo.skill_vfx_cosmetics:type_name -> SkillVfxCosmeticEntry
-	20, // 5: PlayerAppearanceInfo.equipped_skill_vfx:type_name -> PlayerAppearanceInfo.EquippedSkillVfxEntry
-	21, // 6: EquipPetCosmeticResponse.error_message:type_name -> TipInfoMessage
-	2,  // 7: EquipPetCosmeticResponse.info:type_name -> PlayerAppearanceInfo
-	21, // 8: EquipSkillVfxResponse.error_message:type_name -> TipInfoMessage
-	2,  // 9: EquipSkillVfxResponse.info:type_name -> PlayerAppearanceInfo
-	21, // 10: GetAppearanceInfoResponse.error_message:type_name -> TipInfoMessage
-	2,  // 11: GetAppearanceInfoResponse.info:type_name -> PlayerAppearanceInfo
-	21, // 12: SwitchAppearanceResponse.error_message:type_name -> TipInfoMessage
-	2,  // 13: SwitchAppearanceResponse.info:type_name -> PlayerAppearanceInfo
-	21, // 14: StartAppearanceTrialResponse.error_message:type_name -> TipInfoMessage
-	2,  // 15: StartAppearanceTrialResponse.info:type_name -> PlayerAppearanceInfo
-	21, // 16: CancelAppearanceTrialResponse.error_message:type_name -> TipInfoMessage
-	2,  // 17: CancelAppearanceTrialResponse.info:type_name -> PlayerAppearanceInfo
-	2,  // 18: AppearanceStateNotify.info:type_name -> PlayerAppearanceInfo
-	10, // 19: SceneAppearanceClientPlayer.GetAppearanceInfo:input_type -> GetAppearanceInfoRequest
-	12, // 20: SceneAppearanceClientPlayer.SwitchAppearance:input_type -> SwitchAppearanceRequest
-	14, // 21: SceneAppearanceClientPlayer.StartAppearanceTrial:input_type -> StartAppearanceTrialRequest
-	16, // 22: SceneAppearanceClientPlayer.CancelAppearanceTrial:input_type -> CancelAppearanceTrialRequest
-	18, // 23: SceneAppearanceClientPlayer.NotifyActorAppearanceChanged:input_type -> ActorAppearanceChangedS2C
-	19, // 24: SceneAppearanceClientPlayer.NotifyAppearanceState:input_type -> AppearanceStateNotify
-	6,  // 25: SceneAppearanceClientPlayer.EquipPetCosmetic:input_type -> EquipPetCosmeticRequest
-	8,  // 26: SceneAppearanceClientPlayer.EquipSkillVfx:input_type -> EquipSkillVfxRequest
-	11, // 27: SceneAppearanceClientPlayer.GetAppearanceInfo:output_type -> GetAppearanceInfoResponse
-	13, // 28: SceneAppearanceClientPlayer.SwitchAppearance:output_type -> SwitchAppearanceResponse
-	15, // 29: SceneAppearanceClientPlayer.StartAppearanceTrial:output_type -> StartAppearanceTrialResponse
-	17, // 30: SceneAppearanceClientPlayer.CancelAppearanceTrial:output_type -> CancelAppearanceTrialResponse
-	22, // 31: SceneAppearanceClientPlayer.NotifyActorAppearanceChanged:output_type -> Empty
-	22, // 32: SceneAppearanceClientPlayer.NotifyAppearanceState:output_type -> Empty
-	7,  // 33: SceneAppearanceClientPlayer.EquipPetCosmetic:output_type -> EquipPetCosmeticResponse
-	9,  // 34: SceneAppearanceClientPlayer.EquipSkillVfx:output_type -> EquipSkillVfxResponse
-	27, // [27:35] is the sub-list for method output_type
-	19, // [19:27] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	1,  // 0: PlayerAppearanceInfo.appearances:type_name -> CharacterAppearanceEntry
+	2,  // 1: PlayerAppearanceInfo.series_progress:type_name -> CharacterAppearanceSeriesProgress
+	5,  // 2: PlayerAppearanceInfo.pet_cosmetics:type_name -> PetCosmeticEntry
+	6,  // 3: PlayerAppearanceInfo.equipped_pet_cosmetics:type_name -> PetEquippedCosmetic
+	7,  // 4: PlayerAppearanceInfo.skill_vfx_cosmetics:type_name -> SkillVfxCosmeticEntry
+	34, // 5: PlayerAppearanceInfo.equipped_skill_vfx:type_name -> PlayerAppearanceInfo.EquippedSkillVfxEntry
+	4,  // 6: PlayerAppearanceInfo.showcase_cosmetics:type_name -> ShowcaseCosmeticEntry
+	35, // 7: PlayerAppearanceInfo.equipped_showcase_cosmetics:type_name -> PlayerAppearanceInfo.EquippedShowcaseCosmeticsEntry
+	36, // 8: EquipPetCosmeticResponse.error_message:type_name -> TipInfoMessage
+	3,  // 9: EquipPetCosmeticResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 10: EquipSkillVfxResponse.error_message:type_name -> TipInfoMessage
+	3,  // 11: EquipSkillVfxResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 12: GetAppearanceInfoResponse.error_message:type_name -> TipInfoMessage
+	3,  // 13: GetAppearanceInfoResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 14: SwitchAppearanceResponse.error_message:type_name -> TipInfoMessage
+	3,  // 15: SwitchAppearanceResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 16: StartAppearanceTrialResponse.error_message:type_name -> TipInfoMessage
+	3,  // 17: StartAppearanceTrialResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 18: CancelAppearanceTrialResponse.error_message:type_name -> TipInfoMessage
+	3,  // 19: CancelAppearanceTrialResponse.info:type_name -> PlayerAppearanceInfo
+	3,  // 20: AppearanceStateNotify.info:type_name -> PlayerAppearanceInfo
+	36, // 21: BuyAppearanceSeriesBundleResponse.error_message:type_name -> TipInfoMessage
+	3,  // 22: BuyAppearanceSeriesBundleResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 23: EquipShowcaseCosmeticResponse.error_message:type_name -> TipInfoMessage
+	3,  // 24: EquipShowcaseCosmeticResponse.info:type_name -> PlayerAppearanceInfo
+	36, // 25: CastCityCelebrationResponse.error_message:type_name -> TipInfoMessage
+	27, // 26: CastCityCelebrationResponse.celebration:type_name -> CityCelebrationView
+	36, // 27: ClaimCityCelebrationGiftResponse.error_message:type_name -> TipInfoMessage
+	27, // 28: CityCelebrationNotify.celebration:type_name -> CityCelebrationView
+	0,  // 29: SendCosmeticGiftRequest.target_kind:type_name -> CosmeticGiftTargetKind
+	36, // 30: SendCosmeticGiftResponse.error_message:type_name -> TipInfoMessage
+	12, // 31: SceneAppearanceClientPlayer.GetAppearanceInfo:input_type -> GetAppearanceInfoRequest
+	14, // 32: SceneAppearanceClientPlayer.SwitchAppearance:input_type -> SwitchAppearanceRequest
+	16, // 33: SceneAppearanceClientPlayer.StartAppearanceTrial:input_type -> StartAppearanceTrialRequest
+	18, // 34: SceneAppearanceClientPlayer.CancelAppearanceTrial:input_type -> CancelAppearanceTrialRequest
+	20, // 35: SceneAppearanceClientPlayer.NotifyActorAppearanceChanged:input_type -> ActorAppearanceChangedS2C
+	21, // 36: SceneAppearanceClientPlayer.NotifyAppearanceState:input_type -> AppearanceStateNotify
+	8,  // 37: SceneAppearanceClientPlayer.EquipPetCosmetic:input_type -> EquipPetCosmeticRequest
+	10, // 38: SceneAppearanceClientPlayer.EquipSkillVfx:input_type -> EquipSkillVfxRequest
+	22, // 39: SceneAppearanceClientPlayer.BuyAppearanceSeriesBundle:input_type -> BuyAppearanceSeriesBundleRequest
+	24, // 40: SceneAppearanceClientPlayer.EquipShowcaseCosmetic:input_type -> EquipShowcaseCosmeticRequest
+	26, // 41: SceneAppearanceClientPlayer.CastCityCelebration:input_type -> CastCityCelebrationRequest
+	29, // 42: SceneAppearanceClientPlayer.ClaimCityCelebrationGift:input_type -> ClaimCityCelebrationGiftRequest
+	31, // 43: SceneAppearanceClientPlayer.NotifyCityCelebration:input_type -> CityCelebrationNotify
+	32, // 44: SceneAppearanceClientPlayer.SendCosmeticGift:input_type -> SendCosmeticGiftRequest
+	13, // 45: SceneAppearanceClientPlayer.GetAppearanceInfo:output_type -> GetAppearanceInfoResponse
+	15, // 46: SceneAppearanceClientPlayer.SwitchAppearance:output_type -> SwitchAppearanceResponse
+	17, // 47: SceneAppearanceClientPlayer.StartAppearanceTrial:output_type -> StartAppearanceTrialResponse
+	19, // 48: SceneAppearanceClientPlayer.CancelAppearanceTrial:output_type -> CancelAppearanceTrialResponse
+	37, // 49: SceneAppearanceClientPlayer.NotifyActorAppearanceChanged:output_type -> Empty
+	37, // 50: SceneAppearanceClientPlayer.NotifyAppearanceState:output_type -> Empty
+	9,  // 51: SceneAppearanceClientPlayer.EquipPetCosmetic:output_type -> EquipPetCosmeticResponse
+	11, // 52: SceneAppearanceClientPlayer.EquipSkillVfx:output_type -> EquipSkillVfxResponse
+	23, // 53: SceneAppearanceClientPlayer.BuyAppearanceSeriesBundle:output_type -> BuyAppearanceSeriesBundleResponse
+	25, // 54: SceneAppearanceClientPlayer.EquipShowcaseCosmetic:output_type -> EquipShowcaseCosmeticResponse
+	28, // 55: SceneAppearanceClientPlayer.CastCityCelebration:output_type -> CastCityCelebrationResponse
+	30, // 56: SceneAppearanceClientPlayer.ClaimCityCelebrationGift:output_type -> ClaimCityCelebrationGiftResponse
+	37, // 57: SceneAppearanceClientPlayer.NotifyCityCelebration:output_type -> Empty
+	33, // 58: SceneAppearanceClientPlayer.SendCosmeticGift:output_type -> SendCosmeticGiftResponse
+	45, // [45:59] is the sub-list for method output_type
+	31, // [31:45] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_appearance_proto_init() }
@@ -1921,13 +3296,14 @@ func file_proto_scene_player_appearance_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_appearance_proto_rawDesc), len(file_proto_scene_player_appearance_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   21,
+			NumEnums:      1,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_proto_scene_player_appearance_proto_goTypes,
 		DependencyIndexes: file_proto_scene_player_appearance_proto_depIdxs,
+		EnumInfos:         file_proto_scene_player_appearance_proto_enumTypes,
 		MessageInfos:      file_proto_scene_player_appearance_proto_msgTypes,
 	}.Build()
 	File_proto_scene_player_appearance_proto = out.File

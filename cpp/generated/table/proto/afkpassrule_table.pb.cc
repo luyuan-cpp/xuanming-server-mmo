@@ -48,11 +48,11 @@ constexpr AfkPassRuleTable::ParseTableT_ AfkPassRuleTable::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -64,56 +64,92 @@ constexpr AfkPassRuleTable::ParseTableT_ AfkPassRuleTable::InternalGenerateParse
     }, {{
       {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.id_), 1>(),
-       {8, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.id_), 4>(),
+       {8, 4, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.id_)}},
       // uint32 period_days = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.period_days_), 2>(),
-       {16, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.period_days_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.period_days_)}},
       // uint32 price_currency_type = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.price_currency_type_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.price_currency_type_), 7>(),
+       {24, 7, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.price_currency_type_)}},
       // uint64 price = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassRuleTable, _impl_.price_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AfkPassRuleTable, _impl_.price_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.price_)}},
       // uint32 max_remaining_days = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.max_remaining_days_), 5>(),
-       {40, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.max_remaining_days_), 8>(),
+       {40, 8, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.max_remaining_days_)}},
       // uint32 remind_before_hours = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.remind_before_hours_), 6>(),
-       {48, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.remind_before_hours_), 9>(),
+       {48, 9, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.remind_before_hours_)}},
       // string desc = 7;
       {::_pbi::TcParser::FastUS1,
        {58, 0, 0,
         PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.desc_)}},
+      // uint32 bonus_item_id = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.bonus_item_id_), 10>(),
+       {64, 10, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_item_id_)}},
+      // uint32 bonus_item_count = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AfkPassRuleTable, _impl_.bonus_item_count_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_item_count_)}},
+      // string bonus_frame_key = 10;
+      {::_pbi::TcParser::FastUS1,
+       {82, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_frame_key_)}},
+      // string plan_name = 11;
+      {::_pbi::TcParser::FastUS1,
+       {90, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.plan_name_)}},
+      // string icon_key = 12;
+      {::_pbi::TcParser::FastUS1,
+       {98, 3, 0,
+        PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.icon_key_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 period_days = 2;
-      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.period_days_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.period_days_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 price_currency_type = 3;
-      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.price_currency_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.price_currency_type_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 price = 4;
-      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.price_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.price_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 max_remaining_days = 5;
-      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.max_remaining_days_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.max_remaining_days_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 remind_before_hours = 6;
-      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.remind_before_hours_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.remind_before_hours_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 7;
       {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.desc_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 bonus_item_id = 8;
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_item_id_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 bonus_item_count = 9;
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_item_count_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string bonus_frame_key = 10;
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_frame_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string plan_name = 11;
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.plan_name_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // string icon_key = 12;
+      {PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.icon_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\20\0\0\0\0\0\0\4"
+      "\20\0\0\0\0\0\0\4\0\0\17\11\10\0\0\0"
       "AfkPassRuleTable"
       "desc"
+      "bonus_frame_key"
+      "plan_name"
+      "icon_key"
     }},
   };
 }
@@ -126,12 +162,23 @@ inline constexpr AfkPassRuleTable::Impl_::Impl_(
         desc_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        bonus_frame_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        plan_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        icon_key_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         id_{0u},
         period_days_{0u},
         price_{::uint64_t{0u}},
         price_currency_type_{0u},
         max_remaining_days_{0u},
-        remind_before_hours_{0u} {}
+        remind_before_hours_{0u},
+        bonus_item_id_{0u},
+        bonus_item_count_{0u} {}
 
 template <typename>
 constexpr AfkPassRuleTable::AfkPassRuleTable(::_pbi::ConstantInitialized,
@@ -385,7 +432,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_._has_bits_),
-        10, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.period_days_),
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.price_currency_type_),
@@ -393,13 +440,23 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.max_remaining_days_),
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.remind_before_hours_),
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.bonus_item_id_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.bonus_item_count_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.bonus_frame_key_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.plan_name_),
+        PROTOBUF_FIELD_OFFSET(::AfkPassRuleTable, _impl_.icon_key_),
+        4,
+        5,
+        7,
+        6,
+        8,
+        9,
+        0,
+        10,
+        11,
         1,
         2,
-        4,
         3,
-        5,
-        6,
-        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AfkPassRuleTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -410,7 +467,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::AfkPassRuleTable)},
-        {17, sizeof(::AfkPassRuleTableData)},
+        {27, sizeof(::AfkPassRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -419,21 +476,23 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_afkpassrule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\027afkpassrule_table.proto\"\246\001\n\020AfkPassRul"
+    "\n\027afkpassrule_table.proto\"\225\002\n\020AfkPassRul"
     "eTable\022\n\n\002id\030\001 \001(\r\022\023\n\013period_days\030\002 \001(\r\022"
     "\033\n\023price_currency_type\030\003 \001(\r\022\r\n\005price\030\004 "
     "\001(\004\022\032\n\022max_remaining_days\030\005 \001(\r\022\033\n\023remin"
-    "d_before_hours\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\"7\n\024Af"
-    "kPassRuleTableData\022\037\n\004data\030\001 \003(\0132\021.AfkPa"
-    "ssRuleTableBB\n\016com.game.tableB\032AfkPassRu"
-    "leTableOuterClassP\001Z\022generated/pb/tableb"
-    "\006proto3"
+    "d_before_hours\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\022\025\n\rbo"
+    "nus_item_id\030\010 \001(\r\022\030\n\020bonus_item_count\030\t "
+    "\001(\r\022\027\n\017bonus_frame_key\030\n \001(\t\022\021\n\tplan_nam"
+    "e\030\013 \001(\t\022\020\n\010icon_key\030\014 \001(\t\"7\n\024AfkPassRule"
+    "TableData\022\037\n\004data\030\001 \003(\0132\021.AfkPassRuleTab"
+    "leBB\n\016com.game.tableB\032AfkPassRuleTableOu"
+    "terClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_afkpassrule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_afkpassrule_5ftable_2eproto = {
     false,
     false,
-    327,
+    438,
     descriptor_table_protodef_afkpassrule_5ftable_2eproto,
     "afkpassrule_table.proto",
     &descriptor_table_afkpassrule_5ftable_2eproto_once,
@@ -463,7 +522,10 @@ PROTOBUF_NDEBUG_INLINE AfkPassRuleTable::Impl_::Impl_(
     [[maybe_unused]] const ::AfkPassRuleTable& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        desc_(arena, from.desc_) {}
+        desc_(arena, from.desc_),
+        bonus_frame_key_(arena, from.bonus_frame_key_),
+        plan_name_(arena, from.plan_name_),
+        icon_key_(arena, from.icon_key_) {}
 
 AfkPassRuleTable::AfkPassRuleTable(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -483,9 +545,9 @@ AfkPassRuleTable::AfkPassRuleTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, remind_before_hours_) -
+           offsetof(Impl_, bonus_item_count_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::remind_before_hours_));
+               sizeof(Impl_::bonus_item_count_));
 
   // @@protoc_insertion_point(copy_constructor:AfkPassRuleTable)
 }
@@ -493,16 +555,19 @@ PROTOBUF_NDEBUG_INLINE AfkPassRuleTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        desc_(arena) {}
+        desc_(arena),
+        bonus_frame_key_(arena),
+        plan_name_(arena),
+        icon_key_(arena) {}
 
 inline void AfkPassRuleTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, remind_before_hours_) -
+           offsetof(Impl_, bonus_item_count_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::remind_before_hours_));
+               sizeof(Impl_::bonus_item_count_));
 }
 AfkPassRuleTable::~AfkPassRuleTable() {
   // @@protoc_insertion_point(destructor:AfkPassRuleTable)
@@ -516,6 +581,9 @@ inline void AfkPassRuleTable::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.desc_.Destroy();
+  this_._impl_.bonus_frame_key_.Destroy();
+  this_._impl_.plan_name_.Destroy();
+  this_._impl_.icon_key_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -553,13 +621,29 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.desc_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.desc_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.bonus_frame_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.plan_name_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      _impl_.icon_key_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.remind_before_hours_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.remind_before_hours_));
+        reinterpret_cast<char*>(&_impl_.price_currency_type_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.price_currency_type_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    ::memset(&_impl_.max_remaining_days_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.bonus_item_count_) -
+        reinterpret_cast<char*>(&_impl_.max_remaining_days_)) + sizeof(_impl_.bonus_item_count_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -585,7 +669,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -594,7 +678,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
   }
 
   // uint32 period_days = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_period_days() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -603,7 +687,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
   }
 
   // uint32 price_currency_type = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_price_currency_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -612,7 +696,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
   }
 
   // uint64 price = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_price() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -621,7 +705,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
   }
 
   // uint32 max_remaining_days = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_max_remaining_days() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -630,7 +714,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
   }
 
   // uint32 remind_before_hours = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
     if (this_._internal_remind_before_hours() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -645,6 +729,54 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassRuleTable.desc");
       target = stream->WriteStringMaybeAliased(7, _s, target);
+    }
+  }
+
+  // uint32 bonus_item_id = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_bonus_item_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_bonus_item_id(), target);
+    }
+  }
+
+  // uint32 bonus_item_count = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_bonus_item_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_bonus_item_count(), target);
+    }
+  }
+
+  // string bonus_frame_key = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_bonus_frame_key().empty()) {
+      const ::std::string& _s = this_._internal_bonus_frame_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassRuleTable.bonus_frame_key");
+      target = stream->WriteStringMaybeAliased(10, _s, target);
+    }
+  }
+
+  // string plan_name = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (!this_._internal_plan_name().empty()) {
+      const ::std::string& _s = this_._internal_plan_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassRuleTable.plan_name");
+      target = stream->WriteStringMaybeAliased(11, _s, target);
+    }
+  }
+
+  // string icon_key = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (!this_._internal_icon_key().empty()) {
+      const ::std::string& _s = this_._internal_icon_key();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AfkPassRuleTable.icon_key");
+      target = stream->WriteStringMaybeAliased(12, _s, target);
     }
   }
 
@@ -673,7 +805,7 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string desc = 7;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_desc().empty()) {
@@ -681,46 +813,83 @@ PROTOBUF_NOINLINE void AfkPassRuleTable::Clear() {
                                         this_._internal_desc());
       }
     }
-    // uint32 id = 1;
+    // string bonus_frame_key = 10;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_bonus_frame_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_bonus_frame_key());
+      }
+    }
+    // string plan_name = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!this_._internal_plan_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_plan_name());
+      }
+    }
+    // string icon_key = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!this_._internal_icon_key().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_icon_key());
+      }
+    }
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 period_days = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_period_days() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_period_days());
       }
     }
     // uint64 price = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_price() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_price());
       }
     }
     // uint32 price_currency_type = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_price_currency_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_price_currency_type());
       }
     }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint32 max_remaining_days = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_max_remaining_days() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_remaining_days());
       }
     }
     // uint32 remind_before_hours = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (this_._internal_remind_before_hours() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_remind_before_hours());
+      }
+    }
+    // uint32 bonus_item_id = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_bonus_item_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bonus_item_id());
+      }
+    }
+    // uint32 bonus_item_count = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_bonus_item_count() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bonus_item_count());
       }
     }
   }
@@ -741,7 +910,7 @@ void AfkPassRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_desc().empty()) {
         _this->_internal_set_desc(from._internal_desc());
@@ -752,33 +921,72 @@ void AfkPassRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_bonus_frame_key().empty()) {
+        _this->_internal_set_bonus_frame_key(from._internal_bonus_frame_key());
+      } else {
+        if (_this->_impl_.bonus_frame_key_.IsDefault()) {
+          _this->_internal_set_bonus_frame_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (!from._internal_plan_name().empty()) {
+        _this->_internal_set_plan_name(from._internal_plan_name());
+      } else {
+        if (_this->_impl_.plan_name_.IsDefault()) {
+          _this->_internal_set_plan_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (!from._internal_icon_key().empty()) {
+        _this->_internal_set_icon_key(from._internal_icon_key());
+      } else {
+        if (_this->_impl_.icon_key_.IsDefault()) {
+          _this->_internal_set_icon_key("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_period_days() != 0) {
         _this->_impl_.period_days_ = from._impl_.period_days_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_price() != 0) {
         _this->_impl_.price_ = from._impl_.price_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_price_currency_type() != 0) {
         _this->_impl_.price_currency_type_ = from._impl_.price_currency_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_max_remaining_days() != 0) {
         _this->_impl_.max_remaining_days_ = from._impl_.max_remaining_days_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_remind_before_hours() != 0) {
         _this->_impl_.remind_before_hours_ = from._impl_.remind_before_hours_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_bonus_item_id() != 0) {
+        _this->_impl_.bonus_item_id_ = from._impl_.bonus_item_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_bonus_item_count() != 0) {
+        _this->_impl_.bonus_item_count_ = from._impl_.bonus_item_count_;
       }
     }
   }
@@ -802,9 +1010,12 @@ void AfkPassRuleTable::InternalSwap(AfkPassRuleTable* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.bonus_frame_key_, &other->_impl_.bonus_frame_key_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.plan_name_, &other->_impl_.plan_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.remind_before_hours_)
-      + sizeof(AfkPassRuleTable::_impl_.remind_before_hours_)
+      PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.bonus_item_count_)
+      + sizeof(AfkPassRuleTable::_impl_.bonus_item_count_)
       - PROTOBUF_FIELD_OFFSET(AfkPassRuleTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

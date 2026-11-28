@@ -22,7 +22,7 @@ public static partial class TravelpassseasonTableReflection {
   static TravelpassseasonTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "Chx0cmF2ZWxwYXNzc2Vhc29uX3RhYmxlLnByb3RvIuwCChVUcmF2ZWxQYXNz",
+          "Chx0cmF2ZWxwYXNzc2Vhc29uX3RhYmxlLnByb3RvIpUDChVUcmF2ZWxQYXNz",
           "U2Vhc29uVGFibGUSCgoCaWQYASABKA0SDwoHZW5hYmxlZBgCIAEoDRIMCgRu",
           "YW1lGAMgASgJEhMKC2Rlc2NyaXB0aW9uGAQgASgJEhAKCGljb25fa2V5GAUg",
           "ASgJEhgKEGJhbm5lcl9hc3NldF9rZXkYBiABKAkSFAoMc3RhcnRzX2F0X21z",
@@ -30,15 +30,16 @@ public static partial class TravelpassseasonTableReflection {
           "DRIWCg5wdmVfd2luX3BvaW50cxgKIAEoDRIeChZoYXJkX29yX3B2cF93aW5f",
           "cG9pbnRzGAsgASgNEiIKGnB2cF9xdWFsaWZpZWRfb3RoZXJfcG9pbnRzGAwg",
           "ASgNEh0KFXByZW1pdW1fY3VycmVuY3lfdHlwZRgNIAEoDRIVCg1wcmVtaXVt",
-          "X3ByaWNlGA4gASgEEhcKD2NvbmZpZ19yZXZpc2lvbhgPIAEoDSJBChlUcmF2",
-          "ZWxQYXNzU2Vhc29uVGFibGVEYXRhEiQKBGRhdGEYASADKAsyFi5UcmF2ZWxQ",
-          "YXNzU2Vhc29uVGFibGVCRwoOY29tLmdhbWUudGFibGVCH1RyYXZlbFBhc3NT",
-          "ZWFzb25UYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZw",
-          "cm90bzM="));
+          "X3ByaWNlGA4gASgEEhcKD2NvbmZpZ19yZXZpc2lvbhgPIAEoDRISCgpzb3J0",
+          "X29yZGVyGBAgASgNEhMKC2lzX2FyY2hpdmVkGBEgASgNIkEKGVRyYXZlbFBh",
+          "c3NTZWFzb25UYWJsZURhdGESJAoEZGF0YRgBIAMoCzIWLlRyYXZlbFBhc3NT",
+          "ZWFzb25UYWJsZUJHCg5jb20uZ2FtZS50YWJsZUIfVHJhdmVsUGFzc1NlYXNv",
+          "blRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::TravelPassSeasonTable), global::TravelPassSeasonTable.Parser, new[]{ "Id", "Enabled", "Name", "Description", "IconKey", "BannerAssetKey", "StartsAtMs", "EndsAtMs", "MaxPoints", "PveWinPoints", "HardOrPvpWinPoints", "PvpQualifiedOtherPoints", "PremiumCurrencyType", "PremiumPrice", "ConfigRevision" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::TravelPassSeasonTable), global::TravelPassSeasonTable.Parser, new[]{ "Id", "Enabled", "Name", "Description", "IconKey", "BannerAssetKey", "StartsAtMs", "EndsAtMs", "MaxPoints", "PveWinPoints", "HardOrPvpWinPoints", "PvpQualifiedOtherPoints", "PremiumCurrencyType", "PremiumPrice", "ConfigRevision", "SortOrder", "IsArchived" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::TravelPassSeasonTableData), global::TravelPassSeasonTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -96,6 +97,8 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
     premiumCurrencyType_ = other.premiumCurrencyType_;
     premiumPrice_ = other.premiumPrice_;
     configRevision_ = other.configRevision_;
+    sortOrder_ = other.sortOrder_;
+    isArchived_ = other.isArchived_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -285,6 +288,30 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
     }
   }
 
+  /// <summary>Field number for the "sort_order" field.</summary>
+  public const int SortOrderFieldNumber = 16;
+  private uint sortOrder_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint SortOrder {
+    get { return sortOrder_; }
+    set {
+      sortOrder_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "is_archived" field.</summary>
+  public const int IsArchivedFieldNumber = 17;
+  private uint isArchived_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint IsArchived {
+    get { return isArchived_; }
+    set {
+      isArchived_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -315,6 +342,8 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
     if (PremiumCurrencyType != other.PremiumCurrencyType) return false;
     if (PremiumPrice != other.PremiumPrice) return false;
     if (ConfigRevision != other.ConfigRevision) return false;
+    if (SortOrder != other.SortOrder) return false;
+    if (IsArchived != other.IsArchived) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -337,6 +366,8 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
     if (PremiumCurrencyType != 0) hash ^= PremiumCurrencyType.GetHashCode();
     if (PremiumPrice != 0UL) hash ^= PremiumPrice.GetHashCode();
     if (ConfigRevision != 0) hash ^= ConfigRevision.GetHashCode();
+    if (SortOrder != 0) hash ^= SortOrder.GetHashCode();
+    if (IsArchived != 0) hash ^= IsArchived.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -415,6 +446,14 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
       output.WriteRawTag(120);
       output.WriteUInt32(ConfigRevision);
     }
+    if (SortOrder != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(SortOrder);
+    }
+    if (IsArchived != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(IsArchived);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -485,6 +524,14 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
       output.WriteRawTag(120);
       output.WriteUInt32(ConfigRevision);
     }
+    if (SortOrder != 0) {
+      output.WriteRawTag(128, 1);
+      output.WriteUInt32(SortOrder);
+    }
+    if (IsArchived != 0) {
+      output.WriteRawTag(136, 1);
+      output.WriteUInt32(IsArchived);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -539,6 +586,12 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
     }
     if (ConfigRevision != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(ConfigRevision);
+    }
+    if (SortOrder != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(SortOrder);
+    }
+    if (IsArchived != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(IsArchived);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -596,6 +649,12 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
     }
     if (other.ConfigRevision != 0) {
       ConfigRevision = other.ConfigRevision;
+    }
+    if (other.SortOrder != 0) {
+      SortOrder = other.SortOrder;
+    }
+    if (other.IsArchived != 0) {
+      IsArchived = other.IsArchived;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -676,6 +735,14 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
           ConfigRevision = input.ReadUInt32();
           break;
         }
+        case 128: {
+          SortOrder = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          IsArchived = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -753,6 +820,14 @@ public sealed partial class TravelPassSeasonTable : pb::IMessage<TravelPassSeaso
         }
         case 120: {
           ConfigRevision = input.ReadUInt32();
+          break;
+        }
+        case 128: {
+          SortOrder = input.ReadUInt32();
+          break;
+        }
+        case 136: {
+          IsArchived = input.ReadUInt32();
           break;
         }
       }

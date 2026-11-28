@@ -61,6 +61,10 @@ public:
 	static uint32_t Buy(entt::entity player, const ::BuyMysteryMerchantGoodsRequest &request, uint64_t nowMs,
 						::BuyMysteryMerchantGoodsResponse &response);
 
+	// B4 激励视频槽位 4：校验玩家本轮神秘商人个人换货资格（同线/在场/在交互距离内/本轮尚未换过货）。
+	static uint32_t ValidatePersonalShelfRefresh(entt::entity player, uint32_t expectedRoundIdLow32,
+												 uint64_t nowMs, uint64_t &outRoundId);
+
 	// 记录所在的 Redis 键 mystery_merchant:{ctl:<zone>}(HASH)。跨语言契约:写入方是
 	// go/scene_manager/internal/logic/mystery_merchant.go 的 mysteryMerchantKey,渲染出来的键逐字节相同,改一边必须改另一边;
 	// tag 由族表生成(docs/design/redis-cluster-all-domains-20261110.md §3)。

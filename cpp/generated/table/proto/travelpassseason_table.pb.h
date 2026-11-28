@@ -243,6 +243,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSeasonTable final : publi
     kPremiumPriceFieldNumber = 14,
     kPremiumCurrencyTypeFieldNumber = 13,
     kConfigRevisionFieldNumber = 15,
+    kSortOrderFieldNumber = 16,
+    kIsArchivedFieldNumber = 17,
   };
   // string name = 3;
   void clear_name() ;
@@ -414,12 +416,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSeasonTable final : publi
   void _internal_set_config_revision(::uint32_t value);
 
   public:
+  // uint32 sort_order = 16;
+  void clear_sort_order() ;
+  [[nodiscard]] ::uint32_t sort_order() const;
+  void set_sort_order(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_sort_order() const;
+  void _internal_set_sort_order(::uint32_t value);
+
+  public:
+  // uint32 is_archived = 17;
+  void clear_is_archived() ;
+  [[nodiscard]] ::uint32_t is_archived() const;
+  void set_is_archived(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_is_archived() const;
+  void _internal_set_is_archived(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TravelPassSeasonTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          0, 77,
+      ::google::protobuf::internal::TcParseTable<5, 17,
+                          0, 85,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -462,6 +484,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSeasonTable final : publi
     ::uint64_t premium_price_;
     ::uint32_t premium_currency_type_;
     ::uint32_t config_revision_;
+    ::uint32_t sort_order_;
+    ::uint32_t is_archived_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1214,6 +1238,54 @@ inline ::uint32_t TravelPassSeasonTable::_internal_config_revision() const {
 inline void TravelPassSeasonTable::_internal_set_config_revision(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_revision_ = value;
+}
+
+// uint32 sort_order = 16;
+inline void TravelPassSeasonTable::clear_sort_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_order_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+}
+inline ::uint32_t TravelPassSeasonTable::sort_order() const {
+  // @@protoc_insertion_point(field_get:TravelPassSeasonTable.sort_order)
+  return _internal_sort_order();
+}
+inline void TravelPassSeasonTable::set_sort_order(::uint32_t value) {
+  _internal_set_sort_order(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  // @@protoc_insertion_point(field_set:TravelPassSeasonTable.sort_order)
+}
+inline ::uint32_t TravelPassSeasonTable::_internal_sort_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sort_order_;
+}
+inline void TravelPassSeasonTable::_internal_set_sort_order(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_order_ = value;
+}
+
+// uint32 is_archived = 17;
+inline void TravelPassSeasonTable::clear_is_archived() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_archived_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint32_t TravelPassSeasonTable::is_archived() const {
+  // @@protoc_insertion_point(field_get:TravelPassSeasonTable.is_archived)
+  return _internal_is_archived();
+}
+inline void TravelPassSeasonTable::set_is_archived(::uint32_t value) {
+  _internal_set_is_archived(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:TravelPassSeasonTable.is_archived)
+}
+inline ::uint32_t TravelPassSeasonTable::_internal_is_archived() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_archived_;
+}
+inline void TravelPassSeasonTable::_internal_set_is_archived(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_archived_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -59,4 +59,34 @@ public final class AfkPassRuleTableComp {
         }
     }
 
+    public record Bonus_item_id(int value) {
+        public static Bonus_item_id from(AfkPassRuleTable row) {
+            return new Bonus_item_id(row.getBonusItemId());
+        }
+    }
+
+    public record Bonus_item_count(int value) {
+        public static Bonus_item_count from(AfkPassRuleTable row) {
+            return new Bonus_item_count(row.getBonusItemCount());
+        }
+    }
+
+    public record Bonus_frame_key(String value) {
+        public static Bonus_frame_key from(AfkPassRuleTable row) {
+            return new Bonus_frame_key(row.getBonusFrameKey());
+        }
+    }
+
+    public record Plan_name(String value) {
+        public static Plan_name from(AfkPassRuleTable row) {
+            return new Plan_name(row.getPlanName());
+        }
+    }
+
+    public record Icon_key(String value) {
+        public static Icon_key from(AfkPassRuleTable row) {
+            return new Icon_key(row.getIconKey());
+        }
+    }
+
 }

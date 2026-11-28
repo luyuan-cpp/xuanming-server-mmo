@@ -97,3 +97,76 @@ void SceneAppearanceClientPlayerHandler::EquipSkillVfx(entt::entity player,const
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneAppearanceClientPlayerHandler::BuyAppearanceSeriesBundle(entt::entity player,const ::BuyAppearanceSeriesBundleRequest* request,
+	::BuyAppearanceSeriesBundleResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::BuySeriesBundle(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAppearanceClientPlayerHandler::EquipShowcaseCosmetic(entt::entity player,const ::EquipShowcaseCosmeticRequest* request,
+	::EquipShowcaseCosmeticResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::EquipShowcaseCosmetic(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAppearanceClientPlayerHandler::CastCityCelebration(entt::entity player,const ::CastCityCelebrationRequest* request,
+	::CastCityCelebrationResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::CastCityCelebration(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAppearanceClientPlayerHandler::ClaimCityCelebrationGift(entt::entity player,const ::ClaimCityCelebrationGiftRequest* request,
+	::ClaimCityCelebrationGiftResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::ClaimCityCelebrationGift(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAppearanceClientPlayerHandler::NotifyCityCelebration(entt::entity player,const ::CityCelebrationNotify* request,
+	::Empty* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneAppearanceClientPlayerHandler::SendCosmeticGift(entt::entity player,const ::SendCosmeticGiftRequest* request,
+	::SendCosmeticGiftResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	if (const auto err = PlayerAppearanceSystem::SendCosmeticGift(player, *request, TimeSystem::NowSecondsUTC(), *response);
+		err != kSuccess)
+	{
+		response->mutable_error_message()->set_id(err);
+	}
+///<<< END WRITING YOUR CODE
+
+}

@@ -326,6 +326,23 @@ message TravelPassTierView {
   bool premium_can_claim = 22;
 }
 
+// 永不绝版手记书架的单期目录项（零战力纯展示与进度切换）。
+message TravelPassCatalogEntry {
+  uint32 pass_id = 1;
+  string name = 2;
+  string icon_key = 3;
+  string banner_asset_key = 4;
+  uint32 sort_order = 5;
+  bool is_archived = 6;
+  bool is_active = 7;
+  uint32 progress_points = 8;
+  uint32 max_points = 9;
+  bool premium_unlocked = 10;
+  uint32 claimable_count = 11;
+  bool open_for_progress = 12;
+  bool open_for_unlock = 13;
+}
+
 message TravelPassSnapshot {
   bool available = 1;
   string unavailable_reason = 2;
@@ -360,6 +377,10 @@ message TravelPassSnapshot {
   repeated string unlocked_cosmetic_keys = 30;
   string equipped_frame_key = 31;
   string equipped_title_key = 32;
+  // 当前生效的在研手记期次 ID（战斗结算游历印注入此期次）。
+  uint32 active_pass_id = 33;
+  // 全部可用及已参与的历史手记书架目录（按 sort_order 升序）。
+  repeated TravelPassCatalogEntry bookshelf = 34;
 }
 
 message GetTravelPassStateRequest {
@@ -415,6 +436,16 @@ message EquipTravelPassCosmeticResponse {
   TravelPassSnapshot snapshot = 2;
 }
 
+// 零消耗、无冷却切换当前在研游历手记期次（永不绝版书架制）。
+message SelectActiveTravelPassRequest {
+  uint32 pass_id = 1;
+}
+
+message SelectActiveTravelPassResponse {
+  TipInfoMessage error_message = 1;
+  TravelPassSnapshot snapshot = 2;
+}
+
 service SceneActivityClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -437,4 +468,6 @@ service SceneActivityClientPlayer {
   // 零消耗切换佩戴或卸下已解锁的游历纪念头像框/称谓（零战力纯外显）。
   rpc EquipTravelPassCosmetic (EquipTravelPassCosmeticRequest) returns (EquipTravelPassCosmeticResponse);
   // ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+  // 零消耗自由切换当前在研游历手记期次（永不绝版书架制，战斗结算点数自动注入所选期次）。
+  rpc SelectActiveTravelPass (SelectActiveTravelPassRequest) returns (SelectActiveTravelPassResponse);
 }

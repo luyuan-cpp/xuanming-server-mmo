@@ -490,8 +490,24 @@ type PlayerProfileComp struct {
 	EquippedSkillVfx map[uint32]uint32 `protobuf:"bytes,14,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// 玩家个人「允许局外人观战交流」偏好(仅控制观战期间能否交流，不禁止观战)。
 	SpectateChatPref ESpectateChatPreference `protobuf:"varint,15,opt,name=spectate_chat_pref,json=spectateChatPref,proto3,enum=ESpectateChatPreference" json:"spectate_chat_pref,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 仙途轻享卡「衣柜随心试穿」当前自然周起点（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	LightCardTrialWeekStartMs uint64 `protobuf:"varint,16,opt,name=light_card_trial_week_start_ms,json=lightCardTrialWeekStartMs,proto3" json:"light_card_trial_week_start_ms,omitempty"`
+	// 仙途轻享卡本周已消耗的随心试穿次数（每周至多 3 次，纯临时试穿不授永久权）。
+	LightCardTrialUsed uint32 `protobuf:"varint,17,opt,name=light_card_trial_used,json=lightCardTrialUsed,proto3" json:"light_card_trial_used,omitempty"`
+	// 已永久拥有的战斗排面与社交外观位图（CosmeticShowcase.id 经 cfg_bit_index 映射，低位在前，未知高位原样透传）。
+	ShowcaseCosmeticOwnedBits []byte `protobuf:"bytes,18,opt,name=showcase_cosmetic_owned_bits,json=showcaseCosmeticOwnedBits,proto3" json:"showcase_cosmetic_owned_bits,omitempty"`
+	// 当前穿戴的排面外观映射（slot_kind 1..5 -> CosmeticShowcase.id；0 或缺键表示默认）。
+	EquippedShowcaseCosmetics map[uint32]uint32 `protobuf:"bytes,19,rep,name=equipped_showcase_cosmetics,json=equippedShowcaseCosmetics,proto3" json:"equipped_showcase_cosmetics,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	// 全城同乐绑定银两周上限账本（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	CelebrationWeekStartMs uint64 `protobuf:"varint,20,opt,name=celebration_week_start_ms,json=celebrationWeekStartMs,proto3" json:"celebration_week_start_ms,omitempty"`
+	// 本周通过全城同乐已领取的绑定银两累计（硬封顶 3000，仅 CURRENCY_TYPE_BIND_GOLD=3）。
+	CelebrationBindGoldClaimed uint32 `protobuf:"varint,21,opt,name=celebration_bind_gold_claimed,json=celebrationBindGoldClaimed,proto3" json:"celebration_bind_gold_claimed,omitempty"`
+	// 好友纯外观/手记赠礼周频控账本（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	CosmeticGiftWeekStartMs uint64 `protobuf:"varint,22,opt,name=cosmetic_gift_week_start_ms,json=cosmeticGiftWeekStartMs,proto3" json:"cosmetic_gift_week_start_ms,omitempty"`
+	// 本周已送出的外观/手记赠礼笔数（每周至多 5 笔）。
+	CosmeticGiftSentCount uint32 `protobuf:"varint,23,opt,name=cosmetic_gift_sent_count,json=cosmeticGiftSentCount,proto3" json:"cosmetic_gift_sent_count,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *PlayerProfileComp) Reset() {
@@ -627,6 +643,62 @@ func (x *PlayerProfileComp) GetSpectateChatPref() ESpectateChatPreference {
 		return x.SpectateChatPref
 	}
 	return ESpectateChatPreference_SPECTATE_CHAT_PREF_UNSPECIFIED
+}
+
+func (x *PlayerProfileComp) GetLightCardTrialWeekStartMs() uint64 {
+	if x != nil {
+		return x.LightCardTrialWeekStartMs
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetLightCardTrialUsed() uint32 {
+	if x != nil {
+		return x.LightCardTrialUsed
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetShowcaseCosmeticOwnedBits() []byte {
+	if x != nil {
+		return x.ShowcaseCosmeticOwnedBits
+	}
+	return nil
+}
+
+func (x *PlayerProfileComp) GetEquippedShowcaseCosmetics() map[uint32]uint32 {
+	if x != nil {
+		return x.EquippedShowcaseCosmetics
+	}
+	return nil
+}
+
+func (x *PlayerProfileComp) GetCelebrationWeekStartMs() uint64 {
+	if x != nil {
+		return x.CelebrationWeekStartMs
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetCelebrationBindGoldClaimed() uint32 {
+	if x != nil {
+		return x.CelebrationBindGoldClaimed
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetCosmeticGiftWeekStartMs() uint64 {
+	if x != nil {
+		return x.CosmeticGiftWeekStartMs
+	}
+	return 0
+}
+
+func (x *PlayerProfileComp) GetCosmeticGiftSentCount() uint32 {
+	if x != nil {
+		return x.CosmeticGiftSentCount
+	}
+	return 0
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:
@@ -811,7 +883,7 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	" \x01(\rR\x14hostedRecapItemCount\x127\n" +
 	"\x18hosted_recap_pending_ack\x18\v \x01(\bR\x15hostedRecapPendingAck\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"\x9c\x06\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"\x89\v\n" +
 	"\x11PlayerProfileComp\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x12\x16\n" +
@@ -830,8 +902,19 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x17pet_cosmetic_owned_bits\x18\f \x01(\fR\x14petCosmeticOwnedBits\x12/\n" +
 	"\x14skill_vfx_owned_bits\x18\r \x01(\fR\x11skillVfxOwnedBits\x12V\n" +
 	"\x12equipped_skill_vfx\x18\x0e \x03(\v2(.PlayerProfileComp.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12F\n" +
-	"\x12spectate_chat_pref\x18\x0f \x01(\x0e2\x18.eSpectateChatPreferenceR\x10spectateChatPref\x1aC\n" +
+	"\x12spectate_chat_pref\x18\x0f \x01(\x0e2\x18.eSpectateChatPreferenceR\x10spectateChatPref\x12A\n" +
+	"\x1elight_card_trial_week_start_ms\x18\x10 \x01(\x04R\x19lightCardTrialWeekStartMs\x121\n" +
+	"\x15light_card_trial_used\x18\x11 \x01(\rR\x12lightCardTrialUsed\x12?\n" +
+	"\x1cshowcase_cosmetic_owned_bits\x18\x12 \x01(\fR\x19showcaseCosmeticOwnedBits\x12q\n" +
+	"\x1bequipped_showcase_cosmetics\x18\x13 \x03(\v21.PlayerProfileComp.EquippedShowcaseCosmeticsEntryR\x19equippedShowcaseCosmetics\x129\n" +
+	"\x19celebration_week_start_ms\x18\x14 \x01(\x04R\x16celebrationWeekStartMs\x12A\n" +
+	"\x1dcelebration_bind_gold_claimed\x18\x15 \x01(\rR\x1acelebrationBindGoldClaimed\x12<\n" +
+	"\x1bcosmetic_gift_week_start_ms\x18\x16 \x01(\x04R\x17cosmeticGiftWeekStartMs\x127\n" +
+	"\x18cosmetic_gift_sent_count\x18\x17 \x01(\rR\x15cosmeticGiftSentCount\x1aC\n" +
 	"\x15EquippedSkillVfxEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aL\n" +
+	"\x1eEquippedShowcaseCosmeticsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaf\x01\n" +
 	"\x0ePlayerRenameOp\x12\x10\n" +
@@ -865,7 +948,7 @@ func file_proto_common_component_player_comp_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_common_component_player_comp_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(ESpectateChatPreference)(0),  // 0: eSpectateChatPreference
 	(*NormalLogin)(nil),           // 1: NormalLogin
@@ -879,16 +962,18 @@ var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*PlayerRenameOp)(nil),        // 9: PlayerRenameOp
 	(*PlayerStressTestProbe)(nil), // 10: PlayerStressTestProbe
 	nil,                           // 11: PlayerProfileComp.EquippedSkillVfxEntry
+	nil,                           // 12: PlayerProfileComp.EquippedShowcaseCosmeticsEntry
 }
 var file_proto_common_component_player_comp_proto_depIdxs = []int32{
 	9,  // 0: PlayerProfileComp.rename_op:type_name -> PlayerRenameOp
 	11, // 1: PlayerProfileComp.equipped_skill_vfx:type_name -> PlayerProfileComp.EquippedSkillVfxEntry
 	0,  // 2: PlayerProfileComp.spectate_chat_pref:type_name -> eSpectateChatPreference
-	3,  // [3:3] is the sub-list for method output_type
-	3,  // [3:3] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	12, // 3: PlayerProfileComp.equipped_showcase_cosmetics:type_name -> PlayerProfileComp.EquippedShowcaseCosmeticsEntry
+	4,  // [4:4] is the sub-list for method output_type
+	4,  // [4:4] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_comp_proto_init() }
@@ -902,7 +987,7 @@ func file_proto_common_component_player_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_comp_proto_rawDesc), len(file_proto_common_component_player_comp_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -50,6 +50,14 @@ struct AppearanceSeriesEpilogue_bodyComp {
     std::string_view value;
 };
 
+struct AppearanceSeriesBundle_discount_bpsComp {
+    uint32_t value;
+};
+
+struct AppearanceSeriesUnit_price_diamondComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -81,4 +89,10 @@ inline AppearanceSeriesEpilogue_titleComp MakeAppearanceSeriesEpilogue_titleComp
 }
 inline AppearanceSeriesEpilogue_bodyComp MakeAppearanceSeriesEpilogue_bodyComp(const AppearanceSeriesTable& row) {
     return { std::string_view(row.epilogue_body()) };
+}
+inline AppearanceSeriesBundle_discount_bpsComp MakeAppearanceSeriesBundle_discount_bpsComp(const AppearanceSeriesTable& row) {
+    return { row.bundle_discount_bps() };
+}
+inline AppearanceSeriesUnit_price_diamondComp MakeAppearanceSeriesUnit_price_diamondComp(const AppearanceSeriesTable& row) {
+    return { row.unit_price_diamond() };
 }

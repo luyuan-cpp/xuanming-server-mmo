@@ -45,17 +45,18 @@ public final class RewardedAdSlotTableOuterClass extends com.google.protobuf.Gen
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\032rewardedadslot_table.proto\"\372\001\n\023Rewarde" +
+      "\n\032rewardedadslot_table.proto\"\217\002\n\023Rewarde" +
       "dAdSlotTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030\002 \001(" +
       "\r\022\021\n\tmin_level\030\003 \001(\r\022\023\n\013daily_limit\030\004 \001(" +
       "\r\022\024\n\014cooldown_sec\030\005 \001(\r\022\025\n\rmin_watch_sec" +
       "\030\006 \001(\r\022\027\n\017session_ttl_sec\030\007 \001(\r\022\025\n\rcurre" +
       "ncy_type\030\010 \001(\r\022\025\n\rreward_amount\030\t \001(\004\022\023\n" +
       "\013require_ssv\030\n \001(\r\022\025\n\rplatform_mask\030\013 \001(" +
-      "\r\"=\n\027RewardedAdSlotTableData\022\"\n\004data\030\001 \003" +
-      "(\0132\024.RewardedAdSlotTableBE\n\016com.game.tab" +
-      "leB\035RewardedAdSlotTableOuterClassP\001Z\022gen" +
-      "erated/pb/tableb\006proto3"
+      "\r\022\023\n\013reward_kind\030\014 \001(\r\"=\n\027RewardedAdSlot" +
+      "TableData\022\"\n\004data\030\001 \003(\0132\024.RewardedAdSlot" +
+      "TableBE\n\016com.game.tableB\035RewardedAdSlotT" +
+      "ableOuterClassP\001Z\022generated/pb/tableb\006pr" +
+      "oto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -66,7 +67,7 @@ public final class RewardedAdSlotTableOuterClass extends com.google.protobuf.Gen
     internal_static_RewardedAdSlotTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_RewardedAdSlotTable_descriptor,
-        new java.lang.String[] { "Id", "Enabled", "MinLevel", "DailyLimit", "CooldownSec", "MinWatchSec", "SessionTtlSec", "CurrencyType", "RewardAmount", "RequireSsv", "PlatformMask", });
+        new java.lang.String[] { "Id", "Enabled", "MinLevel", "DailyLimit", "CooldownSec", "MinWatchSec", "SessionTtlSec", "CurrencyType", "RewardAmount", "RequireSsv", "PlatformMask", "RewardKind", });
     internal_static_RewardedAdSlotTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_RewardedAdSlotTableData_fieldAccessorTable = new

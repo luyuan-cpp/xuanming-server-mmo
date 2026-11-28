@@ -43,6 +43,8 @@ const (
 	BagError_kBagTemporaryItemNotFound      BagError = 6015
 	BagError_kBagTemporaryRetrieveBagFull   BagError = 6016
 	BagError_kBagTemporaryRetrieveBusy      BagError = 6017
+	BagError_kBagExpandMaxReached           BagError = 6018
+	BagError_kBagExpandPriceChanged         BagError = 6019
 )
 
 // Enum value maps for BagError.
@@ -67,6 +69,8 @@ var (
 		6015: "kBagTemporaryItemNotFound",
 		6016: "kBagTemporaryRetrieveBagFull",
 		6017: "kBagTemporaryRetrieveBusy",
+		6018: "kBagExpandMaxReached",
+		6019: "kBagExpandPriceChanged",
 	}
 	BagError_value = map[string]int32{
 		"kBag_errorOK":                   0,
@@ -88,6 +92,8 @@ var (
 		"kBagTemporaryItemNotFound":      6015,
 		"kBagTemporaryRetrieveBagFull":   6016,
 		"kBagTemporaryRetrieveBusy":      6017,
+		"kBagExpandMaxReached":           6018,
+		"kBagExpandPriceChanged":         6019,
 	}
 )
 
@@ -122,7 +128,7 @@ var File_bag_error_tip_proto protoreflect.FileDescriptor
 
 const file_bag_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x13bag_error_tip.proto*\xa3\x04\n" +
+	"\x13bag_error_tip.proto*\xdb\x04\n" +
 	"\tbag_error\x12\x10\n" +
 	"\fkBag_errorOK\x10\x00\x12\x1b\n" +
 	"\x16kBagDeleteItemFindGuid\x10\xf0.\x12!\n" +
@@ -142,7 +148,9 @@ const file_bag_error_tip_proto_rawDesc = "" +
 	"\x18kBagInsufficientBagSpace\x10\xfe.\x12\x1e\n" +
 	"\x19kBagTemporaryItemNotFound\x10\xff.\x12!\n" +
 	"\x1ckBagTemporaryRetrieveBagFull\x10\x80/\x12\x1e\n" +
-	"\x19kBagTemporaryRetrieveBusy\x10\x81/B$\n" +
+	"\x19kBagTemporaryRetrieveBusy\x10\x81/\x12\x19\n" +
+	"\x14kBagExpandMaxReached\x10\x82/\x12\x1b\n" +
+	"\x16kBagExpandPriceChanged\x10\x83/B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

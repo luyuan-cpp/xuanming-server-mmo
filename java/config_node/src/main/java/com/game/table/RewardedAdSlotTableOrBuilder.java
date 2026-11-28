@@ -75,4 +75,10 @@ public interface RewardedAdSlotTableOrBuilder extends
    * @return The platformMask.
    */
   int getPlatformMask();
+
+  /**
+   * <code>uint32 reward_kind = 12;</code>
+   * @return The rewardKind.
+   */
+  int getRewardKind();
 }

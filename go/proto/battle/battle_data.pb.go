@@ -1112,8 +1112,12 @@ type BattlePlayerSnapshot struct {
 	MinorPlayDeadlineMs uint64 `protobuf:"varint,33,opt,name=minor_play_deadline_ms,json=minorPlayDeadlineMs,proto3" json:"minor_play_deadline_ms,omitempty"`
 	// 玩家个人「允许局外人观战交流」偏好（由 scene 在 PrepareBattle 从 PlayerProfileComp 注入，供 match 建房冻结）。
 	SpectateChatPref component.ESpectateChatPreference `protobuf:"varint,34,opt,name=spectate_chat_pref,json=spectateChatPref,proto3,enum=ESpectateChatPreference" json:"spectate_chat_pref,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 玩家权威穿戴的脚底五行阵纹外观 ID（CosmeticShowcase.id, slot_kind=1; 0=默认，纯视觉零数值）。
+	FormationSkinId uint32 `protobuf:"varint,35,opt,name=formation_skin_id,json=formationSkinId,proto3" json:"formation_skin_id,omitempty"`
+	// 玩家权威穿戴的擂台/会武入场与胜利演出横幅 ID（CosmeticShowcase.id, slot_kind=2; 0=默认，纯视觉零数值）。
+	EntranceVictorySkinId uint32 `protobuf:"varint,36,opt,name=entrance_victory_skin_id,json=entranceVictorySkinId,proto3" json:"entrance_victory_skin_id,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -1384,6 +1388,20 @@ func (x *BattlePlayerSnapshot) GetSpectateChatPref() component.ESpectateChatPref
 	return component.ESpectateChatPreference(0)
 }
 
+func (x *BattlePlayerSnapshot) GetFormationSkinId() uint32 {
+	if x != nil {
+		return x.FormationSkinId
+	}
+	return 0
+}
+
+func (x *BattlePlayerSnapshot) GetEntranceVictorySkinId() uint32 {
+	if x != nil {
+		return x.EntranceVictorySkinId
+	}
+	return 0
+}
+
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
 // 属性口径与玩家快照逐项对齐:base_attributes 带 speed(出手序)与当前 HP/MP,
 // max_* 与物伤/法伤/防御来自 PetSystem 现算的二级属性。
@@ -1605,29 +1623,31 @@ type BattleActorState struct {
 	// 下发给客户端的状态快照里会被清空,不暴露对手的装备概率。
 	Combat *component.CombatAttributes `protobuf:"bytes,27,opt,name=combat,proto3" json:"combat,omitempty"`
 	// 本局职业技能生效等级(来自快照 skill_ranks,引擎复核后的值;怪物 / 宝宝为空)。
-	SkillRanks           map[uint32]uint32                `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	CapturePetTableId    uint32                           `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
-	CapturedByPlayerId   uint64                           `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
-	CaptureMinLevel      uint32                           `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
-	AbilityUseCounts     map[uint32]uint32                `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
-	RuntimeSkills        []uint32                         `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
-	WithdrawUntilRound   uint32                           `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
-	RoundEffectUsage     map[uint32]uint64                `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
-	EquipmentEffects     *component.EquipmentEffects      `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
-	ArtifactStates       []*BattleArtifactState           `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
-	EntryMaxHealth       uint64                           `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
-	EntryMaxMana         uint64                           `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
-	PetCultivation       *component.PetCultivationEffects `protobuf:"bytes,41,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"`                                                                                     // 宝宝独立条目贡献，开局快照冻结。
-	SupportEffects       *component.SupportEffectSummary  `protobuf:"bytes,40,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"`                                                                                     // 仅本人可见；来源及中立预览由本轮真实状态生成。
-	CompetitiveTemporary bool                             `protobuf:"varint,42,opt,name=competitive_temporary,json=competitiveTemporary,proto3" json:"competitive_temporary,omitempty"`                                                                  // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
-	IsBoss               bool                             `protobuf:"varint,43,opt,name=is_boss,json=isBoss,proto3" json:"is_boss,omitempty"`                                                                                                            // true = 首领单位（来自 MonsterTable.is_boss）；不可被复制技能选中，客户端选目标阶段置灰。
-	SeasonSealState      *BattleArtifactState             `protobuf:"bytes,44,opt,name=season_seal_state,json=seasonSealState,proto3" json:"season_seal_state,omitempty"`                                                                                // 单槽赛季印的局内次数状态（不占用永久法宝 item_id 列表，下发客户端前清除）。
-	ChargingSkillId      uint32                           `protobuf:"varint,45,opt,name=charging_skill_id,json=chargingSkillId,proto3" json:"charging_skill_id,omitempty"`                                                                               // 非 0 表示当前处于明牌蓄力状态（如 E01/E02），下回合正常行动自动释放；对敌我双方均可见。
-	PetCosmeticArtKey    string                           `protobuf:"bytes,46,opt,name=pet_cosmetic_art_key,json=petCosmeticArtKey,proto3" json:"pet_cosmetic_art_key,omitempty"`                                                                        // 仅灵宠有效：生效幻化外观客户端资源键（空串 = 原形，缺图回退原形）。
-	EquippedSkillVfx     map[uint32]uint32                `protobuf:"bytes,47,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 仅玩家有效：生效技能特效外观映射（skill_table_id -> SkillVfxCosmetic.id）。
-	WinStreak            uint32                           `protobuf:"varint,48,opt,name=win_streak,json=winStreak,proto3" json:"win_streak,omitempty"`                                                                                                   // 正式排位开局前本季连胜数（>=3 时展示「连胜势 ×N」并供终局破势终结判定，非排位/未达 3 为 0）。
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	SkillRanks            map[uint32]uint32                `protobuf:"bytes,28,rep,name=skill_ranks,json=skillRanks,proto3" json:"skill_ranks,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	CapturePetTableId     uint32                           `protobuf:"varint,29,opt,name=capture_pet_table_id,json=capturePetTableId,proto3" json:"capture_pet_table_id,omitempty"`    // 仅可捕捉的普通野怪填写，0表示不可捕捉。
+	CapturedByPlayerId    uint64                           `protobuf:"varint,30,opt,name=captured_by_player_id,json=capturedByPlayerId,proto3" json:"captured_by_player_id,omitempty"` // 成功捕捉者；不计为击杀，不产生怪物掉落。
+	CaptureMinLevel       uint32                           `protobuf:"varint,31,opt,name=capture_min_level,json=captureMinLevel,proto3" json:"capture_min_level,omitempty"`
+	AbilityUseCounts      map[uint32]uint32                `protobuf:"bytes,32,rep,name=ability_use_counts,json=abilityUseCounts,proto3" json:"ability_use_counts,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 本场限次；技能表定义上限。
+	RuntimeSkills         []uint32                         `protobuf:"varint,33,rep,packed,name=runtime_skills,json=runtimeSkills,proto3" json:"runtime_skills,omitempty"`                                                                                // 非主动技能也保留，供被动、追击、开场查询。
+	WithdrawUntilRound    uint32                           `protobuf:"varint,34,opt,name=withdraw_until_round,json=withdrawUntilRound,proto3" json:"withdraw_until_round,omitempty"`                                                                      // 劝退返回边界；与阵亡分开。
+	RoundEffectUsage      map[uint32]uint64                `protobuf:"bytes,35,rep,name=round_effect_usage,json=roundEffectUsage,proto3" json:"round_effect_usage,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 来源技能的全体目标共享回合预算，下一回合清零。
+	EquipmentEffects      *component.EquipmentEffects      `protobuf:"bytes,36,opt,name=equipment_effects,json=equipmentEffects,proto3" json:"equipment_effects,omitempty"`
+	ArtifactStates        []*BattleArtifactState           `protobuf:"bytes,37,rep,name=artifact_states,json=artifactStates,proto3" json:"artifact_states,omitempty"`
+	EntryMaxHealth        uint64                           `protobuf:"varint,38,opt,name=entry_max_health,json=entryMaxHealth,proto3" json:"entry_max_health,omitempty"` // 入战上限，临时上限变化不放大法宝预算。
+	EntryMaxMana          uint64                           `protobuf:"varint,39,opt,name=entry_max_mana,json=entryMaxMana,proto3" json:"entry_max_mana,omitempty"`
+	PetCultivation        *component.PetCultivationEffects `protobuf:"bytes,41,opt,name=pet_cultivation,json=petCultivation,proto3" json:"pet_cultivation,omitempty"`                                                                                     // 宝宝独立条目贡献，开局快照冻结。
+	SupportEffects        *component.SupportEffectSummary  `protobuf:"bytes,40,opt,name=support_effects,json=supportEffects,proto3" json:"support_effects,omitempty"`                                                                                     // 仅本人可见；来源及中立预览由本轮真实状态生成。
+	CompetitiveTemporary  bool                             `protobuf:"varint,42,opt,name=competitive_temporary,json=competitiveTemporary,proto3" json:"competitive_temporary,omitempty"`                                                                  // true = 论剑排位临时竞技单位,结算不产出永久宠物回写项。
+	IsBoss                bool                             `protobuf:"varint,43,opt,name=is_boss,json=isBoss,proto3" json:"is_boss,omitempty"`                                                                                                            // true = 首领单位（来自 MonsterTable.is_boss）；不可被复制技能选中，客户端选目标阶段置灰。
+	SeasonSealState       *BattleArtifactState             `protobuf:"bytes,44,opt,name=season_seal_state,json=seasonSealState,proto3" json:"season_seal_state,omitempty"`                                                                                // 单槽赛季印的局内次数状态（不占用永久法宝 item_id 列表，下发客户端前清除）。
+	ChargingSkillId       uint32                           `protobuf:"varint,45,opt,name=charging_skill_id,json=chargingSkillId,proto3" json:"charging_skill_id,omitempty"`                                                                               // 非 0 表示当前处于明牌蓄力状态（如 E01/E02），下回合正常行动自动释放；对敌我双方均可见。
+	PetCosmeticArtKey     string                           `protobuf:"bytes,46,opt,name=pet_cosmetic_art_key,json=petCosmeticArtKey,proto3" json:"pet_cosmetic_art_key,omitempty"`                                                                        // 仅灵宠有效：生效幻化外观客户端资源键（空串 = 原形，缺图回退原形）。
+	EquippedSkillVfx      map[uint32]uint32                `protobuf:"bytes,47,rep,name=equipped_skill_vfx,json=equippedSkillVfx,proto3" json:"equipped_skill_vfx,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 仅玩家有效：生效技能特效外观映射（skill_table_id -> SkillVfxCosmetic.id）。
+	WinStreak             uint32                           `protobuf:"varint,48,opt,name=win_streak,json=winStreak,proto3" json:"win_streak,omitempty"`                                                                                                   // 正式排位开局前本季连胜数（>=3 时展示「连胜势 ×N」并供终局破势终结判定，非排位/未达 3 为 0）。
+	FormationSkinId       uint32                           `protobuf:"varint,49,opt,name=formation_skin_id,json=formationSkinId,proto3" json:"formation_skin_id,omitempty"`                                                                               // 仅玩家有效：权威脚底五行阵纹外观 ID（0=默认，敌我与观战可见，零数值）。
+	EntranceVictorySkinId uint32                           `protobuf:"varint,50,opt,name=entrance_victory_skin_id,json=entranceVictorySkinId,proto3" json:"entrance_victory_skin_id,omitempty"`                                                           // 仅玩家有效：权威入场与胜利演出横幅 ID（0=默认，零数值）。
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *BattleActorState) Reset() {
@@ -1992,6 +2012,20 @@ func (x *BattleActorState) GetEquippedSkillVfx() map[uint32]uint32 {
 func (x *BattleActorState) GetWinStreak() uint32 {
 	if x != nil {
 		return x.WinStreak
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetFormationSkinId() uint32 {
+	if x != nil {
+		return x.FormationSkinId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetEntranceVictorySkinId() uint32 {
+	if x != nil {
+		return x.EntranceVictorySkinId
 	}
 	return 0
 }
@@ -6226,7 +6260,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x17_outgoing_heal_snapshot\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\x80\r\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xe5\r\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -6266,7 +6300,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x12equipped_skill_vfx\x18\x1f \x03(\v2+.BattlePlayerSnapshot.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12&\n" +
 	"\x0fis_team_captain\x18  \x01(\bR\risTeamCaptain\x123\n" +
 	"\x16minor_play_deadline_ms\x18! \x01(\x04R\x13minorPlayDeadlineMs\x12F\n" +
-	"\x12spectate_chat_pref\x18\" \x01(\x0e2\x18.eSpectateChatPreferenceR\x10spectateChatPref\x1a=\n" +
+	"\x12spectate_chat_pref\x18\" \x01(\x0e2\x18.eSpectateChatPreferenceR\x10spectateChatPref\x12*\n" +
+	"\x11formation_skin_id\x18# \x01(\rR\x0fformationSkinId\x127\n" +
+	"\x18entrance_victory_skin_id\x18$ \x01(\rR\x15entranceVictorySkinId\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aC\n" +
@@ -6299,7 +6335,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x10cosmetic_art_key\x18\x12 \x01(\tR\x0ecosmeticArtKey\x1a=\n" +
 	"\x0fSkillRanksEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaf\x13\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x94\x14\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -6357,7 +6393,9 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x14pet_cosmetic_art_key\x18. \x01(\tR\x11petCosmeticArtKey\x12U\n" +
 	"\x12equipped_skill_vfx\x18/ \x03(\v2'.BattleActorState.EquippedSkillVfxEntryR\x10equippedSkillVfx\x12\x1d\n" +
 	"\n" +
-	"win_streak\x180 \x01(\rR\twinStreak\x1aF\n" +
+	"win_streak\x180 \x01(\rR\twinStreak\x12*\n" +
+	"\x11formation_skin_id\x181 \x01(\rR\x0fformationSkinId\x127\n" +
+	"\x18entrance_victory_skin_id\x182 \x01(\rR\x15entranceVictorySkinId\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a=\n" +

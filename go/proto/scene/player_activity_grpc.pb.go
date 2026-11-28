@@ -28,6 +28,7 @@ const (
 	SceneActivityClientPlayer_UnlockTravelPassPremium_FullMethodName     = "/SceneActivityClientPlayer/UnlockTravelPassPremium"
 	SceneActivityClientPlayer_ClaimTravelPassReward_FullMethodName       = "/SceneActivityClientPlayer/ClaimTravelPassReward"
 	SceneActivityClientPlayer_EquipTravelPassCosmetic_FullMethodName     = "/SceneActivityClientPlayer/EquipTravelPassCosmetic"
+	SceneActivityClientPlayer_SelectActiveTravelPass_FullMethodName      = "/SceneActivityClientPlayer/SelectActiveTravelPass"
 )
 
 // SceneActivityClientPlayerClient is the client API for SceneActivityClientPlayer service.
@@ -52,6 +53,9 @@ type SceneActivityClientPlayerClient interface {
 	ClaimTravelPassReward(ctx context.Context, in *ClaimTravelPassRewardRequest, opts ...grpc.CallOption) (*ClaimTravelPassRewardResponse, error)
 	// 零消耗切换佩戴或卸下已解锁的游历纪念头像框/称谓（零战力纯外显）。
 	EquipTravelPassCosmetic(ctx context.Context, in *EquipTravelPassCosmeticRequest, opts ...grpc.CallOption) (*EquipTravelPassCosmeticResponse, error)
+	// ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+	// 零消耗自由切换当前在研游历手记期次（永不绝版书架制，战斗结算点数自动注入所选期次）。
+	SelectActiveTravelPass(ctx context.Context, in *SelectActiveTravelPassRequest, opts ...grpc.CallOption) (*SelectActiveTravelPassResponse, error)
 }
 
 type sceneActivityClientPlayerClient struct {
@@ -152,6 +156,16 @@ func (c *sceneActivityClientPlayerClient) EquipTravelPassCosmetic(ctx context.Co
 	return out, nil
 }
 
+func (c *sceneActivityClientPlayerClient) SelectActiveTravelPass(ctx context.Context, in *SelectActiveTravelPassRequest, opts ...grpc.CallOption) (*SelectActiveTravelPassResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SelectActiveTravelPassResponse)
+	err := c.cc.Invoke(ctx, SceneActivityClientPlayer_SelectActiveTravelPass_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneActivityClientPlayerServer is the server API for SceneActivityClientPlayer service.
 // All implementations must embed UnimplementedSceneActivityClientPlayerServer
 // for forward compatibility.
@@ -174,6 +188,9 @@ type SceneActivityClientPlayerServer interface {
 	ClaimTravelPassReward(context.Context, *ClaimTravelPassRewardRequest) (*ClaimTravelPassRewardResponse, error)
 	// 零消耗切换佩戴或卸下已解锁的游历纪念头像框/称谓（零战力纯外显）。
 	EquipTravelPassCosmetic(context.Context, *EquipTravelPassCosmeticRequest) (*EquipTravelPassCosmeticResponse, error)
+	// ── 以下只许在末尾追加：生成的 CallMethod 按 method index 分发 ──
+	// 零消耗自由切换当前在研游历手记期次（永不绝版书架制，战斗结算点数自动注入所选期次）。
+	SelectActiveTravelPass(context.Context, *SelectActiveTravelPassRequest) (*SelectActiveTravelPassResponse, error)
 	mustEmbedUnimplementedSceneActivityClientPlayerServer()
 }
 
@@ -210,6 +227,9 @@ func (UnimplementedSceneActivityClientPlayerServer) ClaimTravelPassReward(contex
 }
 func (UnimplementedSceneActivityClientPlayerServer) EquipTravelPassCosmetic(context.Context, *EquipTravelPassCosmeticRequest) (*EquipTravelPassCosmeticResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EquipTravelPassCosmetic not implemented")
+}
+func (UnimplementedSceneActivityClientPlayerServer) SelectActiveTravelPass(context.Context, *SelectActiveTravelPassRequest) (*SelectActiveTravelPassResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SelectActiveTravelPass not implemented")
 }
 func (UnimplementedSceneActivityClientPlayerServer) mustEmbedUnimplementedSceneActivityClientPlayerServer() {
 }
@@ -395,6 +415,24 @@ func _SceneActivityClientPlayer_EquipTravelPassCosmetic_Handler(srv interface{},
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneActivityClientPlayer_SelectActiveTravelPass_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SelectActiveTravelPassRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneActivityClientPlayerServer).SelectActiveTravelPass(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneActivityClientPlayer_SelectActiveTravelPass_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneActivityClientPlayerServer).SelectActiveTravelPass(ctx, req.(*SelectActiveTravelPassRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneActivityClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneActivityClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -437,6 +475,10 @@ var SceneActivityClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EquipTravelPassCosmetic",
 			Handler:    _SceneActivityClientPlayer_EquipTravelPassCosmetic_Handler,
+		},
+		{
+			MethodName: "SelectActiveTravelPass",
+			Handler:    _SceneActivityClientPlayer_SelectActiveTravelPass_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

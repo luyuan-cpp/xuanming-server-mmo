@@ -58,6 +58,16 @@ inline void SetPackedBit(std::string& bits, std::size_t index)
     bits[index / 8] = static_cast<char>(static_cast<unsigned char>(bits[index / 8]) | (1u << (index % 8)));
 }
 
+inline void ClearPackedBit(std::string& bits, std::size_t index)
+{
+    if (index / 8 >= bits.size()) return;
+    bits[index / 8] = static_cast<char>(static_cast<unsigned char>(bits[index / 8]) & ~(1u << (index % 8)));
+    while (!bits.empty() && bits.back() == '\0')
+    {
+        bits.pop_back();
+    }
+}
+
 // Reward-decision result for a completed entry.
 enum class RewardAction : uint8_t
 {

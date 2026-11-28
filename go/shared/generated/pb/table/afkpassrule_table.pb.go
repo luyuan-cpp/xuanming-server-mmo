@@ -30,6 +30,11 @@ type AfkPassRuleTable struct {
 	MaxRemainingDays  uint32                 `protobuf:"varint,5,opt,name=max_remaining_days,json=maxRemainingDays,proto3" json:"max_remaining_days,omitempty"`
 	RemindBeforeHours uint32                 `protobuf:"varint,6,opt,name=remind_before_hours,json=remindBeforeHours,proto3" json:"remind_before_hours,omitempty"`
 	Desc              string                 `protobuf:"bytes,7,opt,name=desc,proto3" json:"desc,omitempty"`
+	BonusItemId       uint32                 `protobuf:"varint,8,opt,name=bonus_item_id,json=bonusItemId,proto3" json:"bonus_item_id,omitempty"`
+	BonusItemCount    uint32                 `protobuf:"varint,9,opt,name=bonus_item_count,json=bonusItemCount,proto3" json:"bonus_item_count,omitempty"`
+	BonusFrameKey     string                 `protobuf:"bytes,10,opt,name=bonus_frame_key,json=bonusFrameKey,proto3" json:"bonus_frame_key,omitempty"`
+	PlanName          string                 `protobuf:"bytes,11,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`
+	IconKey           string                 `protobuf:"bytes,12,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -113,6 +118,41 @@ func (x *AfkPassRuleTable) GetDesc() string {
 	return ""
 }
 
+func (x *AfkPassRuleTable) GetBonusItemId() uint32 {
+	if x != nil {
+		return x.BonusItemId
+	}
+	return 0
+}
+
+func (x *AfkPassRuleTable) GetBonusItemCount() uint32 {
+	if x != nil {
+		return x.BonusItemCount
+	}
+	return 0
+}
+
+func (x *AfkPassRuleTable) GetBonusFrameKey() string {
+	if x != nil {
+		return x.BonusFrameKey
+	}
+	return ""
+}
+
+func (x *AfkPassRuleTable) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
+func (x *AfkPassRuleTable) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
 type AfkPassRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*AfkPassRuleTable    `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -161,7 +201,7 @@ var File_afkpassrule_table_proto protoreflect.FileDescriptor
 
 const file_afkpassrule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x17afkpassrule_table.proto\"\xfb\x01\n" +
+	"\x17afkpassrule_table.proto\"\xa9\x03\n" +
 	"\x10AfkPassRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1f\n" +
 	"\vperiod_days\x18\x02 \x01(\rR\n" +
@@ -170,7 +210,13 @@ const file_afkpassrule_table_proto_rawDesc = "" +
 	"\x05price\x18\x04 \x01(\x04R\x05price\x12,\n" +
 	"\x12max_remaining_days\x18\x05 \x01(\rR\x10maxRemainingDays\x12.\n" +
 	"\x13remind_before_hours\x18\x06 \x01(\rR\x11remindBeforeHours\x12\x12\n" +
-	"\x04desc\x18\a \x01(\tR\x04desc\"=\n" +
+	"\x04desc\x18\a \x01(\tR\x04desc\x12\"\n" +
+	"\rbonus_item_id\x18\b \x01(\rR\vbonusItemId\x12(\n" +
+	"\x10bonus_item_count\x18\t \x01(\rR\x0ebonusItemCount\x12&\n" +
+	"\x0fbonus_frame_key\x18\n" +
+	" \x01(\tR\rbonusFrameKey\x12\x1b\n" +
+	"\tplan_name\x18\v \x01(\tR\bplanName\x12\x19\n" +
+	"\bicon_key\x18\f \x01(\tR\aiconKey\"=\n" +
 	"\x14AfkPassRuleTableData\x12%\n" +
 	"\x04data\x18\x01 \x03(\v2\x11.AfkPassRuleTableR\x04dataBB\n" +
 	"\x0ecom.game.tableB\x1aAfkPassRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

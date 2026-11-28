@@ -133,6 +133,17 @@ enum TransactionType : int {
   TX_JIANGHU_DUEL_FEE = 49,
   TX_JIANGHU_DUEL_REFUND = 50,
   TX_JIANGHU_CLEAR_DEFEAT_MARK = 51,
+  TX_APPEARANCE_SERIES_BUNDLE = 52,
+  TX_AFK_PASS_BONUS_GRANT = 53,
+  TX_SOCIAL_CELEBRATION_CAST = 54,
+  TX_SOCIAL_CELEBRATION_CLAIM = 55,
+  TX_COSMETIC_GIFT_SEND = 56,
+  TX_COSMETIC_GIFT_REFUND = 57,
+  TX_COSMETIC_GIFT_REVOKE = 58,
+  TX_BAG_EXPAND = 59,
+  TX_PET_SQUAD_SLOT_UNLOCK = 60,
+  TX_BUILD_BOOKMARK_EXPAND = 61,
+  TX_GUILD_EMBLEM_UNLOCK = 62,
   TransactionType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   TransactionType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -143,11 +154,11 @@ extern const uint32_t TransactionType_internal_data_[];
 inline constexpr TransactionType TransactionType_MIN =
     static_cast<TransactionType>(0);
 inline constexpr TransactionType TransactionType_MAX =
-    static_cast<TransactionType>(51);
+    static_cast<TransactionType>(62);
 [[nodiscard]] inline bool TransactionType_IsValid(int value) {
-  return 0 <= value && value <= 51;
+  return 0 <= value && value <= 62;
 }
-inline constexpr int TransactionType_ARRAYSIZE = 51 + 1;
+inline constexpr int TransactionType_ARRAYSIZE = 62 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 TransactionType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(TransactionType) {
@@ -162,7 +173,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& TransactionType_Name(TransactionType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<TransactionType_descriptor, 0, 51>(
+  return ::google::protobuf::internal::NameOfDenseEnum<TransactionType_descriptor, 0, 62>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool TransactionType_Parse(

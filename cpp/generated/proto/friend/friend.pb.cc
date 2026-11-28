@@ -2139,11 +2139,11 @@ constexpr BatchCheckSocialRelationsRequest::ParseTableT_ BatchCheckSocialRelatio
     {
       PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -2153,14 +2153,19 @@ constexpr BatchCheckSocialRelationsRequest::ParseTableT_ BatchCheckSocialRelatio
       ::_pbi::TcParser::GetTable<::friendpb::BatchCheckSocialRelationsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // repeated uint64 side_b_player_ids = 2;
-      {::_pbi::TcParser::FastV64P1,
-       {18, 1, 0,
-        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated uint64 side_a_player_ids = 1;
       {::_pbi::TcParser::FastV64P1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_)}},
+      // repeated uint64 side_b_player_ids = 2;
+      {::_pbi::TcParser::FastV64P1,
+       {18, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)}},
+      // int64 min_friend_duration_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BatchCheckSocialRelationsRequest, _impl_.min_friend_duration_ms_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.min_friend_duration_ms_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2168,6 +2173,8 @@ constexpr BatchCheckSocialRelationsRequest::ParseTableT_ BatchCheckSocialRelatio
       {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
       // repeated uint64 side_b_player_ids = 2;
       {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // int64 min_friend_duration_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(BatchCheckSocialRelationsRequest, _impl_.min_friend_duration_ms_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
     }},
     // no aux_entries
     {{
@@ -2191,7 +2198,8 @@ inline constexpr BatchCheckSocialRelationsRequest::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_)>()
          }
         ,
-        _side_b_player_ids_cached_byte_size_{0} {}
+        _side_b_player_ids_cached_byte_size_{0},
+        min_friend_duration_ms_{::int64_t{0}} {}
 
 template <typename>
 constexpr BatchCheckSocialRelationsRequest::BatchCheckSocialRelationsRequest(::_pbi::ConstantInitialized,
@@ -4495,11 +4503,13 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_a_player_ids_),
         PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.side_b_player_ids_),
+        PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsRequest, _impl_.min_friend_duration_ms_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::friendpb::BatchCheckSocialRelationsResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -4539,7 +4549,7 @@ static const ::_pbi::MigrationSchema
         {169, sizeof(::friendpb::RecommendFriendsResponse)},
         {180, sizeof(::friendpb::FriendEventS2C)},
         {189, sizeof(::friendpb::BatchCheckSocialRelationsRequest)},
-        {196, sizeof(::friendpb::BatchCheckSocialRelationsResponse)},
+        {198, sizeof(::friendpb::BatchCheckSocialRelationsResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -4631,45 +4641,46 @@ const char descriptor_table_protodef_proto_2ffriend_2ffriend_2eproto[] ABSL_ATTR
     "\022\023\n\013next_cursor\030\003 \001(\t\022\030\n\020online_director"
     "y\030\004 \001(\010\"b\n\016FriendEventS2C\022+\n\006reason\030\001 \001("
     "\0162\033.friendpb.FriendEventReason\022\024\n\014by_pla"
-    "yer_id\030\002 \001(\004\022\r\n\005ts_ms\030\003 \001(\003\"X\n BatchChec"
+    "yer_id\030\002 \001(\004\022\r\n\005ts_ms\030\003 \001(\003\"x\n BatchChec"
     "kSocialRelationsRequest\022\031\n\021side_a_player"
-    "_ids\030\001 \003(\004\022\031\n\021side_b_player_ids\030\002 \003(\004\"{\n"
-    "!BatchCheckSocialRelationsResponse\022&\n\rer"
-    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\rha"
-    "s_any_block\030\002 \001(\010\022\027\n\017all_are_friends\030\003 \001"
-    "(\010*\207\001\n\023FriendRequestStatus\022\032\n\026FRIEND_REQ"
-    "UEST_UNKNOWN\020\000\022\032\n\026FRIEND_REQUEST_PENDING"
-    "\020\001\022\033\n\027FRIEND_REQUEST_ACCEPTED\020\002\022\033\n\027FRIEN"
-    "D_REQUEST_REJECTED\020\003*\214\001\n\021FriendEventReas"
-    "on\022#\n\037FRIEND_EVENT_REASON_UNSPECIFIED\020\000\022"
-    "(\n$FRIEND_EVENT_REASON_REQUEST_RECEIVED\020"
-    "\001\022(\n$FRIEND_EVENT_REASON_REQUEST_ACCEPTE"
-    "D\020\0022\332\007\n\022ClientPlayerFriend\022D\n\tAddFriend\022"
-    "\032.friendpb.AddFriendRequest\032\033.friendpb.A"
-    "ddFriendResponse\022M\n\014AcceptFriend\022\035.frien"
-    "dpb.AcceptFriendRequest\032\036.friendpb.Accep"
-    "tFriendResponse\022M\n\014RejectFriend\022\035.friend"
-    "pb.RejectFriendRequest\032\036.friendpb.Reject"
-    "FriendResponse\022M\n\014RemoveFriend\022\035.friendp"
-    "b.RemoveFriendRequest\032\036.friendpb.RemoveF"
-    "riendResponse\022P\n\rGetFriendList\022\036.friendp"
-    "b.GetFriendListRequest\032\037.friendpb.GetFri"
-    "endListResponse\022_\n\022GetPendingRequests\022#."
-    "friendpb.GetPendingRequestsRequest\032$.fri"
-    "endpb.GetPendingRequestsResponse\0228\n\005Bloc"
-    "k\022\026.friendpb.BlockRequest\032\027.friendpb.Blo"
-    "ckResponse\022>\n\007Unblock\022\030.friendpb.Unblock"
-    "Request\032\031.friendpb.UnblockResponse\022G\n\nLi"
-    "stBlocks\022\033.friendpb.ListBlocksRequest\032\034."
-    "friendpb.ListBlocksResponse\022Y\n\020Recommend"
-    "Friends\022!.friendpb.RecommendFriendsReque"
-    "st\032\".friendpb.RecommendFriendsResponse\022<"
-    "\n\021NotifyFriendEvent\022\030.friendpb.FriendEve"
-    "ntS2C\032\006.Empty\"\005\210\231\310\001\002\022{\n\031BatchCheckSocial"
-    "Relations\022*.friendpb.BatchCheckSocialRel"
-    "ationsRequest\032+.friendpb.BatchCheckSocia"
-    "lRelationsResponse\"\005\210\231\310\001\003\032\005\210\250\303\001\001B\025Z\023frie"
-    "nd/proto/friendb\006proto3"
+    "_ids\030\001 \003(\004\022\031\n\021side_b_player_ids\030\002 \003(\004\022\036\n"
+    "\026min_friend_duration_ms\030\003 \001(\003\"{\n!BatchCh"
+    "eckSocialRelationsResponse\022&\n\rerror_mess"
+    "age\030\001 \001(\0132\017.TipInfoMessage\022\025\n\rhas_any_bl"
+    "ock\030\002 \001(\010\022\027\n\017all_are_friends\030\003 \001(\010*\207\001\n\023F"
+    "riendRequestStatus\022\032\n\026FRIEND_REQUEST_UNK"
+    "NOWN\020\000\022\032\n\026FRIEND_REQUEST_PENDING\020\001\022\033\n\027FR"
+    "IEND_REQUEST_ACCEPTED\020\002\022\033\n\027FRIEND_REQUES"
+    "T_REJECTED\020\003*\214\001\n\021FriendEventReason\022#\n\037FR"
+    "IEND_EVENT_REASON_UNSPECIFIED\020\000\022(\n$FRIEN"
+    "D_EVENT_REASON_REQUEST_RECEIVED\020\001\022(\n$FRI"
+    "END_EVENT_REASON_REQUEST_ACCEPTED\020\0022\332\007\n\022"
+    "ClientPlayerFriend\022D\n\tAddFriend\022\032.friend"
+    "pb.AddFriendRequest\032\033.friendpb.AddFriend"
+    "Response\022M\n\014AcceptFriend\022\035.friendpb.Acce"
+    "ptFriendRequest\032\036.friendpb.AcceptFriendR"
+    "esponse\022M\n\014RejectFriend\022\035.friendpb.Rejec"
+    "tFriendRequest\032\036.friendpb.RejectFriendRe"
+    "sponse\022M\n\014RemoveFriend\022\035.friendpb.Remove"
+    "FriendRequest\032\036.friendpb.RemoveFriendRes"
+    "ponse\022P\n\rGetFriendList\022\036.friendpb.GetFri"
+    "endListRequest\032\037.friendpb.GetFriendListR"
+    "esponse\022_\n\022GetPendingRequests\022#.friendpb"
+    ".GetPendingRequestsRequest\032$.friendpb.Ge"
+    "tPendingRequestsResponse\0228\n\005Block\022\026.frie"
+    "ndpb.BlockRequest\032\027.friendpb.BlockRespon"
+    "se\022>\n\007Unblock\022\030.friendpb.UnblockRequest\032"
+    "\031.friendpb.UnblockResponse\022G\n\nListBlocks"
+    "\022\033.friendpb.ListBlocksRequest\032\034.friendpb"
+    ".ListBlocksResponse\022Y\n\020RecommendFriends\022"
+    "!.friendpb.RecommendFriendsRequest\032\".fri"
+    "endpb.RecommendFriendsResponse\022<\n\021Notify"
+    "FriendEvent\022\030.friendpb.FriendEventS2C\032\006."
+    "Empty\"\005\210\231\310\001\002\022{\n\031BatchCheckSocialRelation"
+    "s\022*.friendpb.BatchCheckSocialRelationsRe"
+    "quest\032+.friendpb.BatchCheckSocialRelatio"
+    "nsResponse\"\005\210\231\310\001\003\032\005\210\250\303\001\001B\025Z\023friend/proto"
+    "/friendb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ffriend_2ffriend_2eproto_deps[3] = {
@@ -4681,7 +4692,7 @@ static ::absl::once_flag descriptor_table_proto_2ffriend_2ffriend_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ffriend_2ffriend_2eproto = {
     false,
     false,
-    3863,
+    3895,
     descriptor_table_protodef_proto_2ffriend_2ffriend_2eproto,
     "proto/friend/friend.proto",
     &descriptor_table_proto_2ffriend_2ffriend_2eproto_once,
@@ -10633,6 +10644,7 @@ BatchCheckSocialRelationsRequest::BatchCheckSocialRelationsRequest(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.min_friend_duration_ms_ = from._impl_.min_friend_duration_ms_;
 
   // @@protoc_insertion_point(copy_constructor:friendpb.BatchCheckSocialRelationsRequest)
 }
@@ -10655,6 +10667,7 @@ PROTOBUF_NDEBUG_INLINE BatchCheckSocialRelationsRequest::Impl_::Impl_(
 
 inline void BatchCheckSocialRelationsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.min_friend_duration_ms_ = {};
 }
 BatchCheckSocialRelationsRequest::~BatchCheckSocialRelationsRequest() {
   // @@protoc_insertion_point(destructor:friendpb.BatchCheckSocialRelationsRequest)
@@ -10712,6 +10725,7 @@ PROTOBUF_NOINLINE void BatchCheckSocialRelationsRequest::Clear() {
       _impl_.side_b_player_ids_.Clear();
     }
   }
+  _impl_.min_friend_duration_ms_ = ::int64_t{0};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -10757,6 +10771,15 @@ PROTOBUF_NOINLINE void BatchCheckSocialRelationsRequest::Clear() {
     }
   }
 
+  // int64 min_friend_duration_ms = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_min_friend_duration_ms() != 0) {
+      target =
+          ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<3>(
+              stream, this_._internal_min_friend_duration_ms(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -10782,7 +10805,7 @@ PROTOBUF_NOINLINE void BatchCheckSocialRelationsRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // repeated uint64 side_a_player_ids = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -10796,6 +10819,13 @@ PROTOBUF_NOINLINE void BatchCheckSocialRelationsRequest::Clear() {
           ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
               this_._internal_side_b_player_ids(), 1,
               this_._impl_._side_b_player_ids_cached_byte_size_);
+    }
+    // int64 min_friend_duration_ms = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_min_friend_duration_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
+            this_._internal_min_friend_duration_ms());
+      }
     }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
@@ -10815,12 +10845,17 @@ void BatchCheckSocialRelationsRequest::MergeImpl(::google::protobuf::MessageLite
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_side_a_player_ids()->MergeFrom(from._internal_side_a_player_ids());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       _this->_internal_mutable_side_b_player_ids()->MergeFrom(from._internal_side_b_player_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_min_friend_duration_ms() != 0) {
+        _this->_impl_.min_friend_duration_ms_ = from._impl_.min_friend_duration_ms_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -10842,6 +10877,7 @@ void BatchCheckSocialRelationsRequest::InternalSwap(BatchCheckSocialRelationsReq
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.side_a_player_ids_.InternalSwap(&other->_impl_.side_a_player_ids_);
   _impl_.side_b_player_ids_.InternalSwap(&other->_impl_.side_b_player_ids_);
+  swap(_impl_.min_friend_duration_ms_, other->_impl_.min_friend_duration_ms_);
 }
 
 ::google::protobuf::Metadata BatchCheckSocialRelationsRequest::GetMetadata() const {

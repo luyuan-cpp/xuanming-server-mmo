@@ -306,23 +306,23 @@ void RedisHSetReputationBuyer(uint64_t masterId, const std::string& buyerName) {
     }
 }
 
-// 热榜桶:<id>:o 单数、<id>:s 极品数。三条命令同键同槽,按发出顺序执行;过期每写一次就续,桶最后一次写入后 25 小时消失。
+// 热榜桶写入:<id>:o 加单数、有极品时 <id>:s 加极品数,再给桶续 25 小时过期,同一段脚本里执行。加数与续期
+// 分开发时,两条之间断连会留下没设过期、永不回收的桶;合进一次执行就没有这个窗口。Python 版 ADD_PROXY_HOT_LUA 同文。
+constexpr char kAddProxyHotLua[] =
+    "local k=KEYS[1] local p=ARGV[1] "
+    "redis.call('HINCRBY',k,p..':o',ARGV[2]) "
+    "if tonumber(ARGV[3])>0 then redis.call('HINCRBY',k,p..':s',ARGV[3]) end "
+    "redis.call('EXPIRE',k,ARGV[4]) "
+    "return 1";
+
 void RedisHIncrByHotBucket(uint64_t masterId, uint64_t hourIndex, uint32_t orders, uint32_t supreme) {
     if (!tlsControlRedis.connected() || masterId == 0 || orders == 0) return;
     const std::string key = PlayerCraftSystem::ProxyHotBucketKey(GetZoneId(), hourIndex);
     const std::string master = std::to_string(masterId);
-    int ret = tlsControlRedis.command(
+    const int ret = tlsControlRedis.command(
         [](hiredis::Hiredis*, redisReply*) {},
-        "HINCRBY %s %s:o %lld", key.c_str(), master.c_str(), static_cast<long long>(orders));
-    if (ret == REDIS_OK && supreme > 0) {
-        ret = tlsControlRedis.command(
-            [](hiredis::Hiredis*, redisReply*) {},
-            "HINCRBY %s %s:s %lld", key.c_str(), master.c_str(), static_cast<long long>(supreme));
-    }
-    if (ret == REDIS_OK) {
-        ret = tlsControlRedis.command(
-            [](hiredis::Hiredis*, redisReply*) {}, "EXPIRE %s %lld", key.c_str(), kProxyHotBucketTtlSec);
-    }
+        "EVAL %s 1 %s %s %lld %lld %lld", kAddProxyHotLua, key.c_str(), master.c_str(),
+        static_cast<long long>(orders), static_cast<long long>(supreme), kProxyHotBucketTtlSec);
     if (ret != REDIS_OK) {
         LOG_WARN << "[CraftProxyRep] Failed to update hot ranking bucket in control Redis: master_id=" << masterId
                  << " hour=" << hourIndex << " ret=" << ret;

@@ -75,6 +75,78 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
      * <code>kAppearanceNotOwned = 33009;</code>
      */
     kAppearanceNotOwned(33009),
+    /**
+     * <code>kAppearanceSeriesBundleUnavailable = 33010;</code>
+     */
+    kAppearanceSeriesBundleUnavailable(33010),
+    /**
+     * <code>kAppearanceSeriesAlreadyCompleted = 33011;</code>
+     */
+    kAppearanceSeriesAlreadyCompleted(33011),
+    /**
+     * <code>kAppearanceSeriesBundlePriceChanged = 33012;</code>
+     */
+    kAppearanceSeriesBundlePriceChanged(33012),
+    /**
+     * <code>kAppearanceSeriesBundleCurrencyNotEnough = 33013;</code>
+     */
+    kAppearanceSeriesBundleCurrencyNotEnough(33013),
+    /**
+     * <code>kCityCelebrationNotSafeCity = 33014;</code>
+     */
+    kCityCelebrationNotSafeCity(33014),
+    /**
+     * <code>kCityCelebrationChannelFull = 33015;</code>
+     */
+    kCityCelebrationChannelFull(33015),
+    /**
+     * <code>kCityCelebrationNoItem = 33016;</code>
+     */
+    kCityCelebrationNoItem(33016),
+    /**
+     * <code>kCityCelebrationNotFound = 33017;</code>
+     */
+    kCityCelebrationNotFound(33017),
+    /**
+     * <code>kCityCelebrationAlreadyClaimed = 33018;</code>
+     */
+    kCityCelebrationAlreadyClaimed(33018),
+    /**
+     * <code>kCityCelebrationLevelTooLow = 33019;</code>
+     */
+    kCityCelebrationLevelTooLow(33019),
+    /**
+     * <code>kCityCelebrationWeeklyCapReached = 33020;</code>
+     */
+    kCityCelebrationWeeklyCapReached(33020),
+    /**
+     * <code>kCosmeticGiftNotFriend7Days = 33021;</code>
+     */
+    kCosmeticGiftNotFriend7Days(33021),
+    /**
+     * <code>kCosmeticGiftTargetAlreadyOwned = 33022;</code>
+     */
+    kCosmeticGiftTargetAlreadyOwned(33022),
+    /**
+     * <code>kCosmeticGiftWeeklyLimitReached = 33023;</code>
+     */
+    kCosmeticGiftWeeklyLimitReached(33023),
+    /**
+     * <code>kCosmeticGiftInvalidTarget = 33024;</code>
+     */
+    kCosmeticGiftInvalidTarget(33024),
+    /**
+     * <code>kCosmeticGiftCurrencyNotEnough = 33025;</code>
+     */
+    kCosmeticGiftCurrencyNotEnough(33025),
+    /**
+     * <code>kCosmeticGiftPriceChanged = 33026;</code>
+     */
+    kCosmeticGiftPriceChanged(33026),
+    /**
+     * <code>kCosmeticGiftServiceUnavailable = 33027;</code>
+     */
+    kCosmeticGiftServiceUnavailable(33027),
     UNRECOGNIZED(-1),
     ;
 
@@ -131,6 +203,78 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
      * <code>kAppearanceNotOwned = 33009;</code>
      */
     public static final int kAppearanceNotOwned_VALUE = 33009;
+    /**
+     * <code>kAppearanceSeriesBundleUnavailable = 33010;</code>
+     */
+    public static final int kAppearanceSeriesBundleUnavailable_VALUE = 33010;
+    /**
+     * <code>kAppearanceSeriesAlreadyCompleted = 33011;</code>
+     */
+    public static final int kAppearanceSeriesAlreadyCompleted_VALUE = 33011;
+    /**
+     * <code>kAppearanceSeriesBundlePriceChanged = 33012;</code>
+     */
+    public static final int kAppearanceSeriesBundlePriceChanged_VALUE = 33012;
+    /**
+     * <code>kAppearanceSeriesBundleCurrencyNotEnough = 33013;</code>
+     */
+    public static final int kAppearanceSeriesBundleCurrencyNotEnough_VALUE = 33013;
+    /**
+     * <code>kCityCelebrationNotSafeCity = 33014;</code>
+     */
+    public static final int kCityCelebrationNotSafeCity_VALUE = 33014;
+    /**
+     * <code>kCityCelebrationChannelFull = 33015;</code>
+     */
+    public static final int kCityCelebrationChannelFull_VALUE = 33015;
+    /**
+     * <code>kCityCelebrationNoItem = 33016;</code>
+     */
+    public static final int kCityCelebrationNoItem_VALUE = 33016;
+    /**
+     * <code>kCityCelebrationNotFound = 33017;</code>
+     */
+    public static final int kCityCelebrationNotFound_VALUE = 33017;
+    /**
+     * <code>kCityCelebrationAlreadyClaimed = 33018;</code>
+     */
+    public static final int kCityCelebrationAlreadyClaimed_VALUE = 33018;
+    /**
+     * <code>kCityCelebrationLevelTooLow = 33019;</code>
+     */
+    public static final int kCityCelebrationLevelTooLow_VALUE = 33019;
+    /**
+     * <code>kCityCelebrationWeeklyCapReached = 33020;</code>
+     */
+    public static final int kCityCelebrationWeeklyCapReached_VALUE = 33020;
+    /**
+     * <code>kCosmeticGiftNotFriend7Days = 33021;</code>
+     */
+    public static final int kCosmeticGiftNotFriend7Days_VALUE = 33021;
+    /**
+     * <code>kCosmeticGiftTargetAlreadyOwned = 33022;</code>
+     */
+    public static final int kCosmeticGiftTargetAlreadyOwned_VALUE = 33022;
+    /**
+     * <code>kCosmeticGiftWeeklyLimitReached = 33023;</code>
+     */
+    public static final int kCosmeticGiftWeeklyLimitReached_VALUE = 33023;
+    /**
+     * <code>kCosmeticGiftInvalidTarget = 33024;</code>
+     */
+    public static final int kCosmeticGiftInvalidTarget_VALUE = 33024;
+    /**
+     * <code>kCosmeticGiftCurrencyNotEnough = 33025;</code>
+     */
+    public static final int kCosmeticGiftCurrencyNotEnough_VALUE = 33025;
+    /**
+     * <code>kCosmeticGiftPriceChanged = 33026;</code>
+     */
+    public static final int kCosmeticGiftPriceChanged_VALUE = 33026;
+    /**
+     * <code>kCosmeticGiftServiceUnavailable = 33027;</code>
+     */
+    public static final int kCosmeticGiftServiceUnavailable_VALUE = 33027;
 
 
     public final int getNumber() {
@@ -168,6 +312,24 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
         case 33007: return kAppearanceNotCardUnlockable;
         case 33008: return kAppearanceAlreadyOwned;
         case 33009: return kAppearanceNotOwned;
+        case 33010: return kAppearanceSeriesBundleUnavailable;
+        case 33011: return kAppearanceSeriesAlreadyCompleted;
+        case 33012: return kAppearanceSeriesBundlePriceChanged;
+        case 33013: return kAppearanceSeriesBundleCurrencyNotEnough;
+        case 33014: return kCityCelebrationNotSafeCity;
+        case 33015: return kCityCelebrationChannelFull;
+        case 33016: return kCityCelebrationNoItem;
+        case 33017: return kCityCelebrationNotFound;
+        case 33018: return kCityCelebrationAlreadyClaimed;
+        case 33019: return kCityCelebrationLevelTooLow;
+        case 33020: return kCityCelebrationWeeklyCapReached;
+        case 33021: return kCosmeticGiftNotFriend7Days;
+        case 33022: return kCosmeticGiftTargetAlreadyOwned;
+        case 33023: return kCosmeticGiftWeeklyLimitReached;
+        case 33024: return kCosmeticGiftInvalidTarget;
+        case 33025: return kCosmeticGiftCurrencyNotEnough;
+        case 33026: return kCosmeticGiftPriceChanged;
+        case 33027: return kCosmeticGiftServiceUnavailable;
         default: return null;
       }
     }
@@ -233,7 +395,7 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\032appearance_error_tip.proto*\327\002\n\020appeara" +
+      "\n\032appearance_error_tip.proto*\373\007\n\020appeara" +
       "nce_error\022\027\n\023kAppearance_errorOK\020\000\022\030\n\022kA" +
       "ppearanceInvalid\020\350\201\002\022\037\n\031kAppearanceAlrea" +
       "dyCurrent\020\351\201\002\022\027\n\021kAppearanceNoCard\020\352\201\002\022!" +
@@ -242,8 +404,25 @@ public final class AppearanceErrorTip extends com.google.protobuf.GeneratedFile 
       "Frozen\020\355\201\002\022\034\n\026kAppearanceUnavailable\020\356\201\002" +
       "\022\"\n\034kAppearanceNotCardUnlockable\020\357\201\002\022\035\n\027" +
       "kAppearanceAlreadyOwned\020\360\201\002\022\031\n\023kAppearan" +
-      "ceNotOwned\020\361\201\002B$\n\016com.game.tableZ\022genera" +
-      "ted/pb/tableb\006proto3"
+      "ceNotOwned\020\361\201\002\022(\n\"kAppearanceSeriesBundl" +
+      "eUnavailable\020\362\201\002\022\'\n!kAppearanceSeriesAlr" +
+      "eadyCompleted\020\363\201\002\022)\n#kAppearanceSeriesBu" +
+      "ndlePriceChanged\020\364\201\002\022.\n(kAppearanceSerie" +
+      "sBundleCurrencyNotEnough\020\365\201\002\022!\n\033kCityCel" +
+      "ebrationNotSafeCity\020\366\201\002\022!\n\033kCityCelebrat" +
+      "ionChannelFull\020\367\201\002\022\034\n\026kCityCelebrationNo" +
+      "Item\020\370\201\002\022\036\n\030kCityCelebrationNotFound\020\371\201\002" +
+      "\022$\n\036kCityCelebrationAlreadyClaimed\020\372\201\002\022!" +
+      "\n\033kCityCelebrationLevelTooLow\020\373\201\002\022&\n kCi" +
+      "tyCelebrationWeeklyCapReached\020\374\201\002\022!\n\033kCo" +
+      "smeticGiftNotFriend7Days\020\375\201\002\022%\n\037kCosmeti" +
+      "cGiftTargetAlreadyOwned\020\376\201\002\022%\n\037kCosmetic" +
+      "GiftWeeklyLimitReached\020\377\201\002\022 \n\032kCosmeticG" +
+      "iftInvalidTarget\020\200\202\002\022$\n\036kCosmeticGiftCur" +
+      "rencyNotEnough\020\201\202\002\022\037\n\031kCosmeticGiftPrice" +
+      "Changed\020\202\202\002\022%\n\037kCosmeticGiftServiceUnava" +
+      "ilable\020\203\202\002B$\n\016com.game.tableZ\022generated/" +
+      "pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

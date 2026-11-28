@@ -131,6 +131,18 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kPetEntryPresetInvalid = 26023;</code>
      */
     kPetEntryPresetInvalid(26023),
+    /**
+     * <code>kPetSquadSlotLocked = 26024;</code>
+     */
+    kPetSquadSlotLocked(26024),
+    /**
+     * <code>kPetSquadMaxSlotsReached = 26025;</code>
+     */
+    kPetSquadMaxSlotsReached(26025),
+    /**
+     * <code>kPetSquadPriceChanged = 26026;</code>
+     */
+    kPetSquadPriceChanged(26026),
     UNRECOGNIZED(-1),
     ;
 
@@ -243,6 +255,18 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kPetEntryPresetInvalid = 26023;</code>
      */
     public static final int kPetEntryPresetInvalid_VALUE = 26023;
+    /**
+     * <code>kPetSquadSlotLocked = 26024;</code>
+     */
+    public static final int kPetSquadSlotLocked_VALUE = 26024;
+    /**
+     * <code>kPetSquadMaxSlotsReached = 26025;</code>
+     */
+    public static final int kPetSquadMaxSlotsReached_VALUE = 26025;
+    /**
+     * <code>kPetSquadPriceChanged = 26026;</code>
+     */
+    public static final int kPetSquadPriceChanged_VALUE = 26026;
 
 
     public final int getNumber() {
@@ -294,6 +318,9 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
         case 26021: return kPetTierLevelNotEnough;
         case 26022: return kPetTierMaterialNotEnough;
         case 26023: return kPetEntryPresetInvalid;
+        case 26024: return kPetSquadSlotLocked;
+        case 26025: return kPetSquadMaxSlotsReached;
+        case 26026: return kPetSquadPriceChanged;
         default: return null;
       }
     }
@@ -359,7 +386,7 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023pet_error_tip.proto*\222\005\n\tpet_error\022\020\n\014k" +
+      "\n\023pet_error_tip.proto*\352\005\n\tpet_error\022\020\n\014k" +
       "Pet_errorOK\020\000\022\022\n\014kPetNotFound\020\220\313\001\022\031\n\023kPe" +
       "tTableRowMissing\020\221\313\001\022\022\n\014kPetSlotFull\020\222\313\001" +
       "\022\035\n\027kPetOwnerLevelNotEnough\020\223\313\001\022\027\n\021kPetA" +
@@ -376,8 +403,10 @@ public final class PetErrorTip extends com.google.protobuf.GeneratedFile {
       "ed\020\243\313\001\022\025\n\017kPetTierChanged\020\244\313\001\022\034\n\026kPetTie" +
       "rLevelNotEnough\020\245\313\001\022\037\n\031kPetTierMaterialN" +
       "otEnough\020\246\313\001\022\034\n\026kPetEntryPresetInvalid\020\247" +
-      "\313\001B$\n\016com.game.tableZ\022generated/pb/table" +
-      "b\006proto3"
+      "\313\001\022\031\n\023kPetSquadSlotLocked\020\250\313\001\022\036\n\030kPetSqu" +
+      "adMaxSlotsReached\020\251\313\001\022\033\n\025kPetSquadPriceC" +
+      "hanged\020\252\313\001B$\n\016com.game.tableZ\022generated/" +
+      "pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

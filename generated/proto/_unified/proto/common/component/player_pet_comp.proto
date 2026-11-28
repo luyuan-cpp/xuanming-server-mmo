@@ -52,6 +52,13 @@ message PetInstance {
   uint32 cosmetic_id = 26;                   // 当前穿戴的灵宠幻化外观 ID（PetCosmetic.id；0 = 原形，纯外观零数值）。
 }
 
+// 灵宠编队快捷预设（布局层只存 pet_id 引用，放生/交易时自动过滤失效引用，绝不拷贝宠物实例属性）。
+message PetSquadPreset {
+  uint32 slot_id = 1;            // 1..5 槽位号（1..2 免费，3..5 永久付费解锁或月卡临赠 +1）
+  uint32 tag = 2;                // 0默认 / 1日常PVE / 2会武PVP / 3首领试炼
+  repeated uint64 pet_ids = 3;   // 最多 3 只宝宝 pet_id（首只为出战首发宠）
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 message PlayerPetComp {
   repeated PetInstance pets = 1;
@@ -63,4 +70,8 @@ message PlayerPetComp {
   uint64 last_purchase_price_gold = 6;
   // true = 该角色已完成一次性起步灵狐判定（已发放或老号已有宠不再补发），重登/召回/放生均不重发。
   bool starter_pet_granted = 7;
+  // 灵宠编队快捷预设列表（按 slot_id 定位，不依赖下标顺序）。
+  repeated PetSquadPreset squad_presets = 8;
+  // 永久已解锁的灵宠编队预设槽位数（0 兼容按默认免费 2 套处理，范围 2..5）。
+  uint32 unlocked_squad_preset_slots = 9;
 }

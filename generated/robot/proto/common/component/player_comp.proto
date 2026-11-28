@@ -113,6 +113,22 @@ message PlayerProfileComp
 	map<uint32, uint32> equipped_skill_vfx = 14;
 	// 玩家个人「允许局外人观战交流」偏好(仅控制观战期间能否交流，不禁止观战)。
 	eSpectateChatPreference spectate_chat_pref = 15;
+	// 仙途轻享卡「衣柜随心试穿」当前自然周起点（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	uint64 light_card_trial_week_start_ms = 16;
+	// 仙途轻享卡本周已消耗的随心试穿次数（每周至多 3 次，纯临时试穿不授永久权）。
+	uint32 light_card_trial_used = 17;
+	// 已永久拥有的战斗排面与社交外观位图（CosmeticShowcase.id 经 cfg_bit_index 映射，低位在前，未知高位原样透传）。
+	bytes showcase_cosmetic_owned_bits = 18;
+	// 当前穿戴的排面外观映射（slot_kind 1..5 -> CosmeticShowcase.id；0 或缺键表示默认）。
+	map<uint32, uint32> equipped_showcase_cosmetics = 19;
+	// 全城同乐绑定银两周上限账本（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	uint64 celebration_week_start_ms = 20;
+	// 本周通过全城同乐已领取的绑定银两累计（硬封顶 3000，仅 CURRENCY_TYPE_BIND_GOLD=3）。
+	uint32 celebration_bind_gold_claimed = 21;
+	// 好友纯外观/手记赠礼周频控账本（UTC+8 周一 05:00 毫秒，抗时钟回拨）。
+	uint64 cosmetic_gift_week_start_ms = 22;
+	// 本周已送出的外观/手记赠礼笔数（每周至多 5 笔）。
+	uint32 cosmetic_gift_sent_count = 23;
 }
 
 // 一次进行中的改名(scene 写,随存档落库)。落库之后 scene 才向 data_service 发 RenameRole,所以任何一步断掉都能从存档接着做:

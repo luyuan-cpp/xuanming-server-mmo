@@ -1,14 +1,14 @@
 {
   "schema_version": 2,
-  "schema_digest": "88750c2d961d8710",
-  "version": 106,
-  "content_digest": "f2a96ee0990cd43c267277495ef6e7301f4e828dae387ff517dd1c31bb4f133e",
-  "generated_at": "2026-11-27T09:39:50Z",
+  "schema_digest": "0fbe086829d8fe21",
+  "version": 112,
+  "content_digest": "444727dc5bfa017e69d27cb84e4899c34f2d90d4d9b51d8230d81ca966c8b1e5",
+  "generated_at": "2026-11-27T21:25:40Z",
   "source_rev": {
-    "commit": "ac9787593f2e7271832553f07d469bd0edc2c315",
+    "commit": "5e5bc546859a25c0fc7c80ceb59d403c9c368c7a",
     "data_dirty": true
   },
-  "table_count": 83,
+  "table_count": 84,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -139,24 +139,24 @@
       "name": "AfkPassRule",
       "hot_reload": false,
       "ids_permanent": false,
-      "rows": 1,
+      "rows": 2,
       "source": {
         "file": "AfkPassRule.xlsx",
-        "size": 5302,
-        "sha256": "2f8d64370ef8f74fcf92d4e23faf52488677f215242b518b2df42c9bd402a0c9"
+        "size": 5864,
+        "sha256": "39dd5be2e00c63d66c3080c98cd2cca8c151381115b2f3eacbdee28ce3a84cdf"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "afkpassrule.json",
-          "size": 211,
-          "sha256": "f0e6556040bbcc3bfa8107371d856110aa9622609c69c130d97db42c019be2fc"
+          "size": 914,
+          "sha256": "956f5231b60fc90132c97d963fae29b120a8a27f36de3ee4666d85bea8d37ac8"
         },
         {
           "kind": "binary",
           "file": "afkpassrule.pb",
-          "size": 50,
-          "sha256": "5dbd31d065af0c3432da64d94c29c3e2749d27f83888123e9f6c1eaf35c74dd0"
+          "size": 399,
+          "sha256": "814f39d675fa4208cdd642ead7c3823e45cf3f098ddef6b3fa280e13309183f8"
         }
       ]
     },
@@ -192,21 +192,21 @@
       "rows": 3,
       "source": {
         "file": "AppearanceSeries.xlsx",
-        "size": 6778,
-        "sha256": "3b75eca9b204575c8fa6f9fffd4469677c0d51d50b728e4fd7f18b3638c32084"
+        "size": 7019,
+        "sha256": "ac348fe3eeab9728ee7f316ad5125b5df7cb2c6d6412ce942ffe20d665a4b6c4"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "appearanceseries.json",
-          "size": 2458,
-          "sha256": "81acc4b7df4979eb35d50e50bf744500b1086cc182b4c86586608b1d7aebbfcc"
+          "size": 2644,
+          "sha256": "4fe51e73c901df6393152ebd0453e01b70498e7a6c5ec08c6132aed633e5c697"
         },
         {
           "kind": "binary",
           "file": "appearanceseries.pb",
-          "size": 1929,
-          "sha256": "bdea95496dfe3ab1c337475685983fc47a7d7756a3a409065a5074e11d5f69c4"
+          "size": 1944,
+          "sha256": "85b3a9eb632b17672bc691a8cb8347affe88fe2a087f5fbe0e7cef6dd4973066"
         }
       ]
     },
@@ -414,24 +414,24 @@
       "name": "Buff",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 199,
+      "rows": 216,
       "source": {
         "file": "Buff.xlsx",
-        "size": 16357,
-        "sha256": "b858e655fae22df40f071a45b93ba1bbc972138bdb1bf1107acf585370bfb45c"
+        "size": 17322,
+        "sha256": "61ecc5007763996274ffb5547de06850cdba5bf835ca52ee1223b01de50206b0"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "buff.json",
-          "size": 47176,
-          "sha256": "a6c6a8a1a88d5cfe758378106da3c846b499a88b7f7e8523540607e1a08d4102"
+          "size": 50186,
+          "sha256": "ce1d9a010a3213a20509e22970f67cf940e58b41f057fa719e194a0869e05254"
         },
         {
           "kind": "binary",
           "file": "buff.pb",
-          "size": 8910,
-          "sha256": "6c9fe7e07b56936d12638b199313bc6beda83385b196d007caf466328f7ab0c6"
+          "size": 9479,
+          "sha256": "38553eaa0c8d819f7c9eef546cfbbebde0ab95c902fce0c72ecd4c5c575317a7"
         }
       ]
     },
@@ -532,6 +532,31 @@
           "file": "cooldown.pb",
           "size": 64,
           "sha256": "870ffb8768aab80ed9edea9c081e8dc40b2f544d35bd2a9df57398c2c4297031"
+        }
+      ]
+    },
+    {
+      "name": "CosmeticShowcase",
+      "hot_reload": false,
+      "ids_permanent": true,
+      "rows": 13,
+      "source": {
+        "file": "CosmeticShowcase.xlsx",
+        "size": 7240,
+        "sha256": "8671b608928b40afbe7040ec75d7f230f6e94a277c5085e97087f75873d03939"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "cosmeticshowcase.json",
+          "size": 6600,
+          "sha256": "2cc67f188ca5dfa9e52731dabded888fdff8478efc209d09cf3981c0f82baa61"
+        },
+        {
+          "kind": "binary",
+          "file": "cosmeticshowcase.pb",
+          "size": 3636,
+          "sha256": "b1e2ab6516fd27d6a7fb7e01aee31fb5e7ae6f7d4e643918846f1b3d2cd7c090"
         }
       ]
     },
@@ -1089,24 +1114,24 @@
       "name": "Item",
       "hot_reload": false,
       "ids_permanent": true,
-      "rows": 148,
+      "rows": 152,
       "source": {
         "file": "Item.xlsx",
-        "size": 16443,
-        "sha256": "fe713812c97dbd9915f671300c1e65a51d98088c617699e0457cf5201283e4ea"
+        "size": 16996,
+        "sha256": "57d34bf730039ff826c656405cc5bde9d6534195581998255a377fff49502301"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "item.json",
-          "size": 59913,
-          "sha256": "d335df4e62ed470cb7fdcdb30b316790ff5bb04d44d4aa90c92c893e59774dca"
+          "size": 62342,
+          "sha256": "c52156931b8388be37e6b15148ae40e659a81ef1abf853f3d90d59b3145fb50c"
         },
         {
           "kind": "binary",
           "file": "item.pb",
-          "size": 14511,
-          "sha256": "1b1230d9b0fa7b488e9d1d606221dc04a917b77bc89c6a3078d0f6c11314a124"
+          "size": 15488,
+          "sha256": "660330fab559bb4064fd26e575938eb1642374514df63850c7b4b216b3ed2fb9"
         }
       ]
     },
@@ -1139,24 +1164,24 @@
       "name": "MessageLimiter",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 137,
+      "rows": 149,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 7315,
-        "sha256": "8083ddee91c707ebdf309ef6679c4aae05a68a8df9e12d992c070e11ee29594c"
+        "size": 7525,
+        "sha256": "148608d9abb9fe310e6b6d3a9f04722d7d07cf836a8442936407d7999c972207"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 12253,
-          "sha256": "cc0ce4226d9ecab9ebddcf75b2e6c14574f5606dc7383979fe5dfb4427aee196"
+          "size": 13326,
+          "sha256": "e03683709af8d5cb0d4733e4e60d2f12ff9ab8a0d4aff27cf7f84ace28285bb0"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 1624,
-          "sha256": "a3f83777a3dac228d8ac0f50a8a25bf8f0a5a0a79739a30ce12a552c571cc9a7"
+          "size": 1768,
+          "sha256": "d4af6f1174ca85b75bd6ce7a3c0b5ed6ac87a55d2460ee88d2d32ebddc36a683"
         }
       ]
     },
@@ -1564,24 +1589,24 @@
       "name": "RewardedAdSlot",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 1,
+      "rows": 4,
       "source": {
         "file": "RewardedAdSlot.xlsx",
-        "size": 5573,
-        "sha256": "52a2ea5ccc071993af7cb1ca212110772583c1be3c46a9b92acdfa4c33161ba3"
+        "size": 5806,
+        "sha256": "660b0e3f415b86865aa0d3fb3862551607007f09e10a86fce39b4fe99bbe454e"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "rewardedadslot.json",
-          "size": 261,
-          "sha256": "b9c23aee44ef26fc679488ba7d591d9a7b49496a08464fcde7cc3460d3901168"
+          "size": 1071,
+          "sha256": "8d5d7caae938a8891d86920cb16e6fcb07483c87d81bfb2dc274a14e591358b8"
         },
         {
           "kind": "binary",
           "file": "rewardedadslot.pb",
-          "size": 22,
-          "sha256": "c05dd58ed7c0bdf4c599dde3d40ca83b5c5dd3d1365c98dd7362b6beaa2f4c3e"
+          "size": 87,
+          "sha256": "96e33ec1b2a14b9c38862ced74550e027062c1e9f8beddda7e8f78342e479b4e"
         }
       ]
     },
@@ -1664,24 +1689,24 @@
       "name": "Skill",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 181,
+      "rows": 192,
       "source": {
         "file": "Skill.xlsx",
-        "size": 36226,
-        "sha256": "02969a28592908c113523c977ea09471a0c3a88a5e40346de2b33ac9838940f5"
+        "size": 38185,
+        "sha256": "5aa97cdf12c8be830b8fc51dc477c22a73bd0af31d25338fa0ca0a1c3accef52"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skill.json",
-          "size": 173554,
-          "sha256": "37191e4f8ca77ccec3515b17a8c9ed6ad143606e9645dc1579ad0b6139cc51e3"
+          "size": 181630,
+          "sha256": "ff1c5415a2b4bad399232be35b88ff221dbc28e09923be05b5064bd3c2ce79bd"
         },
         {
           "kind": "binary",
           "file": "skill.pb",
-          "size": 38197,
-          "sha256": "6263590621269503bbacd1178892b265fe5756a14a2d70a9ed4961e352571d27"
+          "size": 40700,
+          "sha256": "ae84aa42b4819ce24e0539b3d3002e5c11eb76614db3b1dcd655106efaff8070"
         }
       ]
     },
@@ -1714,24 +1739,24 @@
       "name": "SkillScrollCraft",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 7,
+      "rows": 9,
       "source": {
         "file": "SkillScrollCraft.xlsx",
-        "size": 6340,
-        "sha256": "6a76cc90ea57508db1bab8fadec19124757d0dfe423c8da5a96731dc0d9f8cfe"
+        "size": 6640,
+        "sha256": "a5c24bf7a2c2af303160969333cf2c4bd5b8ebff9c69d20f8dcaf5a844996044"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "skillscrollcraft.json",
-          "size": 4024,
-          "sha256": "defeec5e4e7d3199dcae0b326afad51b1b7dd323defd365996a59f0be1add3cf"
+          "size": 5263,
+          "sha256": "6bb6fcf178717a8d67684882fb26962d07b09c584de48652be6db28116135ef2"
         },
         {
           "kind": "binary",
           "file": "skillscrollcraft.pb",
-          "size": 1308,
-          "sha256": "1b14be5c85fbb47ba38c886a2fafd02756dd80e913808f4a681c6437cc051686"
+          "size": 1777,
+          "sha256": "03aa75617d3a0d2c257bdae01d3cb2779c7aa2b2c612ff00a34465975d140b50"
         }
       ]
     },
@@ -1764,24 +1789,24 @@
       "name": "SpiritShopGoods",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 13,
+      "rows": 19,
       "source": {
         "file": "SpiritShopGoods.xlsx",
-        "size": 9290,
-        "sha256": "f91494e6a799fbfa4f664c06a480fc2406f8e7e807d2b51be59d63954d2dd918"
+        "size": 10589,
+        "sha256": "6ec02ac7a7cf165752f96bfb714973c939b00e80094bd934d8772e680118c179"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "spiritshopgoods.json",
-          "size": 11968,
-          "sha256": "ff861125d2b8b1443e696bdbb6a1f110127cecfada739343cf2b8b273907d07f"
+          "size": 17598,
+          "sha256": "35139b69205652955c0c9845e8942a05251193e23370cfa35769a93452704d32"
         },
         {
           "kind": "binary",
           "file": "spiritshopgoods.pb",
-          "size": 3357,
-          "sha256": "1acd43a5780af063f6de3ac67669621a7748b92644430bb17c3ef546d4a284c6"
+          "size": 4983,
+          "sha256": "f27f76c79f126f42806b4c5113513ea44eaf412ef545363f9eb164642060b6e8"
         }
       ]
     },
@@ -1914,24 +1939,24 @@
       "name": "TravelPassSeason",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 1,
+      "rows": 6,
       "source": {
         "file": "TravelPassSeason.xlsx",
-        "size": 5991,
-        "sha256": "72bc0f215d0fe49b130b7a46f5093711f1299b83e3bf270a6b4882719c0d79c1"
+        "size": 6658,
+        "sha256": "1f63bdff471982feab98bbac31f11a761f45751cb5ba018022c67088fe300498"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "travelpassseason.json",
-          "size": 664,
-          "sha256": "2a445ce3e767f42e9fcf8ad4bbf49d835e33f214d8f19a9a4bc0048594d9f4cf"
+          "size": 4155,
+          "sha256": "c2d1babeff645e0ee22906c99362b5ec2885f609f2b1e8ef6ccddb70087f598e"
         },
         {
           "kind": "binary",
           "file": "travelpassseason.pb",
-          "size": 320,
-          "sha256": "cf49f4a3a1564a6eb2be408712adf0791430419ba4e2352034842092aa7ac746"
+          "size": 1943,
+          "sha256": "32657dac113b8ae91e96fe7b7a19ee1071a969abfe1766e10a1af0eed85210b5"
         }
       ]
     },
@@ -1939,24 +1964,24 @@
       "name": "TravelPassTier",
       "hot_reload": true,
       "ids_permanent": false,
-      "rows": 10,
+      "rows": 60,
       "source": {
         "file": "TravelPassTier.xlsx",
-        "size": 6116,
-        "sha256": "24b41a6d91256651956b0ee335973bd9a7a292229f8e63938002584e06246dee"
+        "size": 8256,
+        "sha256": "180a92c8bf3f6a90fabf43717429009ac162a0bee8b777fa71ab54abd3f1a77e"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "travelpasstier.json",
-          "size": 2643,
-          "sha256": "755c1059992de6eee2bee93e378a5dcf8fd4a83c40e88b50bf0f56321a160884"
+          "size": 15776,
+          "sha256": "d410099a3af691893e0b54087cd62354f1870d6095ae504728af1d718ae196ea"
         },
         {
           "kind": "binary",
           "file": "travelpasstier.pb",
-          "size": 319,
-          "sha256": "4a225401a802cbc3206c5398a6710a5feb34312cddc4bc6c8074a2ddc6138c75"
+          "size": 1962,
+          "sha256": "ed7bf2c281c868080490d768dd661e418399c7151faa79d6bc929f3ae5928613"
         }
       ]
     },

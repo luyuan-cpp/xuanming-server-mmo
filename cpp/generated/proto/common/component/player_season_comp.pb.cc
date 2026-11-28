@@ -54,11 +54,11 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_._has_bits_),
       0, // no _extensions_
-      24, 248,  // max_field_number, fast_idx_mask
+      25, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4278190080,  // skipmap
+      4261412864,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      24,  // num_field_entries
+      25,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -163,9 +163,12 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_preset_)}},
       // uint32 route_choice_mask = 24;
       {::_pbi::TcParser::FastV32S2,
-       {448, 23, 0,
+       {448, 24, 0,
         PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.route_choice_mask_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 ad_reroll_used_run_id = 25;
+      {::_pbi::TcParser::FastV64S2,
+       {456, 23, 0,
+        PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.ad_reroll_used_run_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -222,7 +225,9 @@ constexpr WuxingTowerCompState::ParseTableT_ WuxingTowerCompState::InternalGener
       // uint32 weekly_best_rounds_preset = 23;
       {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.weekly_best_rounds_preset_), _Internal::kHasBitsOffset + 22, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 route_choice_mask = 24;
-      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.route_choice_mask_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.route_choice_mask_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 ad_reroll_used_run_id = 25;
+      {PROTOBUF_FIELD_OFFSET(WuxingTowerCompState, _impl_.ad_reroll_used_run_id_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -268,6 +273,7 @@ inline constexpr WuxingTowerCompState::Impl_::Impl_(
         best_rounds_preset_{0u},
         weekly_best_floor_preset_{0u},
         weekly_best_rounds_preset_{0u},
+        ad_reroll_used_run_id_{::uint64_t{0u}},
         route_choice_mask_{0u} {}
 
 template <typename>
@@ -374,11 +380,11 @@ constexpr SavedBattleBuildBookmark::ParseTableT_ SavedBattleBuildBookmark::Inter
     {
       PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_._has_bits_),
       0, // no _extensions_
-      13, 120,  // max_field_number, fast_idx_mask
+      14, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294959104,  // skipmap
+      4294950912,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      13,  // num_field_entries
+      14,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -441,7 +447,10 @@ constexpr SavedBattleBuildBookmark::ParseTableT_ SavedBattleBuildBookmark::Inter
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(SavedBattleBuildBookmark, _impl_.saved_at_ms_), 12>(),
        {104, 12, 0,
         PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.saved_at_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool pin_replay = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SavedBattleBuildBookmark, _impl_.pin_replay_), 13>(),
+       {112, 13, 0,
+        PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.pin_replay_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
@@ -472,6 +481,8 @@ constexpr SavedBattleBuildBookmark::ParseTableT_ SavedBattleBuildBookmark::Inter
       {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // uint64 saved_at_ms = 13;
       {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.saved_at_ms_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bool pin_replay = 14;
+      {PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.pin_replay_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     // no aux_entries
     {{
@@ -517,7 +528,8 @@ inline constexpr SavedBattleBuildBookmark::Impl_::Impl_(
         formation_id_{0u},
         season_seal_id_{0u},
         active_pet_table_id_{0u},
-        saved_at_ms_{::uint64_t{0u}} {}
+        saved_at_ms_{::uint64_t{0u}},
+        pin_replay_{false} {}
 
 template <typename>
 constexpr SavedBattleBuildBookmark::SavedBattleBuildBookmark(::_pbi::ConstantInitialized,
@@ -940,11 +952,11 @@ constexpr PlayerSeasonComp::ParseTableT_ PlayerSeasonComp::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -954,7 +966,10 @@ constexpr PlayerSeasonComp::ParseTableT_ PlayerSeasonComp::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::PlayerSeasonComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 extra_saved_build_slots = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSeasonComp, _impl_.extra_saved_build_slots_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.extra_saved_build_slots_)}},
       // repeated .PlayerSeasonSealRecord records = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
@@ -996,7 +1011,9 @@ constexpr PlayerSeasonComp::ParseTableT_ PlayerSeasonComp::InternalGenerateParse
       // uint32 retro_honor_target_season_id = 6;
       {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.retro_honor_target_season_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // map<uint32, uint32> retro_honor_progress = 7;
-      {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.retro_honor_progress_), _Internal::kHasBitsOffset + 6, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.retro_honor_progress_), _Internal::kHasBitsOffset + 7, 3, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      // uint32 extra_saved_build_slots = 8;
+      {PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.extra_saved_build_slots_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1046,6 +1063,7 @@ inline constexpr PlayerSeasonComp::Impl_::Impl_(
         wuxing_tower_{nullptr},
         equipped_formation_id_{0u},
         retro_honor_target_season_id_{0u},
+        extra_saved_build_slots_{0u},
         retro_honor_progress_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::PlayerSeasonComp,
             PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.retro_honor_progress_)>()
@@ -1170,7 +1188,7 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_._has_bits_),
-        27, // hasbit index offset
+        28, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.week_key_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_active_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.run_id_),
@@ -1195,6 +1213,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_floor_preset_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.weekly_best_rounds_preset_),
         PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.route_choice_mask_),
+        PROTOBUF_FIELD_OFFSET(::WuxingTowerCompState, _impl_.ad_reroll_used_run_id_),
         2,
         7,
         4,
@@ -1218,10 +1237,11 @@ const ::uint32_t
         20,
         21,
         22,
+        24,
         23,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_._has_bits_),
-        16, // hasbit index offset
+        17, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.bookmark_id_),
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.title_),
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.source_battle_id_),
@@ -1235,6 +1255,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.skill_table_ids_),
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.wuxing_sigil_ids_),
         PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.saved_at_ms_),
+        PROTOBUF_FIELD_OFFSET(::SavedBattleBuildBookmark, _impl_.pin_replay_),
         5,
         2,
         6,
@@ -1248,6 +1269,7 @@ const ::uint32_t
         0,
         1,
         12,
+        13,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -1257,7 +1279,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.records_),
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.equipped_formation_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.wuxing_tower_),
@@ -1265,12 +1287,14 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.unlocked_honor_words_),
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.retro_honor_target_season_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.retro_honor_progress_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSeasonComp, _impl_.extra_saved_build_slots_),
         0,
         4,
         3,
         1,
         2,
         5,
+        7,
         6,
 };
 
@@ -1278,9 +1302,9 @@ static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PlayerSeasonSealRecord)},
         {17, sizeof(::WuxingTowerCompState)},
-        {68, sizeof(::SavedBattleBuildBookmark)},
-        {97, sizeof(::PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse)},
-        {104, sizeof(::PlayerSeasonComp)},
+        {70, sizeof(::SavedBattleBuildBookmark)},
+        {101, sizeof(::PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse)},
+        {108, sizeof(::PlayerSeasonComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1297,7 +1321,7 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseaso
     "season_id\030\001 \001(\r\022\030\n\020equipped_seal_id\030\002 \001("
     "\r\022\027\n\017progress_points\030\003 \001(\r\022\025\n\rbattle_poi"
     "nts\030\004 \001(\r\022\026\n\016catchup_points\030\005 \001(\r\022\020\n\010rev"
-    "ision\030\006 \001(\004\022\021\n\tlast_term\030\007 \001(\r\"\201\005\n\024Wuxin"
+    "ision\030\006 \001(\004\022\021\n\tlast_term\030\007 \001(\r\"\240\005\n\024Wuxin"
     "gTowerCompState\022\020\n\010week_key\030\001 \001(\r\022\022\n\nrun"
     "_active\030\002 \001(\010\022\016\n\006run_id\030\003 \001(\004\022\025\n\rcurrent"
     "_floor\030\004 \001(\r\022\030\n\020run_total_rounds\030\005 \001(\r\022\030"
@@ -1313,32 +1337,34 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseaso
     " \001(\r\022\030\n\020best_rounds_self\030\024 \001(\r\022\032\n\022best_r"
     "ounds_preset\030\025 \001(\r\022 \n\030weekly_best_floor_"
     "preset\030\026 \001(\r\022!\n\031weekly_best_rounds_prese"
-    "t\030\027 \001(\r\022\031\n\021route_choice_mask\030\030 \001(\r\"\314\002\n\030S"
-    "avedBattleBuildBookmark\022\023\n\013bookmark_id\030\001"
-    " \001(\004\022\r\n\005title\030\002 \001(\t\022\030\n\020source_battle_id\030"
-    "\003 \001(\004\022\030\n\020source_player_id\030\004 \001(\004\022\032\n\022sourc"
-    "e_player_name\030\005 \001(\t\022\020\n\010class_id\030\006 \001(\r\022\024\n"
-    "\014formation_id\030\007 \001(\r\022\026\n\016season_seal_id\030\010 "
-    "\001(\r\022\033\n\023active_pet_table_id\030\t \001(\r\022\027\n\017acti"
-    "ve_pet_name\030\n \001(\t\022\027\n\017skill_table_ids\030\013 \003"
-    "(\r\022\030\n\020wuxing_sigil_ids\030\014 \003(\r\022\023\n\013saved_at"
-    "_ms\030\r \001(\004\"\201\003\n\020PlayerSeasonComp\022(\n\007record"
-    "s\030\001 \003(\0132\027.PlayerSeasonSealRecord\022\035\n\025equi"
-    "pped_formation_id\030\002 \001(\r\022+\n\014wuxing_tower\030"
-    "\003 \001(\0132\025.WuxingTowerCompState\022/\n\014saved_bu"
-    "ilds\030\004 \003(\0132\031.SavedBattleBuildBookmark\022\034\n"
-    "\024unlocked_honor_words\030\005 \003(\004\022$\n\034retro_hon"
-    "or_target_season_id\030\006 \001(\r\022G\n\024retro_honor"
-    "_progress\030\007 \003(\0132).PlayerSeasonComp.Retro"
-    "HonorProgressEntry\0329\n\027RetroHonorProgress"
-    "Entry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001B\022Z"
-    "\020common/componentb\006proto3"
+    "t\030\027 \001(\r\022\031\n\021route_choice_mask\030\030 \001(\r\022\035\n\025ad"
+    "_reroll_used_run_id\030\031 \001(\004\"\340\002\n\030SavedBattl"
+    "eBuildBookmark\022\023\n\013bookmark_id\030\001 \001(\004\022\r\n\005t"
+    "itle\030\002 \001(\t\022\030\n\020source_battle_id\030\003 \001(\004\022\030\n\020"
+    "source_player_id\030\004 \001(\004\022\032\n\022source_player_"
+    "name\030\005 \001(\t\022\020\n\010class_id\030\006 \001(\r\022\024\n\014formatio"
+    "n_id\030\007 \001(\r\022\026\n\016season_seal_id\030\010 \001(\r\022\033\n\023ac"
+    "tive_pet_table_id\030\t \001(\r\022\027\n\017active_pet_na"
+    "me\030\n \001(\t\022\027\n\017skill_table_ids\030\013 \003(\r\022\030\n\020wux"
+    "ing_sigil_ids\030\014 \003(\r\022\023\n\013saved_at_ms\030\r \001(\004"
+    "\022\022\n\npin_replay\030\016 \001(\010\"\242\003\n\020PlayerSeasonCom"
+    "p\022(\n\007records\030\001 \003(\0132\027.PlayerSeasonSealRec"
+    "ord\022\035\n\025equipped_formation_id\030\002 \001(\r\022+\n\014wu"
+    "xing_tower\030\003 \001(\0132\025.WuxingTowerCompState\022"
+    "/\n\014saved_builds\030\004 \003(\0132\031.SavedBattleBuild"
+    "Bookmark\022\034\n\024unlocked_honor_words\030\005 \003(\004\022$"
+    "\n\034retro_honor_target_season_id\030\006 \001(\r\022G\n\024"
+    "retro_honor_progress\030\007 \003(\0132).PlayerSeaso"
+    "nComp.RetroHonorProgressEntry\022\037\n\027extra_s"
+    "aved_build_slots\030\010 \001(\r\0329\n\027RetroHonorProg"
+    "ressEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028"
+    "\001B\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto = {
     false,
     false,
-    1625,
+    1709,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto,
     "proto/common/component/player_season_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fseason_5fcomp_2eproto_once,
@@ -1836,9 +1862,10 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.current_node_kind_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.route_choice_mask_) -
-        reinterpret_cast<char*>(&_impl_.current_node_kind_)) + sizeof(_impl_.route_choice_mask_));
+        reinterpret_cast<char*>(&_impl_.ad_reroll_used_run_id_) -
+        reinterpret_cast<char*>(&_impl_.current_node_kind_)) + sizeof(_impl_.ad_reroll_used_run_id_));
   }
+  _impl_.route_choice_mask_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2074,11 +2101,20 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
   }
 
   // uint32 route_choice_mask = 24;
-  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
     if (this_._internal_route_choice_mask() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           24, this_._internal_route_choice_mask(), target);
+    }
+  }
+
+  // uint64 ad_reroll_used_run_id = 25;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_ad_reroll_used_run_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          25, this_._internal_ad_reroll_used_run_id(), target);
     }
   }
 
@@ -2271,8 +2307,17 @@ PROTOBUF_NOINLINE void WuxingTowerCompState::Clear() {
                                         this_._internal_weekly_best_rounds_preset());
       }
     }
-    // uint32 route_choice_mask = 24;
+    // uint64 ad_reroll_used_run_id = 25;
     if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_ad_reroll_used_run_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_ad_reroll_used_run_id());
+      }
+    }
+  }
+   {
+    // uint32 route_choice_mask = 24;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
       if (this_._internal_route_choice_mask() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_route_choice_mask());
@@ -2413,9 +2458,14 @@ void WuxingTowerCompState::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00800000U)) {
-      if (from._internal_route_choice_mask() != 0) {
-        _this->_impl_.route_choice_mask_ = from._impl_.route_choice_mask_;
+      if (from._internal_ad_reroll_used_run_id() != 0) {
+        _this->_impl_.ad_reroll_used_run_id_ = from._impl_.ad_reroll_used_run_id_;
       }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (from._internal_route_choice_mask() != 0) {
+      _this->_impl_.route_choice_mask_ = from._impl_.route_choice_mask_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -2503,9 +2553,9 @@ SavedBattleBuildBookmark::SavedBattleBuildBookmark(
                offsetof(Impl_, bookmark_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, bookmark_id_),
-           offsetof(Impl_, saved_at_ms_) -
+           offsetof(Impl_, pin_replay_) -
                offsetof(Impl_, bookmark_id_) +
-               sizeof(Impl_::saved_at_ms_));
+               sizeof(Impl_::pin_replay_));
 
   // @@protoc_insertion_point(copy_constructor:SavedBattleBuildBookmark)
 }
@@ -2534,9 +2584,9 @@ inline void SavedBattleBuildBookmark::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, bookmark_id_),
            0,
-           offsetof(Impl_, saved_at_ms_) -
+           offsetof(Impl_, pin_replay_) -
                offsetof(Impl_, bookmark_id_) +
-               sizeof(Impl_::saved_at_ms_));
+               sizeof(Impl_::pin_replay_));
 }
 SavedBattleBuildBookmark::~SavedBattleBuildBookmark() {
   // @@protoc_insertion_point(destructor:SavedBattleBuildBookmark)
@@ -2611,10 +2661,10 @@ PROTOBUF_NOINLINE void SavedBattleBuildBookmark::Clear() {
         reinterpret_cast<char*>(&_impl_.source_player_id_) -
         reinterpret_cast<char*>(&_impl_.bookmark_id_)) + sizeof(_impl_.source_player_id_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     ::memset(&_impl_.class_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.saved_at_ms_) -
-        reinterpret_cast<char*>(&_impl_.class_id_)) + sizeof(_impl_.saved_at_ms_));
+        reinterpret_cast<char*>(&_impl_.pin_replay_) -
+        reinterpret_cast<char*>(&_impl_.class_id_)) + sizeof(_impl_.pin_replay_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2763,6 +2813,15 @@ PROTOBUF_NOINLINE void SavedBattleBuildBookmark::Clear() {
     }
   }
 
+  // bool pin_replay = 14;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_pin_replay() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          14, this_._internal_pin_replay(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2846,7 +2905,7 @@ PROTOBUF_NOINLINE void SavedBattleBuildBookmark::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     // uint32 class_id = 6;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_class_id() != 0) {
@@ -2880,6 +2939,12 @@ PROTOBUF_NOINLINE void SavedBattleBuildBookmark::Clear() {
       if (this_._internal_saved_at_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_saved_at_ms());
+      }
+    }
+    // bool pin_replay = 14;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_pin_replay() != 0) {
+        total_size += 2;
       }
     }
   }
@@ -2950,7 +3015,7 @@ void SavedBattleBuildBookmark::MergeImpl(::google::protobuf::MessageLite& to_msg
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00001f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_class_id() != 0) {
         _this->_impl_.class_id_ = from._impl_.class_id_;
@@ -2974,6 +3039,11 @@ void SavedBattleBuildBookmark::MergeImpl(::google::protobuf::MessageLite& to_msg
     if (CheckHasBit(cached_has_bits, 0x00001000U)) {
       if (from._internal_saved_at_ms() != 0) {
         _this->_impl_.saved_at_ms_ = from._impl_.saved_at_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_pin_replay() != 0) {
+        _this->_impl_.pin_replay_ = from._impl_.pin_replay_;
       }
     }
   }
@@ -3002,8 +3072,8 @@ void SavedBattleBuildBookmark::InternalSwap(SavedBattleBuildBookmark* PROTOBUF_R
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.source_player_name_, &other->_impl_.source_player_name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.active_pet_name_, &other->_impl_.active_pet_name_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.saved_at_ms_)
-      + sizeof(SavedBattleBuildBookmark::_impl_.saved_at_ms_)
+      PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.pin_replay_)
+      + sizeof(SavedBattleBuildBookmark::_impl_.pin_replay_)
       - PROTOBUF_FIELD_OFFSET(SavedBattleBuildBookmark, _impl_.bookmark_id_)>(
           reinterpret_cast<char*>(&_impl_.bookmark_id_),
           reinterpret_cast<char*>(&other->_impl_.bookmark_id_));
@@ -3119,9 +3189,9 @@ PlayerSeasonComp::PlayerSeasonComp(
                offsetof(Impl_, equipped_formation_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, equipped_formation_id_),
-           offsetof(Impl_, retro_honor_target_season_id_) -
+           offsetof(Impl_, extra_saved_build_slots_) -
                offsetof(Impl_, equipped_formation_id_) +
-               sizeof(Impl_::retro_honor_target_season_id_));
+               sizeof(Impl_::extra_saved_build_slots_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerSeasonComp)
 }
@@ -3156,9 +3226,9 @@ inline void PlayerSeasonComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) 
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, wuxing_tower_),
            0,
-           offsetof(Impl_, retro_honor_target_season_id_) -
+           offsetof(Impl_, extra_saved_build_slots_) -
                offsetof(Impl_, wuxing_tower_) +
-               sizeof(Impl_::retro_honor_target_season_id_));
+               sizeof(Impl_::extra_saved_build_slots_));
 }
 PlayerSeasonComp::~PlayerSeasonComp() {
   // @@protoc_insertion_point(destructor:PlayerSeasonComp)
@@ -3224,11 +3294,11 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
       _impl_.wuxing_tower_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000070U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f0U)) {
     ::memset(&_impl_.equipped_formation_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.retro_honor_target_season_id_) -
-        reinterpret_cast<char*>(&_impl_.equipped_formation_id_)) + sizeof(_impl_.retro_honor_target_season_id_));
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+        reinterpret_cast<char*>(&_impl_.extra_saved_build_slots_) -
+        reinterpret_cast<char*>(&_impl_.equipped_formation_id_)) + sizeof(_impl_.extra_saved_build_slots_));
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       _impl_.retro_honor_progress_.Clear();
     }
   }
@@ -3318,7 +3388,7 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
   }
 
   // map<uint32, uint32> retro_honor_progress = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (!this_._internal_retro_honor_progress().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -3337,6 +3407,15 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
               7, entry.first, entry.second, target, stream);
         }
       }
+    }
+  }
+
+  // uint32 extra_saved_build_slots = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_extra_saved_build_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_extra_saved_build_slots(), target);
     }
   }
 
@@ -3365,7 +3444,7 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated .PlayerSeasonSealRecord records = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_records_size();
@@ -3406,8 +3485,15 @@ PROTOBUF_NOINLINE void PlayerSeasonComp::Clear() {
             this_._internal_retro_honor_target_season_id());
       }
     }
-    // map<uint32, uint32> retro_honor_progress = 7;
+    // uint32 extra_saved_build_slots = 8;
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_extra_saved_build_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_extra_saved_build_slots());
+      }
+    }
+    // map<uint32, uint32> retro_honor_progress = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_retro_honor_progress_size());
       for (const auto& entry : this_._internal_retro_honor_progress()) {
@@ -3435,7 +3521,7 @@ void PlayerSeasonComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_records()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -3468,6 +3554,11 @@ void PlayerSeasonComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_extra_saved_build_slots() != 0) {
+        _this->_impl_.extra_saved_build_slots_ = from._impl_.extra_saved_build_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       _this->_impl_.retro_honor_progress_.MergeFrom(from._impl_.retro_honor_progress_);
     }
   }
@@ -3492,8 +3583,8 @@ void PlayerSeasonComp::InternalSwap(PlayerSeasonComp* PROTOBUF_RESTRICT PROTOBUF
   _impl_.saved_builds_.InternalSwap(&other->_impl_.saved_builds_);
   _impl_.unlocked_honor_words_.InternalSwap(&other->_impl_.unlocked_honor_words_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.retro_honor_target_season_id_)
-      + sizeof(PlayerSeasonComp::_impl_.retro_honor_target_season_id_)
+      PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.extra_saved_build_slots_)
+      + sizeof(PlayerSeasonComp::_impl_.extra_saved_build_slots_)
       - PROTOBUF_FIELD_OFFSET(PlayerSeasonComp, _impl_.wuxing_tower_)>(
           reinterpret_cast<char*>(&_impl_.wuxing_tower_),
           reinterpret_cast<char*>(&other->_impl_.wuxing_tower_));

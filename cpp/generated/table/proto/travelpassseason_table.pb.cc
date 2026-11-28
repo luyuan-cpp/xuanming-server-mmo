@@ -48,11 +48,11 @@ constexpr TravelPassSeasonTable::ParseTableT_ TravelPassSeasonTable::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_._has_bits_),
       0, // no _extensions_
-      15, 120,  // max_field_number, fast_idx_mask
+      17, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294934528,  // skipmap
+      4294836224,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      15,  // num_field_entries
+      17,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -123,6 +123,28 @@ constexpr TravelPassSeasonTable::ParseTableT_ TravelPassSeasonTable::InternalGen
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TravelPassSeasonTable, _impl_.config_revision_), 14>(),
        {120, 14, 0,
         PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.config_revision_)}},
+      // uint32 sort_order = 16;
+      {::_pbi::TcParser::FastV32S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.sort_order_)}},
+      // uint32 is_archived = 17;
+      {::_pbi::TcParser::FastV32S2,
+       {392, 16, 0,
+        PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.is_archived_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -156,10 +178,14 @@ constexpr TravelPassSeasonTable::ParseTableT_ TravelPassSeasonTable::InternalGen
       {PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.premium_price_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 config_revision = 15;
       {PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.config_revision_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 sort_order = 16;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.sort_order_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 is_archived = 17;
+      {PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.is_archived_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
-      "\25\0\0\4\13\10\20\0\0\0\0\0\0\0\0\0"
+      "\25\0\0\4\13\10\20\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "TravelPassSeasonTable"
       "name"
       "description"
@@ -196,7 +222,9 @@ inline constexpr TravelPassSeasonTable::Impl_::Impl_(
         pvp_qualified_other_points_{0u},
         premium_price_{::uint64_t{0u}},
         premium_currency_type_{0u},
-        config_revision_{0u} {}
+        config_revision_{0u},
+        sort_order_{0u},
+        is_archived_{0u} {}
 
 template <typename>
 constexpr TravelPassSeasonTable::TravelPassSeasonTable(::_pbi::ConstantInitialized,
@@ -450,7 +478,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_._has_bits_),
-        18, // hasbit index offset
+        20, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.enabled_),
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.name_),
@@ -466,6 +494,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.premium_currency_type_),
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.premium_price_),
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.config_revision_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.sort_order_),
+        PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTable, _impl_.is_archived_),
         4,
         5,
         0,
@@ -481,6 +511,8 @@ const ::uint32_t
         13,
         12,
         14,
+        15,
+        16,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TravelPassSeasonTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -491,7 +523,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::TravelPassSeasonTable)},
-        {33, sizeof(::TravelPassSeasonTableData)},
+        {37, sizeof(::TravelPassSeasonTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -500,7 +532,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_travelpassseason_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\034travelpassseason_table.proto\"\354\002\n\025Trave"
+    "\n\034travelpassseason_table.proto\"\225\003\n\025Trave"
     "lPassSeasonTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030"
     "\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\023\n\013description\030\004 \001(\t"
     "\022\020\n\010icon_key\030\005 \001(\t\022\030\n\020banner_asset_key\030\006"
@@ -509,17 +541,18 @@ const char descriptor_table_protodef_travelpassseason_5ftable_2eproto[] ABSL_ATT
     "ints\030\n \001(\r\022\036\n\026hard_or_pvp_win_points\030\013 \001"
     "(\r\022\"\n\032pvp_qualified_other_points\030\014 \001(\r\022\035"
     "\n\025premium_currency_type\030\r \001(\r\022\025\n\rpremium"
-    "_price\030\016 \001(\004\022\027\n\017config_revision\030\017 \001(\r\"A\n"
-    "\031TravelPassSeasonTableData\022$\n\004data\030\001 \003(\013"
-    "2\026.TravelPassSeasonTableBG\n\016com.game.tab"
-    "leB\037TravelPassSeasonTableOuterClassP\001Z\022g"
-    "enerated/pb/tableb\006proto3"
+    "_price\030\016 \001(\004\022\027\n\017config_revision\030\017 \001(\r\022\022\n"
+    "\nsort_order\030\020 \001(\r\022\023\n\013is_archived\030\021 \001(\r\"A"
+    "\n\031TravelPassSeasonTableData\022$\n\004data\030\001 \003("
+    "\0132\026.TravelPassSeasonTableBG\n\016com.game.ta"
+    "bleB\037TravelPassSeasonTableOuterClassP\001Z\022"
+    "generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_travelpassseason_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_travelpassseason_5ftable_2eproto = {
     false,
     false,
-    545,
+    586,
     descriptor_table_protodef_travelpassseason_5ftable_2eproto,
     "travelpassseason_table.proto",
     &descriptor_table_travelpassseason_5ftable_2eproto_once,
@@ -572,9 +605,9 @@ TravelPassSeasonTable::TravelPassSeasonTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, config_revision_) -
+           offsetof(Impl_, is_archived_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::config_revision_));
+               sizeof(Impl_::is_archived_));
 
   // @@protoc_insertion_point(copy_constructor:TravelPassSeasonTable)
 }
@@ -592,9 +625,9 @@ inline void TravelPassSeasonTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, config_revision_) -
+           offsetof(Impl_, is_archived_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::config_revision_));
+               sizeof(Impl_::is_archived_));
 }
 TravelPassSeasonTable::~TravelPassSeasonTable() {
   // @@protoc_insertion_point(destructor:TravelPassSeasonTable)
@@ -667,11 +700,12 @@ PROTOBUF_NOINLINE void TravelPassSeasonTable::Clear() {
         reinterpret_cast<char*>(&_impl_.ends_at_ms_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.ends_at_ms_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.max_points_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.config_revision_) -
-        reinterpret_cast<char*>(&_impl_.max_points_)) + sizeof(_impl_.config_revision_));
+        reinterpret_cast<char*>(&_impl_.sort_order_) -
+        reinterpret_cast<char*>(&_impl_.max_points_)) + sizeof(_impl_.sort_order_));
   }
+  _impl_.is_archived_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -834,6 +868,24 @@ PROTOBUF_NOINLINE void TravelPassSeasonTable::Clear() {
     }
   }
 
+  // uint32 sort_order = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_sort_order() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          16, this_._internal_sort_order(), target);
+    }
+  }
+
+  // uint32 is_archived = 17;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_is_archived() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          17, this_._internal_is_archived(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -917,7 +969,7 @@ PROTOBUF_NOINLINE void TravelPassSeasonTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint32 max_points = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_max_points() != 0) {
@@ -965,6 +1017,22 @@ PROTOBUF_NOINLINE void TravelPassSeasonTable::Clear() {
       if (this_._internal_config_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_config_revision());
+      }
+    }
+    // uint32 sort_order = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_sort_order() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_sort_order());
+      }
+    }
+  }
+   {
+    // uint32 is_archived = 17;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_is_archived() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_is_archived());
       }
     }
   }
@@ -1043,7 +1111,7 @@ void TravelPassSeasonTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_max_points() != 0) {
         _this->_impl_.max_points_ = from._impl_.max_points_;
@@ -1079,6 +1147,16 @@ void TravelPassSeasonTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.config_revision_ = from._impl_.config_revision_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_sort_order() != 0) {
+        _this->_impl_.sort_order_ = from._impl_.sort_order_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (from._internal_is_archived() != 0) {
+      _this->_impl_.is_archived_ = from._impl_.is_archived_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1104,8 +1182,8 @@ void TravelPassSeasonTable::InternalSwap(TravelPassSeasonTable* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.icon_key_, &other->_impl_.icon_key_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.banner_asset_key_, &other->_impl_.banner_asset_key_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.config_revision_)
-      + sizeof(TravelPassSeasonTable::_impl_.config_revision_)
+      PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.is_archived_)
+      + sizeof(TravelPassSeasonTable::_impl_.is_archived_)
       - PROTOBUF_FIELD_OFFSET(TravelPassSeasonTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

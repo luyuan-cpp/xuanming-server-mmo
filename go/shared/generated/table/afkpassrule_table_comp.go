@@ -41,6 +41,26 @@ type AfkPassRuleDescComp struct {
     Value string
 }
 
+type AfkPassRuleBonus_item_idComp struct {
+    Value uint32
+}
+
+type AfkPassRuleBonus_item_countComp struct {
+    Value uint32
+}
+
+type AfkPassRuleBonus_frame_keyComp struct {
+    Value string
+}
+
+type AfkPassRulePlan_nameComp struct {
+    Value string
+}
+
+type AfkPassRuleIcon_keyComp struct {
+    Value string
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -72,5 +92,25 @@ func MakeAfkPassRuleRemind_before_hoursComp(row *pb.AfkPassRuleTable) AfkPassRul
 
 func MakeAfkPassRuleDescComp(row *pb.AfkPassRuleTable) AfkPassRuleDescComp {
     return AfkPassRuleDescComp{Value: row.Desc}
+}
+
+func MakeAfkPassRuleBonus_item_idComp(row *pb.AfkPassRuleTable) AfkPassRuleBonus_item_idComp {
+    return AfkPassRuleBonus_item_idComp{Value: row.BonusItemId}
+}
+
+func MakeAfkPassRuleBonus_item_countComp(row *pb.AfkPassRuleTable) AfkPassRuleBonus_item_countComp {
+    return AfkPassRuleBonus_item_countComp{Value: row.BonusItemCount}
+}
+
+func MakeAfkPassRuleBonus_frame_keyComp(row *pb.AfkPassRuleTable) AfkPassRuleBonus_frame_keyComp {
+    return AfkPassRuleBonus_frame_keyComp{Value: row.BonusFrameKey}
+}
+
+func MakeAfkPassRulePlan_nameComp(row *pb.AfkPassRuleTable) AfkPassRulePlan_nameComp {
+    return AfkPassRulePlan_nameComp{Value: row.PlanName}
+}
+
+func MakeAfkPassRuleIcon_keyComp(row *pb.AfkPassRuleTable) AfkPassRuleIcon_keyComp {
+    return AfkPassRuleIcon_keyComp{Value: row.IconKey}
 }
 

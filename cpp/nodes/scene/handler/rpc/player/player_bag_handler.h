@@ -68,6 +68,9 @@ public:
     static void UnlockEquipLoadout(entt::entity player,
         const ::UnlockEquipLoadoutRequest* request,
         ::UnlockEquipLoadoutResponse* response);
+    static void ExpandBagCapacity(entt::entity player,
+        const ::ExpandBagCapacityRequest* request,
+        ::ExpandBagCapacityResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -236,6 +239,15 @@ public:
             UnlockEquipLoadout(player,
                 static_cast<const ::UnlockEquipLoadoutRequest*>(request),
                 static_cast<::UnlockEquipLoadoutResponse*>(response));
+			}
+            break;
+        case 18:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ExpandBagCapacityResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ExpandBagCapacity(player,
+                static_cast<const ::ExpandBagCapacityRequest*>(request),
+                static_cast<::ExpandBagCapacityResponse*>(response));
 			}
             break;
         default:

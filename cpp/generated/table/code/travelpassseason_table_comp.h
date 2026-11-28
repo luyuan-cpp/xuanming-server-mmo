@@ -74,6 +74,14 @@ struct TravelPassSeasonConfig_revisionComp {
     uint32_t value;
 };
 
+struct TravelPassSeasonSort_orderComp {
+    uint32_t value;
+};
+
+struct TravelPassSeasonIs_archivedComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -123,4 +131,10 @@ inline TravelPassSeasonPremium_priceComp MakeTravelPassSeasonPremium_priceComp(c
 }
 inline TravelPassSeasonConfig_revisionComp MakeTravelPassSeasonConfig_revisionComp(const TravelPassSeasonTable& row) {
     return { row.config_revision() };
+}
+inline TravelPassSeasonSort_orderComp MakeTravelPassSeasonSort_orderComp(const TravelPassSeasonTable& row) {
+    return { row.sort_order() };
+}
+inline TravelPassSeasonIs_archivedComp MakeTravelPassSeasonIs_archivedComp(const TravelPassSeasonTable& row) {
+    return { row.is_archived() };
 }

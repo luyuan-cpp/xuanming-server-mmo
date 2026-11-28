@@ -107,6 +107,14 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kBagTemporaryRetrieveBusy = 6017;</code>
      */
     kBagTemporaryRetrieveBusy(6017),
+    /**
+     * <code>kBagExpandMaxReached = 6018;</code>
+     */
+    kBagExpandMaxReached(6018),
+    /**
+     * <code>kBagExpandPriceChanged = 6019;</code>
+     */
+    kBagExpandPriceChanged(6019),
     UNRECOGNIZED(-1),
     ;
 
@@ -195,6 +203,14 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kBagTemporaryRetrieveBusy = 6017;</code>
      */
     public static final int kBagTemporaryRetrieveBusy_VALUE = 6017;
+    /**
+     * <code>kBagExpandMaxReached = 6018;</code>
+     */
+    public static final int kBagExpandMaxReached_VALUE = 6018;
+    /**
+     * <code>kBagExpandPriceChanged = 6019;</code>
+     */
+    public static final int kBagExpandPriceChanged_VALUE = 6019;
 
 
     public final int getNumber() {
@@ -240,6 +256,8 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
         case 6015: return kBagTemporaryItemNotFound;
         case 6016: return kBagTemporaryRetrieveBagFull;
         case 6017: return kBagTemporaryRetrieveBusy;
+        case 6018: return kBagExpandMaxReached;
+        case 6019: return kBagExpandPriceChanged;
         default: return null;
       }
     }
@@ -305,7 +323,7 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023bag_error_tip.proto*\243\004\n\tbag_error\022\020\n\014k" +
+      "\n\023bag_error_tip.proto*\333\004\n\tbag_error\022\020\n\014k" +
       "Bag_errorOK\020\000\022\033\n\026kBagDeleteItemFindGuid\020" +
       "\360.\022!\n\034kBagDeleteItemAlreadyHasGuid\020\361.\022#\n" +
       "\036kBagAddItemHasNotBaseComponent\020\362.\022\033\n\026kB" +
@@ -319,8 +337,9 @@ public final class BagErrorTip extends com.google.protobuf.GeneratedFile {
       ".\022\035\n\030kBagInsufficientBagSpace\020\376.\022\036\n\031kBag" +
       "TemporaryItemNotFound\020\377.\022!\n\034kBagTemporar" +
       "yRetrieveBagFull\020\200/\022\036\n\031kBagTemporaryRetr" +
-      "ieveBusy\020\201/B$\n\016com.game.tableZ\022generated" +
-      "/pb/tableb\006proto3"
+      "ieveBusy\020\201/\022\031\n\024kBagExpandMaxReached\020\202/\022\033" +
+      "\n\026kBagExpandPriceChanged\020\203/B$\n\016com.game." +
+      "tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

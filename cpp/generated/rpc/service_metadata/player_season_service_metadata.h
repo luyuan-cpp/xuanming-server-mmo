@@ -54,3 +54,7 @@ constexpr uint32_t SceneSeasonClientPlayerChooseWuxingRealmBranchIndex = 11;
 constexpr uint32_t SceneSeasonClientPlayerResolveWuxingRealmEventMessageId = 586;
 constexpr uint32_t SceneSeasonClientPlayerResolveWuxingRealmEventIndex = 12;
 #define SceneSeasonClientPlayerResolveWuxingRealmEventMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(12)
+
+constexpr uint32_t SceneSeasonClientPlayerExpandSavedBuildSlotsMessageId = 603;
+constexpr uint32_t SceneSeasonClientPlayerExpandSavedBuildSlotsIndex = 13;
+#define SceneSeasonClientPlayerExpandSavedBuildSlotsMethod  ::SceneSeasonClientPlayer_Stub::descriptor()->method(13)

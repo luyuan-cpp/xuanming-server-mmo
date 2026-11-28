@@ -28,6 +28,12 @@ const (
 	SceneAppearanceClientPlayer_NotifyAppearanceState_FullMethodName        = "/SceneAppearanceClientPlayer/NotifyAppearanceState"
 	SceneAppearanceClientPlayer_EquipPetCosmetic_FullMethodName             = "/SceneAppearanceClientPlayer/EquipPetCosmetic"
 	SceneAppearanceClientPlayer_EquipSkillVfx_FullMethodName                = "/SceneAppearanceClientPlayer/EquipSkillVfx"
+	SceneAppearanceClientPlayer_BuyAppearanceSeriesBundle_FullMethodName    = "/SceneAppearanceClientPlayer/BuyAppearanceSeriesBundle"
+	SceneAppearanceClientPlayer_EquipShowcaseCosmetic_FullMethodName        = "/SceneAppearanceClientPlayer/EquipShowcaseCosmetic"
+	SceneAppearanceClientPlayer_CastCityCelebration_FullMethodName          = "/SceneAppearanceClientPlayer/CastCityCelebration"
+	SceneAppearanceClientPlayer_ClaimCityCelebrationGift_FullMethodName     = "/SceneAppearanceClientPlayer/ClaimCityCelebrationGift"
+	SceneAppearanceClientPlayer_NotifyCityCelebration_FullMethodName        = "/SceneAppearanceClientPlayer/NotifyCityCelebration"
+	SceneAppearanceClientPlayer_SendCosmeticGift_FullMethodName             = "/SceneAppearanceClientPlayer/SendCosmeticGift"
 )
 
 // SceneAppearanceClientPlayerClient is the client API for SceneAppearanceClientPlayer service.
@@ -43,6 +49,12 @@ type SceneAppearanceClientPlayerClient interface {
 	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
 	EquipPetCosmetic(ctx context.Context, in *EquipPetCosmeticRequest, opts ...grpc.CallOption) (*EquipPetCosmeticResponse, error)
 	EquipSkillVfx(ctx context.Context, in *EquipSkillVfxRequest, opts ...grpc.CallOption) (*EquipSkillVfxResponse, error)
+	BuyAppearanceSeriesBundle(ctx context.Context, in *BuyAppearanceSeriesBundleRequest, opts ...grpc.CallOption) (*BuyAppearanceSeriesBundleResponse, error)
+	EquipShowcaseCosmetic(ctx context.Context, in *EquipShowcaseCosmeticRequest, opts ...grpc.CallOption) (*EquipShowcaseCosmeticResponse, error)
+	CastCityCelebration(ctx context.Context, in *CastCityCelebrationRequest, opts ...grpc.CallOption) (*CastCityCelebrationResponse, error)
+	ClaimCityCelebrationGift(ctx context.Context, in *ClaimCityCelebrationGiftRequest, opts ...grpc.CallOption) (*ClaimCityCelebrationGiftResponse, error)
+	NotifyCityCelebration(ctx context.Context, in *CityCelebrationNotify, opts ...grpc.CallOption) (*base.Empty, error)
+	SendCosmeticGift(ctx context.Context, in *SendCosmeticGiftRequest, opts ...grpc.CallOption) (*SendCosmeticGiftResponse, error)
 }
 
 type sceneAppearanceClientPlayerClient struct {
@@ -133,6 +145,66 @@ func (c *sceneAppearanceClientPlayerClient) EquipSkillVfx(ctx context.Context, i
 	return out, nil
 }
 
+func (c *sceneAppearanceClientPlayerClient) BuyAppearanceSeriesBundle(ctx context.Context, in *BuyAppearanceSeriesBundleRequest, opts ...grpc.CallOption) (*BuyAppearanceSeriesBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuyAppearanceSeriesBundleResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_BuyAppearanceSeriesBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAppearanceClientPlayerClient) EquipShowcaseCosmetic(ctx context.Context, in *EquipShowcaseCosmeticRequest, opts ...grpc.CallOption) (*EquipShowcaseCosmeticResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EquipShowcaseCosmeticResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_EquipShowcaseCosmetic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAppearanceClientPlayerClient) CastCityCelebration(ctx context.Context, in *CastCityCelebrationRequest, opts ...grpc.CallOption) (*CastCityCelebrationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CastCityCelebrationResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_CastCityCelebration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAppearanceClientPlayerClient) ClaimCityCelebrationGift(ctx context.Context, in *ClaimCityCelebrationGiftRequest, opts ...grpc.CallOption) (*ClaimCityCelebrationGiftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimCityCelebrationGiftResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_ClaimCityCelebrationGift_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAppearanceClientPlayerClient) NotifyCityCelebration(ctx context.Context, in *CityCelebrationNotify, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_NotifyCityCelebration_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneAppearanceClientPlayerClient) SendCosmeticGift(ctx context.Context, in *SendCosmeticGiftRequest, opts ...grpc.CallOption) (*SendCosmeticGiftResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendCosmeticGiftResponse)
+	err := c.cc.Invoke(ctx, SceneAppearanceClientPlayer_SendCosmeticGift_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneAppearanceClientPlayerServer is the server API for SceneAppearanceClientPlayer service.
 // All implementations must embed UnimplementedSceneAppearanceClientPlayerServer
 // for forward compatibility.
@@ -146,6 +218,12 @@ type SceneAppearanceClientPlayerServer interface {
 	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
 	EquipPetCosmetic(context.Context, *EquipPetCosmeticRequest) (*EquipPetCosmeticResponse, error)
 	EquipSkillVfx(context.Context, *EquipSkillVfxRequest) (*EquipSkillVfxResponse, error)
+	BuyAppearanceSeriesBundle(context.Context, *BuyAppearanceSeriesBundleRequest) (*BuyAppearanceSeriesBundleResponse, error)
+	EquipShowcaseCosmetic(context.Context, *EquipShowcaseCosmeticRequest) (*EquipShowcaseCosmeticResponse, error)
+	CastCityCelebration(context.Context, *CastCityCelebrationRequest) (*CastCityCelebrationResponse, error)
+	ClaimCityCelebrationGift(context.Context, *ClaimCityCelebrationGiftRequest) (*ClaimCityCelebrationGiftResponse, error)
+	NotifyCityCelebration(context.Context, *CityCelebrationNotify) (*base.Empty, error)
+	SendCosmeticGift(context.Context, *SendCosmeticGiftRequest) (*SendCosmeticGiftResponse, error)
 	mustEmbedUnimplementedSceneAppearanceClientPlayerServer()
 }
 
@@ -179,6 +257,24 @@ func (UnimplementedSceneAppearanceClientPlayerServer) EquipPetCosmetic(context.C
 }
 func (UnimplementedSceneAppearanceClientPlayerServer) EquipSkillVfx(context.Context, *EquipSkillVfxRequest) (*EquipSkillVfxResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EquipSkillVfx not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) BuyAppearanceSeriesBundle(context.Context, *BuyAppearanceSeriesBundleRequest) (*BuyAppearanceSeriesBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuyAppearanceSeriesBundle not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) EquipShowcaseCosmetic(context.Context, *EquipShowcaseCosmeticRequest) (*EquipShowcaseCosmeticResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EquipShowcaseCosmetic not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) CastCityCelebration(context.Context, *CastCityCelebrationRequest) (*CastCityCelebrationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CastCityCelebration not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) ClaimCityCelebrationGift(context.Context, *ClaimCityCelebrationGiftRequest) (*ClaimCityCelebrationGiftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimCityCelebrationGift not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) NotifyCityCelebration(context.Context, *CityCelebrationNotify) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyCityCelebration not implemented")
+}
+func (UnimplementedSceneAppearanceClientPlayerServer) SendCosmeticGift(context.Context, *SendCosmeticGiftRequest) (*SendCosmeticGiftResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendCosmeticGift not implemented")
 }
 func (UnimplementedSceneAppearanceClientPlayerServer) mustEmbedUnimplementedSceneAppearanceClientPlayerServer() {
 }
@@ -346,6 +442,114 @@ func _SceneAppearanceClientPlayer_EquipSkillVfx_Handler(srv interface{}, ctx con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneAppearanceClientPlayer_BuyAppearanceSeriesBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuyAppearanceSeriesBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).BuyAppearanceSeriesBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_BuyAppearanceSeriesBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).BuyAppearanceSeriesBundle(ctx, req.(*BuyAppearanceSeriesBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAppearanceClientPlayer_EquipShowcaseCosmetic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EquipShowcaseCosmeticRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).EquipShowcaseCosmetic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_EquipShowcaseCosmetic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).EquipShowcaseCosmetic(ctx, req.(*EquipShowcaseCosmeticRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAppearanceClientPlayer_CastCityCelebration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CastCityCelebrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).CastCityCelebration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_CastCityCelebration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).CastCityCelebration(ctx, req.(*CastCityCelebrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAppearanceClientPlayer_ClaimCityCelebrationGift_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimCityCelebrationGiftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).ClaimCityCelebrationGift(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_ClaimCityCelebrationGift_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).ClaimCityCelebrationGift(ctx, req.(*ClaimCityCelebrationGiftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAppearanceClientPlayer_NotifyCityCelebration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CityCelebrationNotify)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).NotifyCityCelebration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_NotifyCityCelebration_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).NotifyCityCelebration(ctx, req.(*CityCelebrationNotify))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneAppearanceClientPlayer_SendCosmeticGift_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendCosmeticGiftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneAppearanceClientPlayerServer).SendCosmeticGift(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneAppearanceClientPlayer_SendCosmeticGift_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneAppearanceClientPlayerServer).SendCosmeticGift(ctx, req.(*SendCosmeticGiftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneAppearanceClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneAppearanceClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -384,6 +588,30 @@ var SceneAppearanceClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EquipSkillVfx",
 			Handler:    _SceneAppearanceClientPlayer_EquipSkillVfx_Handler,
+		},
+		{
+			MethodName: "BuyAppearanceSeriesBundle",
+			Handler:    _SceneAppearanceClientPlayer_BuyAppearanceSeriesBundle_Handler,
+		},
+		{
+			MethodName: "EquipShowcaseCosmetic",
+			Handler:    _SceneAppearanceClientPlayer_EquipShowcaseCosmetic_Handler,
+		},
+		{
+			MethodName: "CastCityCelebration",
+			Handler:    _SceneAppearanceClientPlayer_CastCityCelebration_Handler,
+		},
+		{
+			MethodName: "ClaimCityCelebrationGift",
+			Handler:    _SceneAppearanceClientPlayer_ClaimCityCelebrationGift_Handler,
+		},
+		{
+			MethodName: "NotifyCityCelebration",
+			Handler:    _SceneAppearanceClientPlayer_NotifyCityCelebration_Handler,
+		},
+		{
+			MethodName: "SendCosmeticGift",
+			Handler:    _SceneAppearanceClientPlayer_SendCosmeticGift_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

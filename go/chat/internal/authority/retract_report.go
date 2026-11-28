@@ -27,10 +27,12 @@ const (
 	maxReportDetailBytes  = 200
 )
 
-// PlayerProfile 是防刷/等级门槛所需的玩家基础档案(由 data_service 提供并带短 TTL 缓存)。
+// PlayerProfile 是防刷/等级门槛与权威排面外观所需的玩家基础档案(由 data_service 提供并带短 TTL 缓存)。
 type PlayerProfile struct {
 	Level            uint32
 	AccountCreatedMs uint64
+	BubbleSkinId     uint32
+	ShareCardSkinId  uint32
 }
 
 // ProfileReader 按 player_id 读取角色等级与账号创建时间。

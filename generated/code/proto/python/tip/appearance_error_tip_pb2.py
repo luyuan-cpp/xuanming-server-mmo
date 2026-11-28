@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1etip/appearance_error_tip.proto*\xd7\x02\n\x10\x61ppearance_error\x12\x17\n\x13kAppearance_errorOK\x10\x00\x12\x18\n\x12kAppearanceInvalid\x10\xe8\x81\x02\x12\x1f\n\x19kAppearanceAlreadyCurrent\x10\xe9\x81\x02\x12\x17\n\x11kAppearanceNoCard\x10\xea\x81\x02\x12!\n\x1bkAppearanceTrialAlreadyUsed\x10\xeb\x81\x02\x12\x1e\n\x18kAppearanceNoActiveTrial\x10\xec\x81\x02\x12\x17\n\x11kAppearanceFrozen\x10\xed\x81\x02\x12\x1c\n\x16kAppearanceUnavailable\x10\xee\x81\x02\x12\"\n\x1ckAppearanceNotCardUnlockable\x10\xef\x81\x02\x12\x1d\n\x17kAppearanceAlreadyOwned\x10\xf0\x81\x02\x12\x19\n\x13kAppearanceNotOwned\x10\xf1\x81\x02\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1etip/appearance_error_tip.proto*\xfb\x07\n\x10\x61ppearance_error\x12\x17\n\x13kAppearance_errorOK\x10\x00\x12\x18\n\x12kAppearanceInvalid\x10\xe8\x81\x02\x12\x1f\n\x19kAppearanceAlreadyCurrent\x10\xe9\x81\x02\x12\x17\n\x11kAppearanceNoCard\x10\xea\x81\x02\x12!\n\x1bkAppearanceTrialAlreadyUsed\x10\xeb\x81\x02\x12\x1e\n\x18kAppearanceNoActiveTrial\x10\xec\x81\x02\x12\x17\n\x11kAppearanceFrozen\x10\xed\x81\x02\x12\x1c\n\x16kAppearanceUnavailable\x10\xee\x81\x02\x12\"\n\x1ckAppearanceNotCardUnlockable\x10\xef\x81\x02\x12\x1d\n\x17kAppearanceAlreadyOwned\x10\xf0\x81\x02\x12\x19\n\x13kAppearanceNotOwned\x10\xf1\x81\x02\x12(\n\"kAppearanceSeriesBundleUnavailable\x10\xf2\x81\x02\x12\'\n!kAppearanceSeriesAlreadyCompleted\x10\xf3\x81\x02\x12)\n#kAppearanceSeriesBundlePriceChanged\x10\xf4\x81\x02\x12.\n(kAppearanceSeriesBundleCurrencyNotEnough\x10\xf5\x81\x02\x12!\n\x1bkCityCelebrationNotSafeCity\x10\xf6\x81\x02\x12!\n\x1bkCityCelebrationChannelFull\x10\xf7\x81\x02\x12\x1c\n\x16kCityCelebrationNoItem\x10\xf8\x81\x02\x12\x1e\n\x18kCityCelebrationNotFound\x10\xf9\x81\x02\x12$\n\x1ekCityCelebrationAlreadyClaimed\x10\xfa\x81\x02\x12!\n\x1bkCityCelebrationLevelTooLow\x10\xfb\x81\x02\x12&\n kCityCelebrationWeeklyCapReached\x10\xfc\x81\x02\x12!\n\x1bkCosmeticGiftNotFriend7Days\x10\xfd\x81\x02\x12%\n\x1fkCosmeticGiftTargetAlreadyOwned\x10\xfe\x81\x02\x12%\n\x1fkCosmeticGiftWeeklyLimitReached\x10\xff\x81\x02\x12 \n\x1akCosmeticGiftInvalidTarget\x10\x80\x82\x02\x12$\n\x1ekCosmeticGiftCurrencyNotEnough\x10\x81\x82\x02\x12\x1f\n\x19kCosmeticGiftPriceChanged\x10\x82\x82\x02\x12%\n\x1fkCosmeticGiftServiceUnavailable\x10\x83\x82\x02\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_APPEARANCE_ERROR']._serialized_start=35
-  _globals['_APPEARANCE_ERROR']._serialized_end=378
+  _globals['_APPEARANCE_ERROR']._serialized_end=1054
 # @@protoc_insertion_point(module_scope)

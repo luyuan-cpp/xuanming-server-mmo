@@ -7,17 +7,22 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <vector>
 
 #include "engine/core/type_define/player_guid_comp.h"
 #include "engine/core/type_define/type_define.h"
+#include "modules/bag/bag_service.h"
+#include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
+#include "modules/id_segment/guid_segment_registry.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_travel_pass_comp.pb.h"
 #include "proto/common/database/player_cache.pb.h"
 #include "proto/scene/player_afk_pass.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
@@ -25,7 +30,9 @@
 #include "services/scene/player/system/afk_pass.h"
 #include "services/scene/player/system/afk_pass_rules.h"
 #include "services/scene/player/system/connection_lost_hold.h"
+#include "services/scene/player/system/travel_pass_rules.h"
 #include "table/code/afkpassrule_table.h"
+#include "table/code/item_table.h"
 #include "table/proto/tip/afk_pass_error_tip.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
@@ -135,9 +142,12 @@ class AfkPassSystemTest : public testing::Test
 protected:
 	void SetUp() override
 	{
+		ItemTableManager::Instance().Load();
 		AfkPassRuleTableManager::Instance().Load();
+		ASSERT_TRUE(ArmItemSegment(2800000, 2900000));
 		ASSERT_GT(AfkPassRuleTableManager::Instance().Count(), 0u)
 			<< "AfkPassRule has not been exported: run tools/scripts/afk_pass_xlsx_patch.py new-tables, then export the tables";
+		ASSERT_TRUE(AfkPassSystem::ValidateTables());
 		const auto &row = *AfkPassRuleTableManager::Instance().FindAll().data().begin();
 		rule = afk_pass::Rule{row.period_days(), row.price_currency_type(), row.price(), row.max_remaining_days(),
 							  row.remind_before_hours()};
@@ -145,7 +155,7 @@ protected:
 		currency = static_cast<CurrencyType>(rule.priceCurrencyType);
 		AfkPassSystem::SetProjectionSenderForTest(
 			[this](Guid playerId, uint64_t expiresAtSec, bool set) { projections.push_back({playerId, expiresAtSec, set}); });
-		player = NewPlayer(kPlayerGuid, rule.price * 3);
+		player = NewPlayer(kPlayerGuid, rule.price * 10);
 	}
 
 	void TearDown() override
@@ -156,6 +166,26 @@ protected:
 		{
 			tlsEcs.actorRegistry.destroy(player);
 		}
+		EXPECT_TRUE(ArmItemSegment(1, uint64_t{1} << 54));
+	}
+
+	static bool ArmItemSegment(uint64_t lo, uint64_t hi)
+	{
+		auto &client = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+		client.Reset();
+		GuidSegmentClient::Options options;
+		options.mixIds = false;
+		options.kindName = "item";
+		options.initialStep = 100000;
+		if (!client.Enable(options, [](const std::string &, uint32_t) { return true; },
+						   [](GuidSegmentClient::TimerKind, double, std::function<void()>) {},
+						   [] { return 0.0; }))
+		{
+			return false;
+		}
+		client.Warm();
+		client.OnResponse(0, lo, hi);
+		return client.IsReady();
 	}
 
 	// 生产侧这几个持久组件由 PlayerDatabaseMessageFieldsUnmarshal 无条件挂上。
@@ -172,6 +202,14 @@ protected:
 		values.set_values(static_cast<int>(currency), balance);
 		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(entity);
 		tlsEcs.actorRegistry.emplace<PlayerUint64Comp>(entity);
+		tlsEcs.actorRegistry.emplace<PlayerProfileComp>(entity);
+		tlsEcs.actorRegistry.emplace<PlayerTravelPassComp>(entity);
+		auto &bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(entity);
+		for (auto &bag : bags.bags)
+		{
+			bag.SetPlayerGuid(guid);
+		}
+		bags.bags[kInventory].SetCapacityForRestore(30);
 		tlsEcs.actorRegistry.emplace<ClientRequestLedgerComp>(entity);
 		tlsEcs.playerList.emplace(guid, entity);
 		return entity;
@@ -522,4 +560,73 @@ TEST_F(AfkPassSystemTest, LightCardPopulatesLoadoutSlotsAndStage2TradableFlag)
 	ASSERT_EQ(AfkPassSystem::GmSet(player, 0, kNow + 5, info), kSuccess);
 	EXPECT_EQ(info.unlocked_loadout_slots(), 2u);
 	EXPECT_FALSE(info.stage2_tradable_enabled());
+}
+
+TEST_F(AfkPassSystemTest, SeasonPlan90dInstantBonusMarketPerksAndFullBagGuard)
+{
+	AfkPassInfo info;
+	AfkPassSystem::FillInfo(player, kNow, info);
+	ASSERT_EQ(info.plans_size(), 2);
+	EXPECT_EQ(info.market_listing_limit(), 10u);
+	EXPECT_EQ(info.stall_duration_hours(), 48u);
+	EXPECT_EQ(info.weekly_free_trial_quota(), 0u);
+	EXPECT_EQ(info.plans(1).plan_id(), 2u);
+	EXPECT_EQ(info.plans(1).period_days(), 90u);
+	EXPECT_EQ(info.plans(1).price(), 780u);
+	EXPECT_EQ(info.plans(1).bonus_item_id(), 3405u);
+	EXPECT_EQ(info.plans(1).bonus_item_count(), 3u);
+	EXPECT_EQ(info.plans(1).bonus_frame_key(), "frame_lightcard_season_s1");
+
+	// 1. 未知套餐 / 天数报价变动均零扣费拒绝。
+	::BuyAfkPassRequest badPlan;
+	badPlan.set_client_request_id(7901);
+	badPlan.set_plan_id(99);
+	badPlan.set_expected_currency_type(1);
+	badPlan.set_expected_price(780);
+	::BuyAfkPassResponse resp;
+	EXPECT_EQ(AfkPassSystem::Buy(player, badPlan, kNow, resp), kAfkPassPlanInvalid);
+
+	::BuyAfkPassRequest staleDays;
+	staleDays.set_client_request_id(7902);
+	staleDays.set_plan_id(2);
+	staleDays.set_expected_currency_type(1);
+	staleDays.set_expected_price(780);
+	staleDays.set_expected_period_days(30);
+	EXPECT_EQ(AfkPassSystem::Buy(player, staleDays, kNow, resp), kAfkPassPriceChanged);
+
+	// 2. 满包购买季享卡：返回 kAfkPassBagFull 且零扣灵石、零加天数（M-2 防线）。
+	const uint64_t balBefore = Balance();
+	auto &inv = tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+	inv.SetCapacityForRestore(0);
+	::BuyAfkPassRequest buySeason;
+	buySeason.set_client_request_id(7903);
+	buySeason.set_plan_id(2);
+	buySeason.set_expected_currency_type(1);
+	buySeason.set_expected_price(780);
+	buySeason.set_expected_period_days(90);
+	EXPECT_EQ(AfkPassSystem::Buy(player, buySeason, kNow, resp), kAfkPassBagFull);
+	EXPECT_EQ(Balance(), balBefore);
+	EXPECT_EQ(Expiry(), 0u);
+
+	// 3. 恢复背包后购买 90 天季享卡：扣 780 灵石、+90 天、直赠 3 张绑定 3405 + 季享限定头像框、激活市场与试穿权益。
+	inv.SetCapacityForRestore(30);
+	ASSERT_EQ(AfkPassSystem::Buy(player, buySeason, kNow, resp), kSuccess);
+	EXPECT_EQ(Balance(), balBefore - 780u);
+	EXPECT_EQ(Expiry(), kNow + 90 * kDay);
+	EXPECT_EQ(inv.GetTotalItemCount(3405), 3u);
+	EXPECT_EQ(BagService::RemovableTradableCount(player, inv, 3405), 0u);
+	EXPECT_TRUE(travel_pass_rules::HasCosmeticKey(
+		tlsEcs.actorRegistry.get<PlayerTravelPassComp>(player), "frame_lightcard_season_s1"));
+	EXPECT_EQ(resp.info().market_listing_limit(), 20u);
+	EXPECT_EQ(resp.info().stall_duration_hours(), 96u);
+	EXPECT_EQ(resp.info().weekly_free_trial_quota(), 3u);
+
+	// 4. 共用 180 天上限：第 2 次 90 天恰好达 180 天放行，第 3 次（含 30 天月卡）被 kAfkPassStackLimit 拦截。
+	buySeason.set_client_request_id(7904);
+	ASSERT_EQ(AfkPassSystem::Buy(player, buySeason, kNow, resp), kSuccess);
+	EXPECT_EQ(Expiry(), kNow + 180 * kDay);
+	EXPECT_EQ(inv.GetTotalItemCount(3405), 6u);
+	EXPECT_EQ(tlsEcs.actorRegistry.get<PlayerTravelPassComp>(player).bonus_cosmetic_keys_size(), 1);
+
+	EXPECT_EQ(AfkPassSystem::Buy(player, Request(7905), kNow, resp), kAfkPassStackLimit);
 }

@@ -237,6 +237,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppearanceSeriesTable final : publi
     kIdFieldNumber = 1,
     kSortOrderFieldNumber = 4,
     kEnabledFieldNumber = 5,
+    kBundleDiscountBpsFieldNumber = 10,
+    kUnitPriceDiamondFieldNumber = 11,
   };
   // string series_key = 2;
   void clear_series_key() ;
@@ -358,11 +360,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppearanceSeriesTable final : publi
   void _internal_set_enabled(::uint32_t value);
 
   public:
+  // uint32 bundle_discount_bps = 10;
+  void clear_bundle_discount_bps() ;
+  [[nodiscard]] ::uint32_t bundle_discount_bps() const;
+  void set_bundle_discount_bps(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bundle_discount_bps() const;
+  void _internal_set_bundle_discount_bps(::uint32_t value);
+
+  public:
+  // uint32 unit_price_diamond = 11;
+  void clear_unit_price_diamond() ;
+  [[nodiscard]] ::uint32_t unit_price_diamond() const;
+  void set_unit_price_diamond(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_unit_price_diamond() const;
+  void _internal_set_unit_price_diamond(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AppearanceSeriesTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 11,
                           0, 104,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -400,6 +422,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppearanceSeriesTable final : publi
     ::uint32_t id_;
     ::uint32_t sort_order_;
     ::uint32_t enabled_;
+    ::uint32_t bundle_discount_bps_;
+    ::uint32_t unit_price_diamond_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1088,6 +1112,54 @@ inline void AppearanceSeriesTable::set_allocated_epilogue_body(::std::string* PR
     _impl_.epilogue_body_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:AppearanceSeriesTable.epilogue_body)
+}
+
+// uint32 bundle_discount_bps = 10;
+inline void AppearanceSeriesTable::clear_bundle_discount_bps() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bundle_discount_bps_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t AppearanceSeriesTable::bundle_discount_bps() const {
+  // @@protoc_insertion_point(field_get:AppearanceSeriesTable.bundle_discount_bps)
+  return _internal_bundle_discount_bps();
+}
+inline void AppearanceSeriesTable::set_bundle_discount_bps(::uint32_t value) {
+  _internal_set_bundle_discount_bps(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:AppearanceSeriesTable.bundle_discount_bps)
+}
+inline ::uint32_t AppearanceSeriesTable::_internal_bundle_discount_bps() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bundle_discount_bps_;
+}
+inline void AppearanceSeriesTable::_internal_set_bundle_discount_bps(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bundle_discount_bps_ = value;
+}
+
+// uint32 unit_price_diamond = 11;
+inline void AppearanceSeriesTable::clear_unit_price_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unit_price_diamond_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t AppearanceSeriesTable::unit_price_diamond() const {
+  // @@protoc_insertion_point(field_get:AppearanceSeriesTable.unit_price_diamond)
+  return _internal_unit_price_diamond();
+}
+inline void AppearanceSeriesTable::set_unit_price_diamond(::uint32_t value) {
+  _internal_set_unit_price_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:AppearanceSeriesTable.unit_price_diamond)
+}
+inline ::uint32_t AppearanceSeriesTable::_internal_unit_price_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unit_price_diamond_;
+}
+inline void AppearanceSeriesTable::_internal_set_unit_price_diamond(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unit_price_diamond_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -48,11 +48,11 @@ constexpr AppearanceSeriesTable::ParseTableT_ AppearanceSeriesTable::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      11, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294965248,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      11,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -99,8 +99,14 @@ constexpr AppearanceSeriesTable::ParseTableT_ AppearanceSeriesTable::InternalGen
       {::_pbi::TcParser::FastUS1,
        {74, 5, 0,
         PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.epilogue_body_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 bundle_discount_bps = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AppearanceSeriesTable, _impl_.bundle_discount_bps_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.bundle_discount_bps_)}},
+      // uint32 unit_price_diamond = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AppearanceSeriesTable, _impl_.unit_price_diamond_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.unit_price_diamond_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -126,6 +132,10 @@ constexpr AppearanceSeriesTable::ParseTableT_ AppearanceSeriesTable::InternalGen
       {PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.epilogue_title_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string epilogue_body = 9;
       {PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.epilogue_body_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 bundle_discount_bps = 10;
+      {PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.bundle_discount_bps_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 unit_price_diamond = 11;
+      {PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.unit_price_diamond_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -166,7 +176,9 @@ inline constexpr AppearanceSeriesTable::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         id_{0u},
         sort_order_{0u},
-        enabled_{0u} {}
+        enabled_{0u},
+        bundle_discount_bps_{0u},
+        unit_price_diamond_{0u} {}
 
 template <typename>
 constexpr AppearanceSeriesTable::AppearanceSeriesTable(::_pbi::ConstantInitialized,
@@ -420,7 +432,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_._has_bits_),
-        12, // hasbit index offset
+        14, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.series_key_),
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.name_),
@@ -430,6 +442,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.completion_badge_name_),
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.epilogue_title_),
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.epilogue_body_),
+        PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.bundle_discount_bps_),
+        PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTable, _impl_.unit_price_diamond_),
         6,
         0,
         1,
@@ -439,6 +453,8 @@ const ::uint32_t
         3,
         4,
         5,
+        9,
+        10,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AppearanceSeriesTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -449,7 +465,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::AppearanceSeriesTable)},
-        {21, sizeof(::AppearanceSeriesTableData)},
+        {25, sizeof(::AppearanceSeriesTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -458,22 +474,23 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_appearanceseries_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\034appearanceseries_table.proto\"\306\001\n\025Appea"
+    "\n\034appearanceseries_table.proto\"\377\001\n\025Appea"
     "ranceSeriesTable\022\n\n\002id\030\001 \001(\r\022\022\n\nseries_k"
     "ey\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\022\n\nsort_order\030\004 \001"
     "(\r\022\017\n\007enabled\030\005 \001(\r\022\014\n\004desc\030\006 \001(\t\022\035\n\025com"
     "pletion_badge_name\030\007 \001(\t\022\026\n\016epilogue_tit"
-    "le\030\010 \001(\t\022\025\n\repilogue_body\030\t \001(\t\"A\n\031Appea"
-    "ranceSeriesTableData\022$\n\004data\030\001 \003(\0132\026.App"
-    "earanceSeriesTableBG\n\016com.game.tableB\037Ap"
-    "pearanceSeriesTableOuterClassP\001Z\022generat"
-    "ed/pb/tableb\006proto3"
+    "le\030\010 \001(\t\022\025\n\repilogue_body\030\t \001(\t\022\033\n\023bundl"
+    "e_discount_bps\030\n \001(\r\022\032\n\022unit_price_diamo"
+    "nd\030\013 \001(\r\"A\n\031AppearanceSeriesTableData\022$\n"
+    "\004data\030\001 \003(\0132\026.AppearanceSeriesTableBG\n\016c"
+    "om.game.tableB\037AppearanceSeriesTableOute"
+    "rClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_appearanceseries_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_appearanceseries_5ftable_2eproto = {
     false,
     false,
-    379,
+    436,
     descriptor_table_protodef_appearanceseries_5ftable_2eproto,
     "appearanceseries_table.proto",
     &descriptor_table_appearanceseries_5ftable_2eproto_once,
@@ -528,9 +545,9 @@ AppearanceSeriesTable::AppearanceSeriesTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, enabled_) -
+           offsetof(Impl_, unit_price_diamond_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::enabled_));
+               sizeof(Impl_::unit_price_diamond_));
 
   // @@protoc_insertion_point(copy_constructor:AppearanceSeriesTable)
 }
@@ -550,9 +567,9 @@ inline void AppearanceSeriesTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, enabled_) -
+           offsetof(Impl_, unit_price_diamond_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::enabled_));
+               sizeof(Impl_::unit_price_diamond_));
 }
 AppearanceSeriesTable::~AppearanceSeriesTable() {
   // @@protoc_insertion_point(destructor:AppearanceSeriesTable)
@@ -633,7 +650,11 @@ PROTOBUF_NOINLINE void AppearanceSeriesTable::Clear() {
         reinterpret_cast<char*>(&_impl_.sort_order_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.sort_order_));
   }
-  _impl_.enabled_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    ::memset(&_impl_.enabled_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.unit_price_diamond_) -
+        reinterpret_cast<char*>(&_impl_.enabled_)) + sizeof(_impl_.unit_price_diamond_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -744,6 +765,24 @@ PROTOBUF_NOINLINE void AppearanceSeriesTable::Clear() {
     }
   }
 
+  // uint32 bundle_discount_bps = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_bundle_discount_bps() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_bundle_discount_bps(), target);
+    }
+  }
+
+  // uint32 unit_price_diamond = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_unit_price_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          11, this_._internal_unit_price_diamond(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -827,12 +866,26 @@ PROTOBUF_NOINLINE void AppearanceSeriesTable::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
     // uint32 enabled = 5;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_enabled() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_enabled());
+      }
+    }
+    // uint32 bundle_discount_bps = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_bundle_discount_bps() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bundle_discount_bps());
+      }
+    }
+    // uint32 unit_price_diamond = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_unit_price_diamond() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unit_price_diamond());
       }
     }
   }
@@ -919,9 +972,21 @@ void AppearanceSeriesTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_enabled() != 0) {
-      _this->_impl_.enabled_ = from._impl_.enabled_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_enabled() != 0) {
+        _this->_impl_.enabled_ = from._impl_.enabled_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_bundle_discount_bps() != 0) {
+        _this->_impl_.bundle_discount_bps_ = from._impl_.bundle_discount_bps_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_unit_price_diamond() != 0) {
+        _this->_impl_.unit_price_diamond_ = from._impl_.unit_price_diamond_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -950,8 +1015,8 @@ void AppearanceSeriesTable::InternalSwap(AppearanceSeriesTable* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.epilogue_title_, &other->_impl_.epilogue_title_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.epilogue_body_, &other->_impl_.epilogue_body_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.enabled_)
-      + sizeof(AppearanceSeriesTable::_impl_.enabled_)
+      PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.unit_price_diamond_)
+      + sizeof(AppearanceSeriesTable::_impl_.unit_price_diamond_)
       - PROTOBUF_FIELD_OFFSET(AppearanceSeriesTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

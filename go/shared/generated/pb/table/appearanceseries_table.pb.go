@@ -32,6 +32,8 @@ type AppearanceSeriesTable struct {
 	CompletionBadgeName string                 `protobuf:"bytes,7,opt,name=completion_badge_name,json=completionBadgeName,proto3" json:"completion_badge_name,omitempty"`
 	EpilogueTitle       string                 `protobuf:"bytes,8,opt,name=epilogue_title,json=epilogueTitle,proto3" json:"epilogue_title,omitempty"`
 	EpilogueBody        string                 `protobuf:"bytes,9,opt,name=epilogue_body,json=epilogueBody,proto3" json:"epilogue_body,omitempty"`
+	BundleDiscountBps   uint32                 `protobuf:"varint,10,opt,name=bundle_discount_bps,json=bundleDiscountBps,proto3" json:"bundle_discount_bps,omitempty"`
+	UnitPriceDiamond    uint32                 `protobuf:"varint,11,opt,name=unit_price_diamond,json=unitPriceDiamond,proto3" json:"unit_price_diamond,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -129,6 +131,20 @@ func (x *AppearanceSeriesTable) GetEpilogueBody() string {
 	return ""
 }
 
+func (x *AppearanceSeriesTable) GetBundleDiscountBps() uint32 {
+	if x != nil {
+		return x.BundleDiscountBps
+	}
+	return 0
+}
+
+func (x *AppearanceSeriesTable) GetUnitPriceDiamond() uint32 {
+	if x != nil {
+		return x.UnitPriceDiamond
+	}
+	return 0
+}
+
 type AppearanceSeriesTableData struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Data          []*AppearanceSeriesTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -177,7 +193,7 @@ var File_appearanceseries_table_proto protoreflect.FileDescriptor
 
 const file_appearanceseries_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1cappearanceseries_table.proto\"\xa7\x02\n" +
+	"\x1cappearanceseries_table.proto\"\x85\x03\n" +
 	"\x15AppearanceSeriesTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1d\n" +
 	"\n" +
@@ -189,7 +205,10 @@ const file_appearanceseries_table_proto_rawDesc = "" +
 	"\x04desc\x18\x06 \x01(\tR\x04desc\x122\n" +
 	"\x15completion_badge_name\x18\a \x01(\tR\x13completionBadgeName\x12%\n" +
 	"\x0eepilogue_title\x18\b \x01(\tR\repilogueTitle\x12#\n" +
-	"\repilogue_body\x18\t \x01(\tR\fepilogueBody\"G\n" +
+	"\repilogue_body\x18\t \x01(\tR\fepilogueBody\x12.\n" +
+	"\x13bundle_discount_bps\x18\n" +
+	" \x01(\rR\x11bundleDiscountBps\x12,\n" +
+	"\x12unit_price_diamond\x18\v \x01(\rR\x10unitPriceDiamond\"G\n" +
 	"\x19AppearanceSeriesTableData\x12*\n" +
 	"\x04data\x18\x01 \x03(\v2\x16.AppearanceSeriesTableR\x04dataBG\n" +
 	"\x0ecom.game.tableB\x1fAppearanceSeriesTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

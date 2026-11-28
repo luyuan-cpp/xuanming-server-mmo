@@ -17,14 +17,29 @@
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_mystery_merchant_comp.pb.h"
+#include "proto/common/component/player_season_comp.pb.h"
+#include "proto/scene/player_mystery_merchant.pb.h"
 #include "proto/scene/player_rewarded_ad.pb.h"
+#include "proto/scene/scene_info.pb.h"
+#include <modules/scene/comp/scene_comp.h>
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/comp/player_ownership_comp.h"
+#include "services/scene/player/system/player_appearance.h"
+#include "services/scene/player/system/player_mystery_merchant.h"
 #include "services/scene/player/system/player_rewarded_ad.h"
+#include "services/scene/player/system/player_season.h"
 #include "services/scene/player/system/rewarded_ad_rules.h"
+#include "table/code/appearancerule_table.h"
+#include "table/code/characterappearance_table.h"
+#include "table/code/item_table.h"
+#include "table/code/mysterymerchantgoods_table.h"
 #include "table/code/rewardedadslot_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/mystery_merchant_error_tip.pb.h"
 #include "table/proto/tip/rewarded_ad_error_tip.pb.h"
+#include "table/proto/tip/season_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
 namespace
@@ -235,4 +250,171 @@ TEST_F(PlayerRewardedAdTest, FullLifecycleBindGoldIdempotencyReconnectAndLimits)
 	// 6. 绑定银两被封禁时在 BeginSession 即拦截，避免玩家白看广告。
 	ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player_, kCurrencyBindGold));
 	EXPECT_EQ(kRewardedAdCurrencyBlocked, PlayerRewardedAdSystem::BeginSession(player_, beginReq, nextWeekMs + 1000, beginResp));
+}
+
+TEST_F(PlayerRewardedAdTest, BatchB4_MultiKindSlots_TowerReroll_WardrobeTrial_MerchantRefresh)
+{
+	// 1. 校验非货币槽位禁止配置 reward_amount > 0。
+	rewarded_ad_rules::SlotConfig badNonCurrency;
+	badNonCurrency.slotId = 2;
+	badNonCurrency.dailyLimit = 7;
+	badNonCurrency.minWatchSec = 15;
+	badNonCurrency.sessionTtlSec = 300;
+	badNonCurrency.currencyType = static_cast<uint32_t>(common::base::CURRENCY_TYPE_BIND_GOLD);
+	badNonCurrency.rewardAmount = 100;
+	badNonCurrency.platformMask = 3;
+	badNonCurrency.rewardKind = rewarded_ad_rules::kRewardTowerBoonReroll;
+	const char *reason = nullptr;
+	EXPECT_FALSE(rewarded_ad_rules::ValidateSlotConfig(badNonCurrency, reason));
+
+	// 2. 装配 Slots 2..4（测试显式开启 enabled=1；正式表全部默认 0）。
+	auto snap = std::make_shared<RewardedAdSlotTableSnapshot>();
+	auto addSlot = [&](uint32_t id, uint32_t minLv, uint32_t limit, uint32_t kind) {
+		auto *row = snap->data.add_data();
+		row->set_id(id);
+		row->set_enabled(1u);
+		row->set_min_level(minLv);
+		row->set_daily_limit(limit);
+		row->set_cooldown_sec(1);
+		row->set_min_watch_sec(15);
+		row->set_session_ttl_sec(300);
+		row->set_currency_type(3u);
+		row->set_reward_amount(0u);
+		row->set_require_ssv(0u);
+		row->set_platform_mask(3u);
+		row->set_reward_kind(kind);
+		snap->idMap[id] = row;
+	};
+	addSlot(2u, 20u, 7u, rewarded_ad_rules::kRewardTowerBoonReroll);
+	addSlot(3u, 10u, 7u, rewarded_ad_rules::kRewardWardrobe1hTrial);
+	addSlot(4u, 10u, 5u, rewarded_ad_rules::kRewardMerchantPersonalRefresh);
+	RewardedAdSlotTableManager::Instance().InstallSnapshot(snap);
+	ASSERT_TRUE(PlayerRewardedAdSystem::ValidateTables());
+	tlsEcs.actorRegistry.get<LevelComp>(player_).set_level(25u);
+
+	// ── Slot 2：五行幻境 V2 奇策重随（M-7 硬锁每局 run_id 最多 1 次，0 资产产出）──
+	auto &seasonComp = tlsEcs.actorRegistry.emplace<PlayerSeasonComp>(player_);
+	auto *tower = seasonComp.mutable_wuxing_tower();
+	tower->set_run_active(true);
+	tower->set_run_id(77u);
+	tower->set_current_floor(1u);
+	tower->set_current_node_kind(1u);
+	tower->add_pending_offer_sigil_ids(601u);
+	tower->add_pending_offer_sigil_ids(602u);
+	tower->add_pending_offer_sigil_ids(603u);
+
+	BeginRewardedAdSessionRequest b2;
+	b2.set_slot_id(2u);
+	b2.set_client_platform(AD_CLIENT_PLATFORM_WECHAT_MINIGAME);
+	BeginRewardedAdSessionResponse b2Resp;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, b2, kNowMs, b2Resp));
+
+	ClaimRewardedAdRequest c2;
+	c2.set_client_request_id(20001u);
+	c2.set_slot_id(2u);
+	c2.set_ad_session_id(b2Resp.ad_session_id());
+	c2.set_target_param_u32(77u);
+	ClaimRewardedAdResponse c2Resp;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::Claim(player_, c2, kNowMs + 20000ULL, c2Resp));
+	EXPECT_EQ(rewarded_ad_rules::kRewardTowerBoonReroll, c2Resp.reward_kind());
+	EXPECT_EQ(0u, c2Resp.reward_amount());
+	EXPECT_EQ(0u, CurrencySystem::GetBalance(player_, kCurrencyBindGold));
+	EXPECT_EQ(3, c2Resp.rerolled_sigil_ids_size());
+	EXPECT_EQ(77u, tower->ad_reroll_used_run_id());
+
+	// 同一局 run_id=77 再次重随必须被 M-7 硬闸拦截。
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, b2, kNowMs + 30000ULL, b2Resp));
+	ClaimRewardedAdRequest c2Dup;
+	c2Dup.set_client_request_id(20002u);
+	c2Dup.set_slot_id(2u);
+	c2Dup.set_ad_session_id(b2Resp.ad_session_id());
+	c2Dup.set_target_param_u32(77u);
+	EXPECT_EQ(kRewardedAdDailyLimitReached, PlayerRewardedAdSystem::Claim(player_, c2Dup, kNowMs + 50000ULL, c2Resp));
+
+	// ── Slot 3：衣柜续时 1 小时试穿（绝不置位永久拥有位图）──
+	auto prevRuleSnap = AppearanceRuleTableManager::Instance().CurrentSnapshot();
+	auto prevCharSnap = CharacterAppearanceTableManager::Instance().CurrentSnapshot();
+	auto ruleSnap = std::make_shared<AppearanceRuleTableSnapshot>();
+	auto *ruleRow = ruleSnap->data.add_data();
+	ruleRow->set_id(1u);
+	ruleRow->set_card_item_id(3402u);
+	ruleRow->set_card_item_count(1u);
+	ruleRow->set_trial_duration_seconds(3600u);
+	ruleSnap->idMap[1u] = ruleRow;
+	AppearanceRuleTableManager::Instance().InstallSnapshot(ruleSnap);
+	auto charSnap = std::make_shared<CharacterAppearanceTableSnapshot>();
+	auto *charRow = charSnap->data.add_data();
+	charRow->set_id(2u);
+	charRow->set_appearance_id("02");
+	charRow->set_enabled(1u);
+	charSnap->idMap[2u] = charRow;
+	CharacterAppearanceTableManager::Instance().InstallSnapshot(charSnap);
+
+	auto &profile = tlsEcs.actorRegistry.emplace<PlayerProfileComp>(player_);
+	profile.set_appearance_id("00");
+	const std::string ownedBefore = profile.appearance_owned_bits();
+
+	BeginRewardedAdSessionRequest b3;
+	b3.set_slot_id(3u);
+	b3.set_client_platform(AD_CLIENT_PLATFORM_WECHAT_MINIGAME);
+	BeginRewardedAdSessionResponse b3Resp;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, b3, kNowMs + 60000ULL, b3Resp));
+	ClaimRewardedAdRequest c3;
+	c3.set_client_request_id(30001u);
+	c3.set_slot_id(3u);
+	c3.set_ad_session_id(b3Resp.ad_session_id());
+	c3.set_target_param_str("02");
+	ClaimRewardedAdResponse c3Resp;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::Claim(player_, c3, kNowMs + 80000ULL, c3Resp));
+	EXPECT_EQ(rewarded_ad_rules::kRewardWardrobe1hTrial, c3Resp.reward_kind());
+	EXPECT_EQ("02", profile.trial_appearance_id());
+	EXPECT_GT(profile.trial_expires_at(), 0u);
+	EXPECT_EQ(ownedBefore, profile.appearance_owned_bits());
+
+	if (prevRuleSnap) AppearanceRuleTableManager::Instance().InstallSnapshot(prevRuleSnap);
+	if (prevCharSnap) CharacterAppearanceTableManager::Instance().InstallSnapshot(prevCharSnap);
+
+	// ── Slot 4：神秘商人个人换货（每轮限 1 次）──
+	const auto sceneEnt = tlsEcs.sceneRegistry.create();
+	auto &sceneInfo = tlsEcs.sceneRegistry.emplace<SceneInfoComp>(sceneEnt);
+	sceneInfo.set_scene_id(9001u);
+	tlsEcs.actorRegistry.emplace<SceneEntityComp>(player_).sceneEntity = sceneEnt;
+	tlsEcs.actorRegistry.emplace<PlayerMysteryMerchantComp>(player_);
+
+	MysteryMerchantState mState;
+	mState.set_round_id(501u);
+	mState.set_scene_id(9001u);
+	mState.set_appear_at_ms(kNowMs);
+	mState.set_expire_at_ms(kNowMs + 3600000ULL);
+	auto *se = mState.add_shelf();
+	se->set_goods_id(1u);
+	se->set_discount_percent(60u);
+	PlayerMysteryMerchantSystem::ApplyStateForTest(&mState, kNowMs + 90000ULL);
+
+	BeginRewardedAdSessionRequest b4;
+	b4.set_slot_id(4u);
+	b4.set_client_platform(AD_CLIENT_PLATFORM_WECHAT_MINIGAME);
+	BeginRewardedAdSessionResponse b4Resp;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, b4, kNowMs + 90000ULL, b4Resp));
+	ClaimRewardedAdRequest c4;
+	c4.set_client_request_id(40001u);
+	c4.set_slot_id(4u);
+	c4.set_ad_session_id(b4Resp.ad_session_id());
+	c4.set_target_param_u32(501u);
+	ClaimRewardedAdResponse c4Resp;
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::Claim(player_, c4, kNowMs + 110000ULL, c4Resp));
+	EXPECT_EQ(rewarded_ad_rules::kRewardMerchantPersonalRefresh, c4Resp.reward_kind());
+	EXPECT_EQ(501u, tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player_).rewarded_ad().merchant_reroll_round_id());
+
+	// 同一轮 round_id=501 再次个人换货拦截。
+	ASSERT_EQ(kSuccess, PlayerRewardedAdSystem::BeginSession(player_, b4, kNowMs + 120000ULL, b4Resp));
+	ClaimRewardedAdRequest c4Dup;
+	c4Dup.set_client_request_id(40002u);
+	c4Dup.set_slot_id(4u);
+	c4Dup.set_ad_session_id(b4Resp.ad_session_id());
+	c4Dup.set_target_param_u32(501u);
+	EXPECT_EQ(kMysteryMerchantLimitReached, PlayerRewardedAdSystem::Claim(player_, c4Dup, kNowMs + 140000ULL, c4Resp));
+
+	PlayerMysteryMerchantSystem::ResetForTest();
+	tlsEcs.sceneRegistry.destroy(sceneEnt);
 }

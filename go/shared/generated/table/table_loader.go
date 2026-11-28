@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaDigest 是整批服务端配置表的数据布局摘要(16 位小写十六进制,docs/design/config-table-hot-reload.md §5.1)。
-const SchemaDigest = "88750c2d961d8710"
+const SchemaDigest = "0fbe086829d8fe21"
 
 var hotReloadableTables = map[string]bool{
 	"ActivitySchedule": true,
@@ -69,6 +69,7 @@ var allTableNames = []string{
 	"Class",
 	"Condition",
 	"Cooldown",
+	"CosmeticShowcase",
 	"Dungeon",
 	"EquipAffixPool",
 	"EquipAffixQuality",
@@ -178,6 +179,7 @@ type TableSet struct {
 	Class *ClassTableManager
 	Condition *ConditionTableManager
 	Cooldown *CooldownTableManager
+	CosmeticShowcase *CosmeticShowcaseTableManager
 	Dungeon *DungeonTableManager
 	EquipAffixPool *EquipAffixPoolTableManager
 	EquipAffixQuality *EquipAffixQualityTableManager
@@ -283,6 +285,7 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 		Class: NewClassTableManager(),
 		Condition: NewConditionTableManager(),
 		Cooldown: NewCooldownTableManager(),
+		CosmeticShowcase: NewCosmeticShowcaseTableManager(),
 		Dungeon: NewDungeonTableManager(),
 		EquipAffixPool: NewEquipAffixPoolTableManager(),
 		EquipAffixQuality: NewEquipAffixQualityTableManager(),
@@ -408,6 +411,9 @@ func Prepare(configDir string, useBinary bool) (*TableSet, error) {
 	}
 	if err := ts.Cooldown.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Cooldown table failed: %w", err)
+	}
+	if err := ts.CosmeticShowcase.Load(configDir, useBinary); err != nil {
+		return nil, fmt.Errorf("prepare CosmeticShowcase table failed: %w", err)
 	}
 	if err := ts.Dungeon.Load(configDir, useBinary); err != nil {
 		return nil, fmt.Errorf("prepare Dungeon table failed: %w", err)
@@ -668,6 +674,9 @@ func Commit(ts *TableSet) {
 	if ts.Cooldown != nil {
 		CooldownTableManagerInstance.swapSnapshot(ts.Cooldown.snap.Load())
 	}
+	if ts.CosmeticShowcase != nil {
+		CosmeticShowcaseTableManagerInstance.swapSnapshot(ts.CosmeticShowcase.snap.Load())
+	}
 	if ts.Dungeon != nil {
 		DungeonTableManagerInstance.swapSnapshot(ts.Dungeon.snap.Load())
 	}
@@ -919,6 +928,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		Class: NewClassTableManager(),
 		Condition: NewConditionTableManager(),
 		Cooldown: NewCooldownTableManager(),
+		CosmeticShowcase: NewCosmeticShowcaseTableManager(),
 		Dungeon: NewDungeonTableManager(),
 		EquipAffixPool: NewEquipAffixPoolTableManager(),
 		EquipAffixQuality: NewEquipAffixQualityTableManager(),
@@ -983,7 +993,7 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		ZoneGroup: NewZoneGroupTableManager(),
 	}
 	var wg sync.WaitGroup
-	wg.Add(83)
+	wg.Add(84)
 	go func() {
 		defer wg.Done()
 		if err := ts.ActivitySchedule.Load(configDir, useBinary); err != nil {
@@ -1108,6 +1118,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
 		defer wg.Done()
 		if err := ts.Cooldown.Load(configDir, useBinary); err != nil {
 			log.Fatalf("failed to load Cooldown table: %v", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := ts.CosmeticShowcase.Load(configDir, useBinary); err != nil {
+			log.Fatalf("failed to load CosmeticShowcase table: %v", err)
 		}
 	}()
 	go func() {

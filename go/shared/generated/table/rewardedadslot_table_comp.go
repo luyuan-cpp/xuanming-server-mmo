@@ -57,6 +57,10 @@ type RewardedAdSlotPlatform_maskComp struct {
     Value uint32
 }
 
+type RewardedAdSlotReward_kindComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -104,5 +108,9 @@ func MakeRewardedAdSlotRequire_ssvComp(row *pb.RewardedAdSlotTable) RewardedAdSl
 
 func MakeRewardedAdSlotPlatform_maskComp(row *pb.RewardedAdSlotTable) RewardedAdSlotPlatform_maskComp {
     return RewardedAdSlotPlatform_maskComp{Value: row.PlatformMask}
+}
+
+func MakeRewardedAdSlotReward_kindComp(row *pb.RewardedAdSlotTable) RewardedAdSlotReward_kindComp {
+    return RewardedAdSlotReward_kindComp{Value: row.RewardKind}
 }
 

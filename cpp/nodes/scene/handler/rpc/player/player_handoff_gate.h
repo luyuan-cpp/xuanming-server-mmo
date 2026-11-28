@@ -41,6 +41,7 @@
 #include "proto/scene/player_skill.pb.h"
 #include "proto/scene/player_spirit_shop.pb.h"
 #include "proto/scene/player_trial_journal.pb.h"
+#include "rpc/service_metadata/player_appearance_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "thread_context/ecs_context.h"
@@ -78,7 +79,6 @@ namespace scene_handoff_gate
 			service == SceneActivityClientPlayer::descriptor() ||
 			service == SceneBattleResultClientPlayer::descriptor() ||
 			service == SceneAfkPassClientPlayer::descriptor() ||
-			service == SceneAppearanceClientPlayer::descriptor() ||
 			service == SceneSeasonClientPlayer::descriptor() ||
 			service == SceneTrialJournalClientPlayer::descriptor() ||
 			service == SceneSpiritShopClientPlayer::descriptor() ||
@@ -87,6 +87,19 @@ namespace scene_handoff_gate
 			return true;
 		}
 		const auto index = static_cast<uint32_t>(method.index());
+		if (service == SceneAppearanceClientPlayer::descriptor())
+		{
+			// 仅放行纯玩家衣柜与赠礼 RPC；CastCityCelebration / ClaimCityCelebrationGift 绑定当前主城分线实例，不跨节点重放。
+			return index == SceneAppearanceClientPlayerGetAppearanceInfoIndex ||
+				   index == SceneAppearanceClientPlayerSwitchAppearanceIndex ||
+				   index == SceneAppearanceClientPlayerStartAppearanceTrialIndex ||
+				   index == SceneAppearanceClientPlayerCancelAppearanceTrialIndex ||
+				   index == SceneAppearanceClientPlayerEquipPetCosmeticIndex ||
+				   index == SceneAppearanceClientPlayerEquipSkillVfxIndex ||
+				   index == SceneAppearanceClientPlayerBuyAppearanceSeriesBundleIndex ||
+				   index == SceneAppearanceClientPlayerEquipShowcaseCosmeticIndex ||
+				   index == SceneAppearanceClientPlayerSendCosmeticGiftIndex;
+		}
 		if (service == SceneSkillClientPlayer::descriptor())
 		{
 			// 仅放行纯玩家本地状态查询/制书/研习/拆页/封卷/开卷/藏经阁里程碑；

@@ -37,4 +37,8 @@ enum season_error {
 
   kSeasonHonorTargetInvalid = 34013;
 
+  kSeasonBuildBookmarkMaxExpanded = 34014;
+
+  kSeasonBuildBookmarkPriceChanged = 34015;
+
 };

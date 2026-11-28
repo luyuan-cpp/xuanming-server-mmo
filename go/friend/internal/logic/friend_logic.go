@@ -121,7 +121,7 @@ type FriendStore interface {
 	// 交给 repo 保管,与 GetFriendList / GetPendingRequests 同源 —— 逐调用传值会让
 	// "这份列表按谁的上限截的"取决于调用点,出现第二个事实源。
 	ListBlocks(ctx context.Context, playerID uint64) ([]data.BlockEntry, error)
-	BatchCheckSocialRelations(ctx context.Context, sideA, sideB []uint64) (hasAnyBlock bool, allAreFriends bool, err error)
+	BatchCheckSocialRelations(ctx context.Context, sideA, sideB []uint64, minFriendDurationMs int64) (hasAnyBlock bool, allAreFriends bool, err error)
 
 	// 推荐两条策略(纯读、不进事务、结果允许轻微陈旧,见 data/recommend_repo.go 的约束)。
 	// 由 recommend.go 组策略链,放在同一个接口里是因为它们实现在同一个 repo 上。
@@ -709,7 +709,7 @@ func (l *FriendLogic) BatchCheckSocialRelations(ctx context.Context, req *pb.Bat
 	defer cancel()
 
 	if req == nil || len(req.GetSideAPlayerIds()) == 0 || len(req.GetSideBPlayerIds()) == 0 ||
-		len(req.GetSideAPlayerIds()) > 5 || len(req.GetSideBPlayerIds()) > 5 {
+		len(req.GetSideAPlayerIds()) > 5 || len(req.GetSideBPlayerIds()) > 5 || req.GetMinFriendDurationMs() < 0 {
 		return &pb.BatchCheckSocialRelationsResponse{
 			ErrorMessage: tipErr(constants.ErrInvalidParameter, "invalid side player list"),
 		}, nil
@@ -736,7 +736,8 @@ func (l *FriendLogic) BatchCheckSocialRelations(ctx context.Context, req *pb.Bat
 		}
 	}
 
-	hasAnyBlock, allAreFriends, err := l.deps.Repo.BatchCheckSocialRelations(ctx, req.GetSideAPlayerIds(), req.GetSideBPlayerIds())
+	hasAnyBlock, allAreFriends, err := l.deps.Repo.BatchCheckSocialRelations(
+		ctx, req.GetSideAPlayerIds(), req.GetSideBPlayerIds(), req.GetMinFriendDurationMs())
 	if err != nil {
 		return &pb.BatchCheckSocialRelationsResponse{ErrorMessage: l.storageFailure(ctx, method, err)}, nil
 	}

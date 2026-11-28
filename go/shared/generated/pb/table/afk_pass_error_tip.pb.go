@@ -30,6 +30,8 @@ const (
 	AfkPassError_kAfkPassStackLimit        AfkPassError = 32002
 	AfkPassError_kAfkPassFrozen            AfkPassError = 32003
 	AfkPassError_kAfkPassUnavailable       AfkPassError = 32004
+	AfkPassError_kAfkPassBagFull           AfkPassError = 32005
+	AfkPassError_kAfkPassPlanInvalid       AfkPassError = 32006
 )
 
 // Enum value maps for AfkPassError.
@@ -41,6 +43,8 @@ var (
 		32002: "kAfkPassStackLimit",
 		32003: "kAfkPassFrozen",
 		32004: "kAfkPassUnavailable",
+		32005: "kAfkPassBagFull",
+		32006: "kAfkPassPlanInvalid",
 	}
 	AfkPassError_value = map[string]int32{
 		"kAfk_pass_errorOK":         0,
@@ -49,6 +53,8 @@ var (
 		"kAfkPassStackLimit":        32002,
 		"kAfkPassFrozen":            32003,
 		"kAfkPassUnavailable":       32004,
+		"kAfkPassBagFull":           32005,
+		"kAfkPassPlanInvalid":       32006,
 	}
 )
 
@@ -83,14 +89,16 @@ var File_afk_pass_error_tip_proto protoreflect.FileDescriptor
 
 const file_afk_pass_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x18afk_pass_error_tip.proto*\xaf\x01\n" +
+	"\x18afk_pass_error_tip.proto*\xe1\x01\n" +
 	"\x0eafk_pass_error\x12\x15\n" +
 	"\x11kAfk_pass_errorOK\x10\x00\x12\x1a\n" +
 	"\x14kAfkPassPriceChanged\x10\x80\xfa\x01\x12\x1f\n" +
 	"\x19kAfkPassCurrencyNotEnough\x10\x81\xfa\x01\x12\x18\n" +
 	"\x12kAfkPassStackLimit\x10\x82\xfa\x01\x12\x14\n" +
 	"\x0ekAfkPassFrozen\x10\x83\xfa\x01\x12\x19\n" +
-	"\x13kAfkPassUnavailable\x10\x84\xfa\x01B$\n" +
+	"\x13kAfkPassUnavailable\x10\x84\xfa\x01\x12\x15\n" +
+	"\x0fkAfkPassBagFull\x10\x85\xfa\x01\x12\x19\n" +
+	"\x13kAfkPassPlanInvalid\x10\x86\xfa\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

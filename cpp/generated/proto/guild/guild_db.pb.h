@@ -405,6 +405,7 @@ enum GuildAssetOpKind : int {
   GUILD_ASSET_OP_KIND_WAR_REWARD = 5,
   GUILD_ASSET_OP_KIND_BOUNTY_ESCROW = 6,
   GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT = 7,
+  GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK = 8,
   GuildAssetOpKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   GuildAssetOpKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -415,11 +416,11 @@ extern const uint32_t GuildAssetOpKind_internal_data_[];
 inline constexpr GuildAssetOpKind GuildAssetOpKind_MIN =
     static_cast<GuildAssetOpKind>(0);
 inline constexpr GuildAssetOpKind GuildAssetOpKind_MAX =
-    static_cast<GuildAssetOpKind>(7);
+    static_cast<GuildAssetOpKind>(8);
 [[nodiscard]] inline bool GuildAssetOpKind_IsValid(int value) {
-  return 0 <= value && value <= 7 && ((239u >> value) & 1) != 0;
+  return 0 <= value && value <= 8 && ((495u >> value) & 1) != 0;
 }
-inline constexpr int GuildAssetOpKind_ARRAYSIZE = 7 + 1;
+inline constexpr int GuildAssetOpKind_ARRAYSIZE = 8 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GuildAssetOpKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GuildAssetOpKind) {
@@ -434,7 +435,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& GuildAssetOpKind_Name(GuildAssetOpKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<GuildAssetOpKind_descriptor, 0, 7>(
+  return ::google::protobuf::internal::NameOfDenseEnum<GuildAssetOpKind_descriptor, 0, 8>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool GuildAssetOpKind_Parse(
@@ -6036,9 +6037,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
     kCreateTimeMsFieldNumber = 6,
     kScoreFieldNumber = 9,
     kFundsFieldNumber = 10,
+    kZoneIdFieldNumber = 8,
+    kEmblemSkinIdFieldNumber = 14,
     kScoreVersionFieldNumber = 12,
     kRenamedMsFieldNumber = 13,
-    kZoneIdFieldNumber = 8,
+    kUnlockedEmblemBitsFieldNumber = 15,
   };
   // string name = 2;
   void clear_name() ;
@@ -6155,6 +6158,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
   void _internal_set_funds(::uint64_t value);
 
   public:
+  // uint32 zone_id = 8;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
+  // uint32 emblem_skin_id = 14;
+  void clear_emblem_skin_id() ;
+  [[nodiscard]] ::uint32_t emblem_skin_id() const;
+  void set_emblem_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_emblem_skin_id() const;
+  void _internal_set_emblem_skin_id(::uint32_t value);
+
+  public:
   // uint64 score_version = 12;
   void clear_score_version() ;
   [[nodiscard]] ::uint64_t score_version() const;
@@ -6175,21 +6198,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
   void _internal_set_renamed_ms(::uint64_t value);
 
   public:
-  // uint32 zone_id = 8;
-  void clear_zone_id() ;
-  [[nodiscard]] ::uint32_t zone_id() const;
-  void set_zone_id(::uint32_t value);
+  // uint64 unlocked_emblem_bits = 15;
+  void clear_unlocked_emblem_bits() ;
+  [[nodiscard]] ::uint64_t unlocked_emblem_bits() const;
+  void set_unlocked_emblem_bits(::uint64_t value);
 
   private:
-  ::uint32_t _internal_zone_id() const;
-  void _internal_set_zone_id(::uint32_t value);
+  ::uint64_t _internal_unlocked_emblem_bits() const;
+  void _internal_set_unlocked_emblem_bits(::uint64_t value);
 
   public:
   // @@protoc_insertion_point(class_scope:guildpb.GuildRecord)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           0, 61,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -6228,9 +6251,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRecord final : public ::google
     ::uint64_t create_time_ms_;
     ::int64_t score_;
     ::uint64_t funds_;
+    ::uint32_t zone_id_;
+    ::uint32_t emblem_skin_id_;
     ::uint64_t score_version_;
     ::uint64_t renamed_ms_;
-    ::uint32_t zone_id_;
+    ::uint64_t unlocked_emblem_bits_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -10892,7 +10917,7 @@ inline void GuildRecord::_internal_set_max_members(::uint32_t value) {
 inline void GuildRecord::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t GuildRecord::zone_id() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildRecord.zone_id)
@@ -10900,7 +10925,7 @@ inline ::uint32_t GuildRecord::zone_id() const {
 }
 inline void GuildRecord::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:guildpb.GuildRecord.zone_id)
 }
 inline ::uint32_t GuildRecord::_internal_zone_id() const {
@@ -11028,7 +11053,7 @@ inline void GuildRecord::set_allocated_name_norm(::std::string* PROTOBUF_NULLABL
 inline void GuildRecord::clear_score_version() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.score_version_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t GuildRecord::score_version() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildRecord.score_version)
@@ -11036,7 +11061,7 @@ inline ::uint64_t GuildRecord::score_version() const {
 }
 inline void GuildRecord::set_score_version(::uint64_t value) {
   _internal_set_score_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:guildpb.GuildRecord.score_version)
 }
 inline ::uint64_t GuildRecord::_internal_score_version() const {
@@ -11052,7 +11077,7 @@ inline void GuildRecord::_internal_set_score_version(::uint64_t value) {
 inline void GuildRecord::clear_renamed_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.renamed_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t GuildRecord::renamed_ms() const {
   // @@protoc_insertion_point(field_get:guildpb.GuildRecord.renamed_ms)
@@ -11060,7 +11085,7 @@ inline ::uint64_t GuildRecord::renamed_ms() const {
 }
 inline void GuildRecord::set_renamed_ms(::uint64_t value) {
   _internal_set_renamed_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:guildpb.GuildRecord.renamed_ms)
 }
 inline ::uint64_t GuildRecord::_internal_renamed_ms() const {
@@ -11070,6 +11095,54 @@ inline ::uint64_t GuildRecord::_internal_renamed_ms() const {
 inline void GuildRecord::_internal_set_renamed_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.renamed_ms_ = value;
+}
+
+// uint32 emblem_skin_id = 14;
+inline void GuildRecord::clear_emblem_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t GuildRecord::emblem_skin_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildRecord.emblem_skin_id)
+  return _internal_emblem_skin_id();
+}
+inline void GuildRecord::set_emblem_skin_id(::uint32_t value) {
+  _internal_set_emblem_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildRecord.emblem_skin_id)
+}
+inline ::uint32_t GuildRecord::_internal_emblem_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.emblem_skin_id_;
+}
+inline void GuildRecord::_internal_set_emblem_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_skin_id_ = value;
+}
+
+// uint64 unlocked_emblem_bits = 15;
+inline void GuildRecord::clear_unlocked_emblem_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_emblem_bits_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint64_t GuildRecord::unlocked_emblem_bits() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildRecord.unlocked_emblem_bits)
+  return _internal_unlocked_emblem_bits();
+}
+inline void GuildRecord::set_unlocked_emblem_bits(::uint64_t value) {
+  _internal_set_unlocked_emblem_bits(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildRecord.unlocked_emblem_bits)
+}
+inline ::uint64_t GuildRecord::_internal_unlocked_emblem_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_emblem_bits_;
+}
+inline void GuildRecord::_internal_set_unlocked_emblem_bits(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_emblem_bits_ = value;
 }
 
 // -------------------------------------------------------------------

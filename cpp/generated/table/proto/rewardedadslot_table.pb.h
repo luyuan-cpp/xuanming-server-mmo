@@ -239,6 +239,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdSlotTable final : public 
     kRewardAmountFieldNumber = 9,
     kRequireSsvFieldNumber = 10,
     kPlatformMaskFieldNumber = 11,
+    kRewardKindFieldNumber = 12,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -350,11 +351,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdSlotTable final : public 
   void _internal_set_platform_mask(::uint32_t value);
 
   public:
+  // uint32 reward_kind = 12;
+  void clear_reward_kind() ;
+  [[nodiscard]] ::uint32_t reward_kind() const;
+  void set_reward_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_kind() const;
+  void _internal_set_reward_kind(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:RewardedAdSlotTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
+      ::google::protobuf::internal::TcParseTable<4, 12,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -394,6 +405,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdSlotTable final : public 
     ::uint64_t reward_amount_;
     ::uint32_t require_ssv_;
     ::uint32_t platform_mask_;
+    ::uint32_t reward_kind_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -890,6 +902,30 @@ inline ::uint32_t RewardedAdSlotTable::_internal_platform_mask() const {
 inline void RewardedAdSlotTable::_internal_set_platform_mask(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.platform_mask_ = value;
+}
+
+// uint32 reward_kind = 12;
+inline void RewardedAdSlotTable::clear_reward_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t RewardedAdSlotTable::reward_kind() const {
+  // @@protoc_insertion_point(field_get:RewardedAdSlotTable.reward_kind)
+  return _internal_reward_kind();
+}
+inline void RewardedAdSlotTable::set_reward_kind(::uint32_t value) {
+  _internal_set_reward_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:RewardedAdSlotTable.reward_kind)
+}
+inline ::uint32_t RewardedAdSlotTable::_internal_reward_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_kind_;
+}
+inline void RewardedAdSlotTable::_internal_set_reward_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = value;
 }
 
 // -------------------------------------------------------------------

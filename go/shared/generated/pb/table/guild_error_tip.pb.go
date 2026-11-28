@@ -101,6 +101,10 @@ const (
 	GuildError_kGuildWarFeudAlreadyActive        GuildError = 14073
 	GuildError_kGuildWarFeudNotFound             GuildError = 14074
 	GuildError_kGuildWarFeudInvalidTarget        GuildError = 14075
+	GuildError_kGuildEmblemInvalid               GuildError = 14076
+	GuildError_kGuildEmblemAlreadyUnlocked       GuildError = 14077
+	GuildError_kGuildEmblemNotUnlocked           GuildError = 14078
+	GuildError_kGuildEmblemPriceChanged          GuildError = 14079
 )
 
 // Enum value maps for GuildError.
@@ -183,6 +187,10 @@ var (
 		14073: "kGuildWarFeudAlreadyActive",
 		14074: "kGuildWarFeudNotFound",
 		14075: "kGuildWarFeudInvalidTarget",
+		14076: "kGuildEmblemInvalid",
+		14077: "kGuildEmblemAlreadyUnlocked",
+		14078: "kGuildEmblemNotUnlocked",
+		14079: "kGuildEmblemPriceChanged",
 	}
 	GuildError_value = map[string]int32{
 		"kGuild_errorOK":                    0,
@@ -262,6 +270,10 @@ var (
 		"kGuildWarFeudAlreadyActive":        14073,
 		"kGuildWarFeudNotFound":             14074,
 		"kGuildWarFeudInvalidTarget":        14075,
+		"kGuildEmblemInvalid":               14076,
+		"kGuildEmblemAlreadyUnlocked":       14077,
+		"kGuildEmblemNotUnlocked":           14078,
+		"kGuildEmblemPriceChanged":          14079,
 	}
 )
 
@@ -296,7 +308,7 @@ var File_guild_error_tip_proto protoreflect.FileDescriptor
 
 const file_guild_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15guild_error_tip.proto*\x9f\x11\n" +
+	"\x15guild_error_tip.proto*\x98\x12\n" +
 	"\vguild_error\x12\x12\n" +
 	"\x0ekGuild_errorOK\x10\x00\x12\x19\n" +
 	"\x14kGuildAlreadyInGuild\x10\xb0m\x12\x13\n" +
@@ -375,7 +387,11 @@ const file_guild_error_tip_proto_rawDesc = "" +
 	"\x15kGuildWarFeudCooldown\x10\xf8m\x12\x1f\n" +
 	"\x1akGuildWarFeudAlreadyActive\x10\xf9m\x12\x1a\n" +
 	"\x15kGuildWarFeudNotFound\x10\xfam\x12\x1f\n" +
-	"\x1akGuildWarFeudInvalidTarget\x10\xfbmB$\n" +
+	"\x1akGuildWarFeudInvalidTarget\x10\xfbm\x12\x18\n" +
+	"\x13kGuildEmblemInvalid\x10\xfcm\x12 \n" +
+	"\x1bkGuildEmblemAlreadyUnlocked\x10\xfdm\x12\x1c\n" +
+	"\x17kGuildEmblemNotUnlocked\x10\xfem\x12\x1d\n" +
+	"\x18kGuildEmblemPriceChanged\x10\xffmB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

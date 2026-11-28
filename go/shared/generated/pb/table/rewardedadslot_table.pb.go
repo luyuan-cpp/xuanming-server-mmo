@@ -34,6 +34,7 @@ type RewardedAdSlotTable struct {
 	RewardAmount  uint64                 `protobuf:"varint,9,opt,name=reward_amount,json=rewardAmount,proto3" json:"reward_amount,omitempty"`
 	RequireSsv    uint32                 `protobuf:"varint,10,opt,name=require_ssv,json=requireSsv,proto3" json:"require_ssv,omitempty"`
 	PlatformMask  uint32                 `protobuf:"varint,11,opt,name=platform_mask,json=platformMask,proto3" json:"platform_mask,omitempty"`
+	RewardKind    uint32                 `protobuf:"varint,12,opt,name=reward_kind,json=rewardKind,proto3" json:"reward_kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -145,6 +146,13 @@ func (x *RewardedAdSlotTable) GetPlatformMask() uint32 {
 	return 0
 }
 
+func (x *RewardedAdSlotTable) GetRewardKind() uint32 {
+	if x != nil {
+		return x.RewardKind
+	}
+	return 0
+}
+
 type RewardedAdSlotTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*RewardedAdSlotTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -193,7 +201,7 @@ var File_rewardedadslot_table_proto protoreflect.FileDescriptor
 
 const file_rewardedadslot_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1arewardedadslot_table.proto\"\xfc\x02\n" +
+	"\x1arewardedadslot_table.proto\"\x9d\x03\n" +
 	"\x13RewardedAdSlotTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\rR\aenabled\x12\x1b\n" +
@@ -208,7 +216,9 @@ const file_rewardedadslot_table_proto_rawDesc = "" +
 	"\vrequire_ssv\x18\n" +
 	" \x01(\rR\n" +
 	"requireSsv\x12#\n" +
-	"\rplatform_mask\x18\v \x01(\rR\fplatformMask\"C\n" +
+	"\rplatform_mask\x18\v \x01(\rR\fplatformMask\x12\x1f\n" +
+	"\vreward_kind\x18\f \x01(\rR\n" +
+	"rewardKind\"C\n" +
 	"\x17RewardedAdSlotTableData\x12(\n" +
 	"\x04data\x18\x01 \x03(\v2\x14.RewardedAdSlotTableR\x04dataBE\n" +
 	"\x0ecom.game.tableB\x1dRewardedAdSlotTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

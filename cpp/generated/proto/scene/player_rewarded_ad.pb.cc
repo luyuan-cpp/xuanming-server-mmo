@@ -58,11 +58,11 @@ constexpr RewardedAdSlotView::ParseTableT_ RewardedAdSlotView::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -109,7 +109,10 @@ constexpr RewardedAdSlotView::ParseTableT_ RewardedAdSlotView::InternalGenerateP
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdSlotView, _impl_.reward_amount_), 8>(),
        {72, 8, 0,
         PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.reward_amount_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 reward_kind = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdSlotView, _impl_.reward_kind_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.reward_kind_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -136,6 +139,8 @@ constexpr RewardedAdSlotView::ParseTableT_ RewardedAdSlotView::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.currency_type_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 reward_amount = 9;
       {PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.reward_amount_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 reward_kind = 10;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.reward_kind_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -156,7 +161,8 @@ inline constexpr RewardedAdSlotView::Impl_::Impl_(
         claimed_today_{0u},
         currency_type_{0u},
         cooldown_until_ms_{::uint64_t{0u}},
-        reward_amount_{::uint64_t{0u}} {}
+        reward_amount_{::uint64_t{0u}},
+        reward_kind_{0u} {}
 
 template <typename>
 constexpr RewardedAdSlotView::RewardedAdSlotView(::_pbi::ConstantInitialized,
@@ -403,11 +409,11 @@ constexpr ClaimRewardedAdRequest::ParseTableT_ ClaimRewardedAdRequest::InternalG
     {
       PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -417,39 +423,54 @@ constexpr ClaimRewardedAdRequest::ParseTableT_ ClaimRewardedAdRequest::InternalG
       ::_pbi::TcParser::GetTable<::ClaimRewardedAdRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 client_request_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdRequest, _impl_.client_request_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.client_request_id_)}},
+      // uint32 slot_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardedAdRequest, _impl_.slot_id_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.slot_id_)}},
+      // uint64 ad_session_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdRequest, _impl_.ad_session_id_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.ad_session_id_)}},
       // string ssv_proof = 4;
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.ssv_proof_)}},
-      // uint64 client_request_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdRequest, _impl_.client_request_id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.client_request_id_)}},
-      // uint32 slot_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardedAdRequest, _impl_.slot_id_), 3>(),
-       {16, 3, 0,
-        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.slot_id_)}},
-      // uint64 ad_session_id = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdRequest, _impl_.ad_session_id_), 2>(),
-       {24, 2, 0,
-        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.ad_session_id_)}},
+      // uint32 target_param_u32 = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardedAdRequest, _impl_.target_param_u32_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.target_param_u32_)}},
+      // string target_param_str = 6;
+      {::_pbi::TcParser::FastUS1,
+       {50, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.target_param_str_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 client_request_id = 1;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 slot_id = 2;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.slot_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.slot_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 ad_session_id = 3;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.ad_session_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.ad_session_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string ssv_proof = 4;
       {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.ssv_proof_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 target_param_u32 = 5;
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.target_param_u32_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string target_param_str = 6;
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.target_param_str_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
-      "\26\0\0\0\11\0\0\0"
+      "\26\0\0\0\11\0\20\0"
       "ClaimRewardedAdRequest"
       "ssv_proof"
+      "target_param_str"
     }},
   };
 }
@@ -462,9 +483,13 @@ inline constexpr ClaimRewardedAdRequest::Impl_::Impl_(
         ssv_proof_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        target_param_str_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         client_request_id_{::uint64_t{0u}},
         ad_session_id_{::uint64_t{0u}},
-        slot_id_{0u} {}
+        slot_id_{0u},
+        target_param_u32_{0u} {}
 
 template <typename>
 constexpr ClaimRewardedAdRequest::ClaimRewardedAdRequest(::_pbi::ConstantInitialized,
@@ -905,11 +930,11 @@ constexpr ClaimRewardedAdResponse::ParseTableT_ ClaimRewardedAdResponse::Interna
     {
       PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      9,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -922,49 +947,67 @@ constexpr ClaimRewardedAdResponse::ParseTableT_ ClaimRewardedAdResponse::Interna
       {::_pbi::TcParser::MiniParse, {}},
       // .TipInfoMessage error_message = 1;
       {::_pbi::TcParser::FastMtS1,
-       {10, 0, 0,
+       {10, 1, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.error_message_)}},
       // uint32 currency_type = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardedAdResponse, _impl_.currency_type_), 4>(),
-       {16, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardedAdResponse, _impl_.currency_type_), 5>(),
+       {16, 5, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.currency_type_)}},
       // uint64 reward_amount = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdResponse, _impl_.reward_amount_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdResponse, _impl_.reward_amount_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.reward_amount_)}},
       // uint64 currency_balance = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdResponse, _impl_.currency_balance_), 3>(),
-       {32, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdResponse, _impl_.currency_balance_), 4>(),
+       {32, 4, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.currency_balance_)}},
       // uint64 gold_balance = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdResponse, _impl_.gold_balance_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClaimRewardedAdResponse, _impl_.gold_balance_), 7>(),
+       {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.gold_balance_)}},
       // .RewardedAdSlotView slot = 6;
       {::_pbi::TcParser::FastMtS1,
-       {50, 1, 1,
+       {50, 2, 1,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.slot_)}},
       // bool replayed = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimRewardedAdResponse, _impl_.replayed_), 5>(),
-       {56, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(ClaimRewardedAdResponse, _impl_.replayed_), 6>(),
+       {56, 6, 0,
         PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.replayed_)}},
+      // uint32 reward_kind = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClaimRewardedAdResponse, _impl_.reward_kind_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.reward_kind_)}},
+      // repeated uint32 rerolled_sigil_ids = 9;
+      {::_pbi::TcParser::FastV32P1,
+       {74, 0, 0,
+        PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.rerolled_sigil_ids_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // .TipInfoMessage error_message = 1;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint32 currency_type = 2;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.currency_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.currency_type_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 reward_amount = 3;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.reward_amount_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.reward_amount_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 currency_balance = 4;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.currency_balance_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.currency_balance_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 gold_balance = 5;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.gold_balance_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.gold_balance_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .RewardedAdSlotView slot = 6;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.slot_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.slot_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // bool replayed = 7;
-      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 reward_kind = 8;
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.reward_kind_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 rerolled_sigil_ids = 9;
+      {PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.rerolled_sigil_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -988,13 +1031,20 @@ inline constexpr ClaimRewardedAdResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        rerolled_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::ClaimRewardedAdResponse,
+            PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.rerolled_sigil_ids_)>()
+         }
+        ,
+        _rerolled_sigil_ids_cached_byte_size_{0},
         error_message_{nullptr},
         slot_{nullptr},
         reward_amount_{::uint64_t{0u}},
         currency_balance_{::uint64_t{0u}},
         currency_type_{0u},
         replayed_{false},
-        gold_balance_{::uint64_t{0u}} {}
+        gold_balance_{::uint64_t{0u}},
+        reward_kind_{0u} {}
 
 template <typename>
 constexpr ClaimRewardedAdResponse::ClaimRewardedAdResponse(::_pbi::ConstantInitialized,
@@ -1012,7 +1062,7 @@ inline void* PROTOBUF_NONNULL ClaimRewardedAdResponse::PlacementNew_(
   return ::new (mem) ClaimRewardedAdResponse(arena);
 }
 constexpr auto ClaimRewardedAdResponse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(ClaimRewardedAdResponse), alignof(ClaimRewardedAdResponse));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(ClaimRewardedAdResponse), alignof(ClaimRewardedAdResponse));
 }
 constexpr auto ClaimRewardedAdResponse::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -1259,7 +1309,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.slot_id_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.enabled_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.min_level_),
@@ -1269,6 +1319,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.cooldown_until_ms_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.currency_type_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.reward_amount_),
+        PROTOBUF_FIELD_OFFSET(::RewardedAdSlotView, _impl_.reward_kind_),
         0,
         1,
         2,
@@ -1278,6 +1329,7 @@ const ::uint32_t
         7,
         6,
         8,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetRewardedAdInfoRequest, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1314,18 +1366,22 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_._has_bits_),
-        7, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_.client_request_id_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_.slot_id_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_.ad_session_id_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_.ssv_proof_),
-        1,
-        3,
+        PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_.target_param_u32_),
+        PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdRequest, _impl_.target_param_str_),
         2,
+        4,
+        3,
         0,
+        5,
+        1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_._has_bits_),
-        10, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.error_message_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.currency_type_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.reward_amount_),
@@ -1333,24 +1389,28 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.gold_balance_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.slot_),
         PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.replayed_),
-        0,
-        4,
-        2,
-        3,
-        6,
+        PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.reward_kind_),
+        PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.rerolled_sigil_ids_),
         1,
         5,
+        3,
+        4,
+        7,
+        2,
+        6,
+        8,
+        0,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::RewardedAdSlotView)},
-        {21, sizeof(::GetRewardedAdInfoRequest)},
-        {26, sizeof(::GetRewardedAdInfoResponse)},
-        {39, sizeof(::BeginRewardedAdSessionRequest)},
-        {46, sizeof(::BeginRewardedAdSessionResponse)},
-        {55, sizeof(::ClaimRewardedAdRequest)},
-        {66, sizeof(::ClaimRewardedAdResponse)},
+        {23, sizeof(::GetRewardedAdInfoRequest)},
+        {28, sizeof(::GetRewardedAdInfoResponse)},
+        {41, sizeof(::BeginRewardedAdSessionRequest)},
+        {48, sizeof(::BeginRewardedAdSessionResponse)},
+        {57, sizeof(::ClaimRewardedAdRequest)},
+        {72, sizeof(::ClaimRewardedAdResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1366,44 +1426,47 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5frewarded_5fad_2epr
     protodesc_cold) = {
     "\n$proto/scene/player_rewarded_ad.proto\032\033"
     "proto/db/proto_option.proto\032\033proto/commo"
-    "n/base/tip.proto\"\325\001\n\022RewardedAdSlotView\022"
+    "n/base/tip.proto\"\352\001\n\022RewardedAdSlotView\022"
     "\017\n\007slot_id\030\001 \001(\r\022\017\n\007enabled\030\002 \001(\010\022\021\n\tmin"
     "_level\030\003 \001(\r\022\023\n\013daily_limit\030\004 \001(\r\022\025\n\rcla"
     "imed_today\030\005 \001(\r\022\025\n\rnext_reset_ms\030\006 \001(\004\022"
     "\031\n\021cooldown_until_ms\030\007 \001(\004\022\025\n\rcurrency_t"
-    "ype\030\010 \001(\r\022\025\n\rreward_amount\030\t \001(\004\"3\n\030GetR"
-    "ewardedAdInfoRequest\022\027\n\017client_platform\030"
-    "\001 \001(\r\"\260\001\n\031GetRewardedAdInfoResponse\022&\n\re"
-    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022\026\n\016s"
-    "erver_time_ms\030\002 \001(\004\022\031\n\021bind_gold_balance"
-    "\030\003 \001(\004\022\024\n\014gold_balance\030\004 \001(\004\022\"\n\005slots\030\005 "
-    "\003(\0132\023.RewardedAdSlotView\"I\n\035BeginRewarde"
-    "dAdSessionRequest\022\017\n\007slot_id\030\001 \001(\r\022\027\n\017cl"
-    "ient_platform\030\002 \001(\r\"v\n\036BeginRewardedAdSe"
-    "ssionResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
-    "ipInfoMessage\022\025\n\rad_session_id\030\002 \001(\004\022\025\n\r"
-    "expires_at_ms\030\003 \001(\004\"n\n\026ClaimRewardedAdRe"
-    "quest\022\031\n\021client_request_id\030\001 \001(\004\022\017\n\007slot"
-    "_id\030\002 \001(\r\022\025\n\rad_session_id\030\003 \001(\004\022\021\n\tssv_"
-    "proof\030\004 \001(\t\"\324\001\n\027ClaimRewardedAdResponse\022"
-    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022"
-    "\025\n\rcurrency_type\030\002 \001(\r\022\025\n\rreward_amount\030"
-    "\003 \001(\004\022\030\n\020currency_balance\030\004 \001(\004\022\024\n\014gold_"
-    "balance\030\005 \001(\004\022!\n\004slot\030\006 \001(\0132\023.RewardedAd"
-    "SlotView\022\020\n\010replayed\030\007 \001(\010*\312\001\n\020AdClientP"
-    "latform\022\"\n\036AD_CLIENT_PLATFORM_UNSPECIFIE"
-    "D\020\000\022&\n\"AD_CLIENT_PLATFORM_WECHAT_MINIGAM"
-    "E\020\001\022&\n\"AD_CLIENT_PLATFORM_DOUYIN_MINIGAM"
-    "E\020\002\022\036\n\032AD_CLIENT_PLATFORM_IOS_APP\020\003\022\"\n\036A"
-    "D_CLIENT_PLATFORM_ANDROID_APP\020\0042\226\002\n\033Scen"
-    "eRewardedAdClientPlayer\022J\n\021GetRewardedAd"
-    "Info\022\031.GetRewardedAdInfoRequest\032\032.GetRew"
-    "ardedAdInfoResponse\022Y\n\026BeginRewardedAdSe"
-    "ssion\022\036.BeginRewardedAdSessionRequest\032\037."
-    "BeginRewardedAdSessionResponse\022D\n\017ClaimR"
-    "ewardedAd\022\027.ClaimRewardedAdRequest\032\030.Cla"
-    "imRewardedAdResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005scen"
-    "e\200\001\001\230\324a\003b\006proto3"
+    "ype\030\010 \001(\r\022\025\n\rreward_amount\030\t \001(\004\022\023\n\013rewa"
+    "rd_kind\030\n \001(\r\"3\n\030GetRewardedAdInfoReques"
+    "t\022\027\n\017client_platform\030\001 \001(\r\"\260\001\n\031GetReward"
+    "edAdInfoResponse\022&\n\rerror_message\030\001 \001(\0132"
+    "\017.TipInfoMessage\022\026\n\016server_time_ms\030\002 \001(\004"
+    "\022\031\n\021bind_gold_balance\030\003 \001(\004\022\024\n\014gold_bala"
+    "nce\030\004 \001(\004\022\"\n\005slots\030\005 \003(\0132\023.RewardedAdSlo"
+    "tView\"I\n\035BeginRewardedAdSessionRequest\022\017"
+    "\n\007slot_id\030\001 \001(\r\022\027\n\017client_platform\030\002 \001(\r"
+    "\"v\n\036BeginRewardedAdSessionResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\rad"
+    "_session_id\030\002 \001(\004\022\025\n\rexpires_at_ms\030\003 \001(\004"
+    "\"\242\001\n\026ClaimRewardedAdRequest\022\031\n\021client_re"
+    "quest_id\030\001 \001(\004\022\017\n\007slot_id\030\002 \001(\r\022\025\n\rad_se"
+    "ssion_id\030\003 \001(\004\022\021\n\tssv_proof\030\004 \001(\t\022\030\n\020tar"
+    "get_param_u32\030\005 \001(\r\022\030\n\020target_param_str\030"
+    "\006 \001(\t\"\205\002\n\027ClaimRewardedAdResponse\022&\n\rerr"
+    "or_message\030\001 \001(\0132\017.TipInfoMessage\022\025\n\rcur"
+    "rency_type\030\002 \001(\r\022\025\n\rreward_amount\030\003 \001(\004\022"
+    "\030\n\020currency_balance\030\004 \001(\004\022\024\n\014gold_balanc"
+    "e\030\005 \001(\004\022!\n\004slot\030\006 \001(\0132\023.RewardedAdSlotVi"
+    "ew\022\020\n\010replayed\030\007 \001(\010\022\023\n\013reward_kind\030\010 \001("
+    "\r\022\032\n\022rerolled_sigil_ids\030\t \003(\r*\312\001\n\020AdClie"
+    "ntPlatform\022\"\n\036AD_CLIENT_PLATFORM_UNSPECI"
+    "FIED\020\000\022&\n\"AD_CLIENT_PLATFORM_WECHAT_MINI"
+    "GAME\020\001\022&\n\"AD_CLIENT_PLATFORM_DOUYIN_MINI"
+    "GAME\020\002\022\036\n\032AD_CLIENT_PLATFORM_IOS_APP\020\003\022\""
+    "\n\036AD_CLIENT_PLATFORM_ANDROID_APP\020\0042\226\002\n\033S"
+    "ceneRewardedAdClientPlayer\022J\n\021GetRewarde"
+    "dAdInfo\022\031.GetRewardedAdInfoRequest\032\032.Get"
+    "RewardedAdInfoResponse\022Y\n\026BeginRewardedA"
+    "dSession\022\036.BeginRewardedAdSessionRequest"
+    "\032\037.BeginRewardedAdSessionResponse\022D\n\017Cla"
+    "imRewardedAd\022\027.ClaimRewardedAdRequest\032\030."
+    "ClaimRewardedAdResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005s"
+    "cene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5frewarded_5fad_2eproto_deps[2] = {
@@ -1414,7 +1477,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5frewarded_5fad
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5frewarded_5fad_2eproto = {
     false,
     false,
-    1576,
+    1699,
     descriptor_table_protodef_proto_2fscene_2fplayer_5frewarded_5fad_2eproto,
     "proto/scene/player_rewarded_ad.proto",
     &descriptor_table_proto_2fscene_2fplayer_5frewarded_5fad_2eproto_once,
@@ -1466,9 +1529,9 @@ inline void RewardedAdSlotView::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, slot_id_),
            0,
-           offsetof(Impl_, reward_amount_) -
+           offsetof(Impl_, reward_kind_) -
                offsetof(Impl_, slot_id_) +
-               sizeof(Impl_::reward_amount_));
+               sizeof(Impl_::reward_kind_));
 }
 RewardedAdSlotView::~RewardedAdSlotView() {
   // @@protoc_insertion_point(destructor:RewardedAdSlotView)
@@ -1523,7 +1586,11 @@ PROTOBUF_NOINLINE void RewardedAdSlotView::Clear() {
         reinterpret_cast<char*>(&_impl_.cooldown_until_ms_) -
         reinterpret_cast<char*>(&_impl_.slot_id_)) + sizeof(_impl_.cooldown_until_ms_));
   }
-  _impl_.reward_amount_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.reward_amount_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.reward_kind_) -
+        reinterpret_cast<char*>(&_impl_.reward_amount_)) + sizeof(_impl_.reward_kind_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1628,6 +1695,15 @@ PROTOBUF_NOINLINE void RewardedAdSlotView::Clear() {
     }
   }
 
+  // uint32 reward_kind = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_reward_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_reward_kind(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1710,12 +1786,19 @@ PROTOBUF_NOINLINE void RewardedAdSlotView::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint64 reward_amount = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_reward_amount() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_reward_amount());
+      }
+    }
+    // uint32 reward_kind = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_reward_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_reward_kind());
       }
     }
   }
@@ -1778,9 +1861,16 @@ void RewardedAdSlotView::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_reward_amount() != 0) {
-      _this->_impl_.reward_amount_ = from._impl_.reward_amount_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_reward_amount() != 0) {
+        _this->_impl_.reward_amount_ = from._impl_.reward_amount_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_reward_kind() != 0) {
+        _this->_impl_.reward_kind_ = from._impl_.reward_kind_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1801,8 +1891,8 @@ void RewardedAdSlotView::InternalSwap(RewardedAdSlotView* PROTOBUF_RESTRICT PROT
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.reward_amount_)
-      + sizeof(RewardedAdSlotView::_impl_.reward_amount_)
+      PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.reward_kind_)
+      + sizeof(RewardedAdSlotView::_impl_.reward_kind_)
       - PROTOBUF_FIELD_OFFSET(RewardedAdSlotView, _impl_.slot_id_)>(
           reinterpret_cast<char*>(&_impl_.slot_id_),
           reinterpret_cast<char*>(&other->_impl_.slot_id_));
@@ -2875,7 +2965,8 @@ PROTOBUF_NDEBUG_INLINE ClaimRewardedAdRequest::Impl_::Impl_(
     [[maybe_unused]] const ::ClaimRewardedAdRequest& from_msg)
       : _has_bits_{from._has_bits_},
         _cached_size_{0},
-        ssv_proof_(arena, from.ssv_proof_) {}
+        ssv_proof_(arena, from.ssv_proof_),
+        target_param_str_(arena, from.target_param_str_) {}
 
 ClaimRewardedAdRequest::ClaimRewardedAdRequest(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -2895,9 +2986,9 @@ ClaimRewardedAdRequest::ClaimRewardedAdRequest(
                offsetof(Impl_, client_request_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, client_request_id_),
-           offsetof(Impl_, slot_id_) -
+           offsetof(Impl_, target_param_u32_) -
                offsetof(Impl_, client_request_id_) +
-               sizeof(Impl_::slot_id_));
+               sizeof(Impl_::target_param_u32_));
 
   // @@protoc_insertion_point(copy_constructor:ClaimRewardedAdRequest)
 }
@@ -2905,16 +2996,17 @@ PROTOBUF_NDEBUG_INLINE ClaimRewardedAdRequest::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
       : _cached_size_{0},
-        ssv_proof_(arena) {}
+        ssv_proof_(arena),
+        target_param_str_(arena) {}
 
 inline void ClaimRewardedAdRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, client_request_id_),
            0,
-           offsetof(Impl_, slot_id_) -
+           offsetof(Impl_, target_param_u32_) -
                offsetof(Impl_, client_request_id_) +
-               sizeof(Impl_::slot_id_));
+               sizeof(Impl_::target_param_u32_));
 }
 ClaimRewardedAdRequest::~ClaimRewardedAdRequest() {
   // @@protoc_insertion_point(destructor:ClaimRewardedAdRequest)
@@ -2928,6 +3020,7 @@ inline void ClaimRewardedAdRequest::SharedDtor(MessageLite& self) {
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
   this_._impl_.ssv_proof_.Destroy();
+  this_._impl_.target_param_str_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -2965,13 +3058,18 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.ssv_proof_.ClearNonDefaultToEmpty();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.ssv_proof_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.target_param_str_.ClearNonDefaultToEmpty();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
     ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.slot_id_) -
-        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.slot_id_));
+        reinterpret_cast<char*>(&_impl_.target_param_u32_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.target_param_u32_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2997,7 +3095,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 client_request_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_client_request_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3006,7 +3104,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
   }
 
   // uint32 slot_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_slot_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3015,7 +3113,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
   }
 
   // uint64 ad_session_id = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_ad_session_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3030,6 +3128,25 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ClaimRewardedAdRequest.ssv_proof");
       target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint32 target_param_u32 = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_target_param_u32() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_target_param_u32(), target);
+    }
+  }
+
+  // string target_param_str = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (!this_._internal_target_param_str().empty()) {
+      const ::std::string& _s = this_._internal_target_param_str();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "ClaimRewardedAdRequest.target_param_str");
+      target = stream->WriteStringMaybeAliased(6, _s, target);
     }
   }
 
@@ -3058,7 +3175,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // string ssv_proof = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_ssv_proof().empty()) {
@@ -3066,25 +3183,39 @@ PROTOBUF_NOINLINE void ClaimRewardedAdRequest::Clear() {
                                         this_._internal_ssv_proof());
       }
     }
-    // uint64 client_request_id = 1;
+    // string target_param_str = 6;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!this_._internal_target_param_str().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_target_param_str());
+      }
+    }
+    // uint64 client_request_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_client_request_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_client_request_id());
       }
     }
     // uint64 ad_session_id = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_ad_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_ad_session_id());
       }
     }
     // uint32 slot_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_slot_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_slot_id());
+      }
+    }
+    // uint32 target_param_u32 = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_target_param_u32() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_target_param_u32());
       }
     }
   }
@@ -3105,7 +3236,7 @@ void ClaimRewardedAdRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_ssv_proof().empty()) {
         _this->_internal_set_ssv_proof(from._internal_ssv_proof());
@@ -3116,18 +3247,32 @@ void ClaimRewardedAdRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (!from._internal_target_param_str().empty()) {
+        _this->_internal_set_target_param_str(from._internal_target_param_str());
+      } else {
+        if (_this->_impl_.target_param_str_.IsDefault()) {
+          _this->_internal_set_target_param_str("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_client_request_id() != 0) {
         _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_ad_session_id() != 0) {
         _this->_impl_.ad_session_id_ = from._impl_.ad_session_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_slot_id() != 0) {
         _this->_impl_.slot_id_ = from._impl_.slot_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_target_param_u32() != 0) {
+        _this->_impl_.target_param_u32_ = from._impl_.target_param_u32_;
       }
     }
   }
@@ -3151,9 +3296,10 @@ void ClaimRewardedAdRequest::InternalSwap(ClaimRewardedAdRequest* PROTOBUF_RESTR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.ssv_proof_, &other->_impl_.ssv_proof_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.target_param_str_, &other->_impl_.target_param_str_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.slot_id_)
-      + sizeof(ClaimRewardedAdRequest::_impl_.slot_id_)
+      PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.target_param_u32_)
+      + sizeof(ClaimRewardedAdRequest::_impl_.target_param_u32_)
       - PROTOBUF_FIELD_OFFSET(ClaimRewardedAdRequest, _impl_.client_request_id_)>(
           reinterpret_cast<char*>(&_impl_.client_request_id_),
           reinterpret_cast<char*>(&other->_impl_.client_request_id_));
@@ -3167,7 +3313,7 @@ void ClaimRewardedAdRequest::InternalSwap(ClaimRewardedAdRequest* PROTOBUF_RESTR
 void ClaimRewardedAdResponse::clear_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 ClaimRewardedAdResponse::ClaimRewardedAdResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -3183,7 +3329,15 @@ PROTOBUF_NDEBUG_INLINE ClaimRewardedAdResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
     [[maybe_unused]] const ::ClaimRewardedAdResponse& from_msg)
       : _has_bits_{from._has_bits_},
-        _cached_size_{0} {}
+        _cached_size_{0},
+        rerolled_sigil_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::ClaimRewardedAdResponse,
+              PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.rerolled_sigil_ids_)>()
+          , from.rerolled_sigil_ids_
+        }
+        ,
+        _rerolled_sigil_ids_cached_byte_size_{0} {}
 
 ClaimRewardedAdResponse::ClaimRewardedAdResponse(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3200,35 +3354,41 @@ ClaimRewardedAdResponse::ClaimRewardedAdResponse(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000002U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
                 : nullptr;
-  _impl_.slot_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.slot_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.slot_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, reward_amount_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, reward_amount_),
-           offsetof(Impl_, gold_balance_) -
+           offsetof(Impl_, reward_kind_) -
                offsetof(Impl_, reward_amount_) +
-               sizeof(Impl_::gold_balance_));
+               sizeof(Impl_::reward_kind_));
 
   // @@protoc_insertion_point(copy_constructor:ClaimRewardedAdResponse)
 }
 PROTOBUF_NDEBUG_INLINE ClaimRewardedAdResponse::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        rerolled_sigil_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::ClaimRewardedAdResponse,
+            PROTOBUF_FIELD_OFFSET(::ClaimRewardedAdResponse, _impl_.rerolled_sigil_ids_)>()
+         }
+        ,
+        _rerolled_sigil_ids_cached_byte_size_{0} {}
 
 inline void ClaimRewardedAdResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, error_message_),
            0,
-           offsetof(Impl_, gold_balance_) -
+           offsetof(Impl_, reward_kind_) -
                offsetof(Impl_, error_message_) +
-               sizeof(Impl_::gold_balance_));
+               sizeof(Impl_::reward_kind_));
 }
 ClaimRewardedAdResponse::~ClaimRewardedAdResponse() {
   // @@protoc_insertion_point(destructor:ClaimRewardedAdResponse)
@@ -3280,21 +3440,25 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.rerolled_sigil_ids_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(_impl_.error_message_ != nullptr);
       _impl_.error_message_->Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.slot_ != nullptr);
       _impl_.slot_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.reward_amount_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.gold_balance_) -
         reinterpret_cast<char*>(&_impl_.reward_amount_)) + sizeof(_impl_.gold_balance_));
   }
+  _impl_.reward_kind_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -3319,14 +3483,14 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // .TipInfoMessage error_message = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
         stream);
   }
 
   // uint32 currency_type = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_currency_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3335,7 +3499,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
   }
 
   // uint64 reward_amount = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_reward_amount() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3344,7 +3508,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
   }
 
   // uint64 currency_balance = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_currency_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3353,7 +3517,7 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
   }
 
   // uint64 gold_balance = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_gold_balance() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3362,18 +3526,38 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
   }
 
   // .RewardedAdSlotView slot = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         6, *this_._impl_.slot_, this_._impl_.slot_->GetCachedSize(), target,
         stream);
   }
 
   // bool replayed = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_replayed() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
           7, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint32 reward_kind = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_reward_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_reward_kind(), target);
+    }
+  }
+
+  // repeated uint32 rerolled_sigil_ids = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._rerolled_sigil_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            9, this_._internal_rerolled_sigil_ids(), byte_size, target);
+      }
     }
   }
 
@@ -3402,49 +3586,65 @@ PROTOBUF_NOINLINE void ClaimRewardedAdResponse::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
-    // .TipInfoMessage error_message = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // repeated uint32 rerolled_sigil_ids = 9;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_rerolled_sigil_ids(), 1,
+              this_._impl_._rerolled_sigil_ids_cached_byte_size_);
+    }
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
     }
     // .RewardedAdSlotView slot = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.slot_);
     }
     // uint64 reward_amount = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_reward_amount() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_reward_amount());
       }
     }
     // uint64 currency_balance = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_currency_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_currency_balance());
       }
     }
     // uint32 currency_type = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_currency_type() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_currency_type());
       }
     }
     // bool replayed = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_replayed() != 0) {
         total_size += 2;
       }
     }
     // uint64 gold_balance = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_gold_balance() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_gold_balance());
+      }
+    }
+  }
+   {
+    // uint32 reward_kind = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_reward_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_reward_kind());
       }
     }
   }
@@ -3466,8 +3666,11 @@ void ClaimRewardedAdResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_rerolled_sigil_ids()->MergeFrom(from._internal_rerolled_sigil_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       ABSL_DCHECK(from._impl_.error_message_ != nullptr);
       if (_this->_impl_.error_message_ == nullptr) {
         _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
@@ -3475,7 +3678,7 @@ void ClaimRewardedAdResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.slot_ != nullptr);
       if (_this->_impl_.slot_ == nullptr) {
         _this->_impl_.slot_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.slot_);
@@ -3483,30 +3686,35 @@ void ClaimRewardedAdResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.slot_->MergeFrom(*from._impl_.slot_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_reward_amount() != 0) {
         _this->_impl_.reward_amount_ = from._impl_.reward_amount_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_currency_balance() != 0) {
         _this->_impl_.currency_balance_ = from._impl_.currency_balance_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_currency_type() != 0) {
         _this->_impl_.currency_type_ = from._impl_.currency_type_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_replayed() != 0) {
         _this->_impl_.replayed_ = from._impl_.replayed_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_gold_balance() != 0) {
         _this->_impl_.gold_balance_ = from._impl_.gold_balance_;
       }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_reward_kind() != 0) {
+      _this->_impl_.reward_kind_ = from._impl_.reward_kind_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -3526,9 +3734,10 @@ void ClaimRewardedAdResponse::InternalSwap(ClaimRewardedAdResponse* PROTOBUF_RES
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.rerolled_sigil_ids_.InternalSwap(&other->_impl_.rerolled_sigil_ids_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.gold_balance_)
-      + sizeof(ClaimRewardedAdResponse::_impl_.gold_balance_)
+      PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.reward_kind_)
+      + sizeof(ClaimRewardedAdResponse::_impl_.reward_kind_)
       - PROTOBUF_FIELD_OFFSET(ClaimRewardedAdResponse, _impl_.error_message_)>(
           reinterpret_cast<char*>(&_impl_.error_message_),
           reinterpret_cast<char*>(&other->_impl_.error_message_));

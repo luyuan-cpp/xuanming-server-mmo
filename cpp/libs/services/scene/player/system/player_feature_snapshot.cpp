@@ -10,7 +10,10 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/condition/condition_util.h"
+#include "modules/currency/constants/currency.h"
+#include "modules/currency/system/currency_system.h"
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途拒绝整理背包
+#include "proto/common/rollback/transaction_log.pb.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/scene/player_activity.pb.h"
@@ -22,8 +25,10 @@
 #include "table/proto/tip/bag_error_tip.pb.h"     // kBagTemporary* / kBagAddItemBagFull:临时格取回
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/mission_error_tip.pb.h"
+#include "services/scene/player/system/client_request_ledger.h"
 #include "services/scene/player/system/player_equip.h"
 #include "services/scene/player/system/player_lifecycle.h" // IsPlayerFrozen:临时格取回的交接冻结闸
+#include "services/scene/player/system/player_mutability.h"
 #include "services/scene/player/system/player_mission.h"
 #include "services/scene/player/system/player_activity_schedule.h"
 #include "services/scene/player/system/player_activity.h"
@@ -256,6 +261,112 @@ uint32_t PlayerBagSystem::RetrieveTemporary(entt::entity player, uint64_t itemId
     }
     // 人物背包放不下是玩家随手能触发的常规拒绝:换成这个入口自己的码,客户端提示腾位或改成一件一件取。
     return result == kBagAddItemBagFull ? uint32_t{kBagTemporaryRetrieveBagFull} : result;
+}
+
+void PlayerBagSystem::ExpandCapacity(entt::entity player, const ExpandBagCapacityRequest& request,
+                                     ExpandBagCapacityResponse& response)
+{
+    response.Clear();
+    response.set_max_capacity(kWarehouseMaxExpandedCapacity);
+    if (!tlsEcs.actorRegistry.valid(player))
+    {
+        response.mutable_error_message()->set_id(kThisEntityIsInvalid);
+        return;
+    }
+    const uint64_t clientRequestId = request.client_request_id();
+    if (clientRequestId == 0u || request.bag_type() != kWarehouse)
+    {
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+    const std::string fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(
+        player, clientRequestId, ClientRequestKind::kExpandBagCapacity, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kMismatch)
+    {
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kUnavailable)
+    {
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kReplay)
+    {
+        response.set_replayed(true);
+        response.set_new_capacity(first.bagExpandNewCapacity);
+        response.set_spent_diamond(first.bagExpandSpentDiamond);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        if (BuildSnapshot(player, kWarehouse, *response.mutable_bag()) != kSuccess)
+        {
+            response.clear_bag();
+        }
+        return;
+    }
+    auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
+    if (bags == nullptr)
+    {
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+    if (tlsEcs.actorRegistry.any_of<InBattleComp>(player) || !player_mutability::IsPlayerMutable(player))
+    {
+        response.mutable_error_message()->set_id(kBagTemporaryRetrieveBusy);
+        return;
+    }
+    auto& warehouse = bags->bags[kWarehouse];
+    if (!warehouse.IsLayerConsistent())
+    {
+        response.mutable_error_message()->set_id(kInvalidTableData);
+        return;
+    }
+    const uint32_t currentCap = static_cast<uint32_t>(warehouse.Capacity());
+    if (currentCap >= kWarehouseMaxExpandedCapacity)
+    {
+        response.mutable_error_message()->set_id(kBagExpandMaxReached);
+        response.set_new_capacity(currentCap);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        return;
+    }
+    if (request.expected_capacity() != currentCap ||
+        request.expected_price_diamond() != kWarehouseExpandPriceDiamond)
+    {
+        response.mutable_error_message()->set_id(kBagExpandPriceChanged);
+        response.set_new_capacity(currentCap);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        return;
+    }
+    const uint32_t addSlots = std::min(kWarehouseExpandStep, kWarehouseMaxExpandedCapacity - currentCap);
+    // 仓库扩容仅扣真实充值灵石（CURRENCY_TYPE_DIAMOND=1），严禁绑定灵石替扣。
+    if (const uint32_t err = CurrencySystem::DeductCurrency(
+            player, kCurrencyDiamond, kWarehouseExpandPriceDiamond, TX_BAG_EXPAND, clientRequestId);
+        err != kSuccess)
+    {
+        response.mutable_error_message()->set_id(err);
+        response.set_new_capacity(currentCap);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        return;
+    }
+    warehouse.ExpandCapacity(addSlots);
+    const uint32_t newCap = static_cast<uint32_t>(warehouse.Capacity());
+    ClientRequestResult rec;
+    rec.bagExpandNewCapacity = newCap;
+    rec.bagExpandSpentDiamond = kWarehouseExpandPriceDiamond;
+    client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kExpandBagCapacity, fingerprint, rec);
+    (void)PlayerLifecycleSystem::SavePlayerForAssetCommit(player);
+    LOG_INFO << "[PlayerBag] metric=warehouse_expanded player_id=" << tlsEcs.GetPlayerId(player)
+             << " before=" << currentCap << " after=" << newCap
+             << " spent_diamond=" << kWarehouseExpandPriceDiamond
+             << " client_request_id=" << clientRequestId;
+    response.set_new_capacity(newCap);
+    response.set_spent_diamond(kWarehouseExpandPriceDiamond);
+    response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    if (BuildSnapshot(player, kWarehouse, *response.mutable_bag()) != kSuccess)
+    {
+        response.clear_bag();
+    }
 }
 
 uint32_t PlayerMissionReadSystem::BuildList(entt::entity player, GetMissionListResponse& out)

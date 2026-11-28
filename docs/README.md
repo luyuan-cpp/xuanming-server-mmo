@@ -164,6 +164,7 @@ Redis 物理水平扩展的选定方案（玩家域 Redis Cluster 按 `{player_i
 - [economy-anti-scam-ui-codex-handoff.md](planning/ui-handoff/economy-anti-scam-ui-codex-handoff.md) — 经济防骗、卖家信用与官方 7:3 商城 UI 需求清单（纯功能规格，不定义美术风格）
 - [equipment-craft-v2-v5-ui-handoff.md](planning/ui-handoff/equipment-craft-v2-v5-ui-handoff.md) — 《五行奇谈》装备品相与典籍制书 V2–V5 增量图标纯功能交接单
 - [equipment-loadout-presets-ui-handoff.md](planning/ui-handoff/equipment-loadout-presets-ui-handoff.md) — 装备流派方案预设（一键多套换装）UI 纯功能需求清单
+- [fair-monetization-b5-steam-dlc-ui-handoff.md](planning/ui-handoff/fair-monetization-b5-steam-dlc-ui-handoff.md) — 不肝不氪增收体系 V2（B5 · Steam 创始支持者纪念包）异机 Codex 纯功能作图交接单
 - [fair-monetization-expansion-v2-ui-handoff.md](planning/ui-handoff/fair-monetization-expansion-v2-ui-handoff.md) — 不肝不氪增收体系 V2（B1–B4）异机 Codex 纯功能作图交接单
 - [growing-passive-skills-v2-ui-handoff.md](planning/ui-handoff/growing-passive-skills-v2-ui-handoff.md) — 率土式叠加成长战法 V2（《兵法叠势卷》）纯功能图标交接单
 - [guild-play-ui-handoff.md](planning/ui-handoff/guild-play-ui-handoff.md) — 帮会会武 · Unity UI 异机交接

@@ -57,6 +57,8 @@ func openDirectory(c config.Config) (*grpc.ClientConn, rolefence.StateReader, au
 		return authority.PlayerProfile{
 			Level:            resp.GetPlayerLevel(),
 			AccountCreatedMs: resp.GetAccountCreatedMs(),
+			BubbleSkinId:     resp.GetChatBubbleSkinId(),
+			ShareCardSkinId:  resp.GetShareCardSkinId(),
 		}, nil
 	})
 	return client.Conn(), states, profiles, nil

@@ -39,6 +39,7 @@ message WuxingTowerCompState {
   uint32 weekly_best_floor_preset = 22;        // 本周公平试炼最高通关关数
   uint32 weekly_best_rounds_preset = 23;       // 本周公平试炼全通最少总回合数
   uint32 route_choice_mask = 24;               // 本轮分岔轨迹位图（bit0=第2关右路奇遇, bit1=第4关右路休整）
+  uint64 ad_reroll_used_run_id = 25;           // M-7：已使用激励视频奇策重随的 run_id（每局硬锁最多 1 次）
 }
 
 // 战报一键收藏的公开脱敏配装条（最多保存 12 条，仅存公开构筑摘要，不含私密属性概率）。
@@ -56,6 +57,7 @@ message SavedBattleBuildBookmark {
   repeated uint32 skill_table_ids = 11;
   repeated uint32 wuxing_sigil_ids = 12;
   uint64 saved_at_ms = 13;
+  bool pin_replay = 14; // true = 锁定关联 source_battle_id 精彩录像防 30 天淘汰（删除收藏或删角释放引用）
 }
 
 // 玩家赛季进度持久化组件（player_database 字段 30，GROWTH 分组）。
@@ -64,8 +66,9 @@ message PlayerSeasonComp {
   repeated PlayerSeasonSealRecord records = 1;
   uint32 equipped_formation_id = 2;               // 五行阵法（0=无/默认，1..5 免费切换）
   WuxingTowerCompState wuxing_tower = 3;          // 五行幻境周常爬塔状态
-  repeated SavedBattleBuildBookmark saved_builds = 4; // 战报配装收藏夹（上限 12 条）
+  repeated SavedBattleBuildBookmark saved_builds = 4; // 战报配装收藏夹（默认 12 条，可扩容至 48 条）
   repeated uint64 unlocked_honor_words = 5;           // 永久零数值纪念徽章动态位图（word=(season_id-1)/64, bit=(season_id-1)%64，永不收回）
   uint32 retro_honor_target_season_id = 6;            // 玩家手动指定的往季徽章追忆目标赛季 ID（0=自动顺延首个未解锁往季）
   map<uint32, uint32> retro_honor_progress = 7;       // 未解锁往季的免费追忆溢出点数（满 12 点解锁后删除）
+  uint32 extra_saved_build_slots = 8;                 // 付费扩容的额外战报配装收藏位（0/12/24/36，总容量 = 12 + extra，封顶 48）
 }

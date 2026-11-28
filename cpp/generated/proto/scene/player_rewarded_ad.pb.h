@@ -331,6 +331,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdSlotView final : public :
     kCurrencyTypeFieldNumber = 8,
     kCooldownUntilMsFieldNumber = 7,
     kRewardAmountFieldNumber = 9,
+    kRewardKindFieldNumber = 10,
   };
   // uint32 slot_id = 1;
   void clear_slot_id() ;
@@ -422,11 +423,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdSlotView final : public :
   void _internal_set_reward_amount(::uint64_t value);
 
   public:
+  // uint32 reward_kind = 10;
+  void clear_reward_kind() ;
+  [[nodiscard]] ::uint32_t reward_kind() const;
+  void set_reward_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_kind() const;
+  void _internal_set_reward_kind(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:RewardedAdSlotView)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -464,6 +475,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED RewardedAdSlotView final : public :
     ::uint32_t currency_type_;
     ::uint64_t cooldown_until_ms_;
     ::uint64_t reward_amount_;
+    ::uint32_t reward_kind_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -821,9 +833,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdRequest final : publ
   // accessors -------------------------------------------------------
   enum : int {
     kSsvProofFieldNumber = 4,
+    kTargetParamStrFieldNumber = 6,
     kClientRequestIdFieldNumber = 1,
     kAdSessionIdFieldNumber = 3,
     kSlotIdFieldNumber = 2,
+    kTargetParamU32FieldNumber = 5,
   };
   // string ssv_proof = 4;
   void clear_ssv_proof() ;
@@ -838,6 +852,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdRequest final : publ
   const ::std::string& _internal_ssv_proof() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_ssv_proof(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_ssv_proof();
+
+  public:
+  // string target_param_str = 6;
+  void clear_target_param_str() ;
+  [[nodiscard]] const ::std::string& target_param_str() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_param_str(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_param_str();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_param_str();
+  void set_allocated_target_param_str(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_param_str() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_param_str(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_param_str();
 
   public:
   // uint64 client_request_id = 1;
@@ -870,12 +899,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdRequest final : publ
   void _internal_set_slot_id(::uint32_t value);
 
   public:
+  // uint32 target_param_u32 = 5;
+  void clear_target_param_u32() ;
+  [[nodiscard]] ::uint32_t target_param_u32() const;
+  void set_target_param_u32(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_param_u32() const;
+  void _internal_set_target_param_u32(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClaimRewardedAdRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          0, 40,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 56,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -904,9 +943,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdRequest final : publ
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr ssv_proof_;
+    ::google::protobuf::internal::ArenaStringPtr target_param_str_;
     ::uint64_t client_request_id_;
     ::uint64_t ad_session_id_;
     ::uint32_t slot_id_;
+    ::uint32_t target_param_u32_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1541,6 +1582,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdResponse final : pub
 
   // accessors -------------------------------------------------------
   enum : int {
+    kRerolledSigilIdsFieldNumber = 9,
     kErrorMessageFieldNumber = 1,
     kSlotFieldNumber = 6,
     kRewardAmountFieldNumber = 3,
@@ -1548,7 +1590,28 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdResponse final : pub
     kCurrencyTypeFieldNumber = 2,
     kReplayedFieldNumber = 7,
     kGoldBalanceFieldNumber = 5,
+    kRewardKindFieldNumber = 8,
   };
+  // repeated uint32 rerolled_sigil_ids = 9;
+  [[nodiscard]] int rerolled_sigil_ids_size()
+      const;
+  private:
+  int _internal_rerolled_sigil_ids_size() const;
+
+  public:
+  void clear_rerolled_sigil_ids() ;
+  [[nodiscard]] ::uint32_t rerolled_sigil_ids(int index) const;
+  void set_rerolled_sigil_ids(int index, ::uint32_t value);
+  void add_rerolled_sigil_ids(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& rerolled_sigil_ids()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_rerolled_sigil_ids();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_rerolled_sigil_ids() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_rerolled_sigil_ids();
+
+  public:
   // .TipInfoMessage error_message = 1;
   [[nodiscard]] bool has_error_message()
       const;
@@ -1631,11 +1694,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdResponse final : pub
   void _internal_set_gold_balance(::uint64_t value);
 
   public:
+  // uint32 reward_kind = 8;
+  void clear_reward_kind() ;
+  [[nodiscard]] ::uint32_t reward_kind() const;
+  void set_reward_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reward_kind() const;
+  void _internal_set_reward_kind(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ClaimRewardedAdResponse)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1664,6 +1737,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdResponse final : pub
         const ClaimRewardedAdResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> rerolled_sigil_ids_;
+    ::google::protobuf::internal::CachedSize _rerolled_sigil_ids_cached_byte_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::RewardedAdSlotView* PROTOBUF_NULLABLE slot_;
     ::uint64_t reward_amount_;
@@ -1671,6 +1746,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimRewardedAdResponse final : pub
     ::uint32_t currency_type_;
     bool replayed_;
     ::uint64_t gold_balance_;
+    ::uint32_t reward_kind_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2219,6 +2295,30 @@ inline void RewardedAdSlotView::_internal_set_reward_amount(::uint64_t value) {
   _impl_.reward_amount_ = value;
 }
 
+// uint32 reward_kind = 10;
+inline void RewardedAdSlotView::clear_reward_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t RewardedAdSlotView::reward_kind() const {
+  // @@protoc_insertion_point(field_get:RewardedAdSlotView.reward_kind)
+  return _internal_reward_kind();
+}
+inline void RewardedAdSlotView::set_reward_kind(::uint32_t value) {
+  _internal_set_reward_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:RewardedAdSlotView.reward_kind)
+}
+inline ::uint32_t RewardedAdSlotView::_internal_reward_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_kind_;
+}
+inline void RewardedAdSlotView::_internal_set_reward_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // GetRewardedAdInfoRequest
@@ -2676,7 +2776,7 @@ inline void BeginRewardedAdSessionResponse::_internal_set_expires_at_ms(::uint64
 inline void ClaimRewardedAdRequest::clear_client_request_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.client_request_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t ClaimRewardedAdRequest::client_request_id() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdRequest.client_request_id)
@@ -2684,7 +2784,7 @@ inline ::uint64_t ClaimRewardedAdRequest::client_request_id() const {
 }
 inline void ClaimRewardedAdRequest::set_client_request_id(::uint64_t value) {
   _internal_set_client_request_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdRequest.client_request_id)
 }
 inline ::uint64_t ClaimRewardedAdRequest::_internal_client_request_id() const {
@@ -2700,7 +2800,7 @@ inline void ClaimRewardedAdRequest::_internal_set_client_request_id(::uint64_t v
 inline void ClaimRewardedAdRequest::clear_slot_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.slot_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t ClaimRewardedAdRequest::slot_id() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdRequest.slot_id)
@@ -2708,7 +2808,7 @@ inline ::uint32_t ClaimRewardedAdRequest::slot_id() const {
 }
 inline void ClaimRewardedAdRequest::set_slot_id(::uint32_t value) {
   _internal_set_slot_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdRequest.slot_id)
 }
 inline ::uint32_t ClaimRewardedAdRequest::_internal_slot_id() const {
@@ -2724,7 +2824,7 @@ inline void ClaimRewardedAdRequest::_internal_set_slot_id(::uint32_t value) {
 inline void ClaimRewardedAdRequest::clear_ad_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ad_session_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t ClaimRewardedAdRequest::ad_session_id() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdRequest.ad_session_id)
@@ -2732,7 +2832,7 @@ inline ::uint64_t ClaimRewardedAdRequest::ad_session_id() const {
 }
 inline void ClaimRewardedAdRequest::set_ad_session_id(::uint64_t value) {
   _internal_set_ad_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdRequest.ad_session_id)
 }
 inline ::uint64_t ClaimRewardedAdRequest::_internal_ad_session_id() const {
@@ -2808,13 +2908,101 @@ inline void ClaimRewardedAdRequest::set_allocated_ssv_proof(::std::string* PROTO
   // @@protoc_insertion_point(field_set_allocated:ClaimRewardedAdRequest.ssv_proof)
 }
 
+// uint32 target_param_u32 = 5;
+inline void ClaimRewardedAdRequest::clear_target_param_u32() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_param_u32_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t ClaimRewardedAdRequest::target_param_u32() const {
+  // @@protoc_insertion_point(field_get:ClaimRewardedAdRequest.target_param_u32)
+  return _internal_target_param_u32();
+}
+inline void ClaimRewardedAdRequest::set_target_param_u32(::uint32_t value) {
+  _internal_set_target_param_u32(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ClaimRewardedAdRequest.target_param_u32)
+}
+inline ::uint32_t ClaimRewardedAdRequest::_internal_target_param_u32() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_param_u32_;
+}
+inline void ClaimRewardedAdRequest::_internal_set_target_param_u32(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_param_u32_ = value;
+}
+
+// string target_param_str = 6;
+inline void ClaimRewardedAdRequest::clear_target_param_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_param_str_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& ClaimRewardedAdRequest::target_param_str() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ClaimRewardedAdRequest.target_param_str)
+  return _internal_target_param_str();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void ClaimRewardedAdRequest::set_target_param_str(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.target_param_str_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:ClaimRewardedAdRequest.target_param_str)
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimRewardedAdRequest::mutable_target_param_str()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_target_param_str();
+  // @@protoc_insertion_point(field_mutable:ClaimRewardedAdRequest.target_param_str)
+  return _s;
+}
+inline const ::std::string& ClaimRewardedAdRequest::_internal_target_param_str() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_param_str_.Get();
+}
+inline void ClaimRewardedAdRequest::_internal_set_target_param_str(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_param_str_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL ClaimRewardedAdRequest::_internal_mutable_target_param_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_param_str_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE ClaimRewardedAdRequest::release_target_param_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ClaimRewardedAdRequest.target_param_str)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.target_param_str_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_param_str_.Set("", GetArena());
+  }
+  return released;
+}
+inline void ClaimRewardedAdRequest::set_allocated_target_param_str(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.target_param_str_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_param_str_.IsDefault()) {
+    _impl_.target_param_str_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:ClaimRewardedAdRequest.target_param_str)
+}
+
 // -------------------------------------------------------------------
 
 // ClaimRewardedAdResponse
 
 // .TipInfoMessage error_message = 1;
 inline bool ClaimRewardedAdResponse::has_error_message() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
   return value;
 }
@@ -2835,16 +3023,16 @@ inline void ClaimRewardedAdResponse::unsafe_arena_set_allocated_error_message(
   }
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClaimRewardedAdResponse.error_message)
 }
 inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimRewardedAdResponse::release_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* released = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -2864,7 +3052,7 @@ inline ::TipInfoMessage* PROTOBUF_NULLABLE ClaimRewardedAdResponse::unsafe_arena
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:ClaimRewardedAdResponse.error_message)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* temp = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   return temp;
@@ -2879,7 +3067,7 @@ inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimRewardedAdResponse::_internal_mut
 }
 inline ::TipInfoMessage* PROTOBUF_NONNULL ClaimRewardedAdResponse::mutable_error_message()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* _msg = _internal_mutable_error_message();
   // @@protoc_insertion_point(field_mutable:ClaimRewardedAdResponse.error_message)
   return _msg;
@@ -2896,9 +3084,9 @@ inline void ClaimRewardedAdResponse::set_allocated_error_message(::TipInfoMessag
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
@@ -2909,7 +3097,7 @@ inline void ClaimRewardedAdResponse::set_allocated_error_message(::TipInfoMessag
 inline void ClaimRewardedAdResponse::clear_currency_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.currency_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t ClaimRewardedAdResponse::currency_type() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.currency_type)
@@ -2917,7 +3105,7 @@ inline ::uint32_t ClaimRewardedAdResponse::currency_type() const {
 }
 inline void ClaimRewardedAdResponse::set_currency_type(::uint32_t value) {
   _internal_set_currency_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.currency_type)
 }
 inline ::uint32_t ClaimRewardedAdResponse::_internal_currency_type() const {
@@ -2933,7 +3121,7 @@ inline void ClaimRewardedAdResponse::_internal_set_currency_type(::uint32_t valu
 inline void ClaimRewardedAdResponse::clear_reward_amount() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.reward_amount_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t ClaimRewardedAdResponse::reward_amount() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.reward_amount)
@@ -2941,7 +3129,7 @@ inline ::uint64_t ClaimRewardedAdResponse::reward_amount() const {
 }
 inline void ClaimRewardedAdResponse::set_reward_amount(::uint64_t value) {
   _internal_set_reward_amount(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.reward_amount)
 }
 inline ::uint64_t ClaimRewardedAdResponse::_internal_reward_amount() const {
@@ -2957,7 +3145,7 @@ inline void ClaimRewardedAdResponse::_internal_set_reward_amount(::uint64_t valu
 inline void ClaimRewardedAdResponse::clear_currency_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.currency_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t ClaimRewardedAdResponse::currency_balance() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.currency_balance)
@@ -2965,7 +3153,7 @@ inline ::uint64_t ClaimRewardedAdResponse::currency_balance() const {
 }
 inline void ClaimRewardedAdResponse::set_currency_balance(::uint64_t value) {
   _internal_set_currency_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.currency_balance)
 }
 inline ::uint64_t ClaimRewardedAdResponse::_internal_currency_balance() const {
@@ -2981,7 +3169,7 @@ inline void ClaimRewardedAdResponse::_internal_set_currency_balance(::uint64_t v
 inline void ClaimRewardedAdResponse::clear_gold_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t ClaimRewardedAdResponse::gold_balance() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.gold_balance)
@@ -2989,7 +3177,7 @@ inline ::uint64_t ClaimRewardedAdResponse::gold_balance() const {
 }
 inline void ClaimRewardedAdResponse::set_gold_balance(::uint64_t value) {
   _internal_set_gold_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.gold_balance)
 }
 inline ::uint64_t ClaimRewardedAdResponse::_internal_gold_balance() const {
@@ -3003,14 +3191,14 @@ inline void ClaimRewardedAdResponse::_internal_set_gold_balance(::uint64_t value
 
 // .RewardedAdSlotView slot = 6;
 inline bool ClaimRewardedAdResponse::has_slot() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.slot_ != nullptr);
   return value;
 }
 inline void ClaimRewardedAdResponse::clear_slot() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.slot_ != nullptr) _impl_.slot_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::RewardedAdSlotView& ClaimRewardedAdResponse::_internal_slot() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3029,16 +3217,16 @@ inline void ClaimRewardedAdResponse::unsafe_arena_set_allocated_slot(
   }
   _impl_.slot_ = reinterpret_cast<::RewardedAdSlotView*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ClaimRewardedAdResponse.slot)
 }
 inline ::RewardedAdSlotView* PROTOBUF_NULLABLE ClaimRewardedAdResponse::release_slot() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::RewardedAdSlotView* released = _impl_.slot_;
   _impl_.slot_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3058,7 +3246,7 @@ inline ::RewardedAdSlotView* PROTOBUF_NULLABLE ClaimRewardedAdResponse::unsafe_a
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:ClaimRewardedAdResponse.slot)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::RewardedAdSlotView* temp = _impl_.slot_;
   _impl_.slot_ = nullptr;
   return temp;
@@ -3073,7 +3261,7 @@ inline ::RewardedAdSlotView* PROTOBUF_NONNULL ClaimRewardedAdResponse::_internal
 }
 inline ::RewardedAdSlotView* PROTOBUF_NONNULL ClaimRewardedAdResponse::mutable_slot()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::RewardedAdSlotView* _msg = _internal_mutable_slot();
   // @@protoc_insertion_point(field_mutable:ClaimRewardedAdResponse.slot)
   return _msg;
@@ -3090,9 +3278,9 @@ inline void ClaimRewardedAdResponse::set_allocated_slot(::RewardedAdSlotView* PR
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.slot_ = reinterpret_cast<::RewardedAdSlotView*>(value);
@@ -3103,7 +3291,7 @@ inline void ClaimRewardedAdResponse::set_allocated_slot(::RewardedAdSlotView* PR
 inline void ClaimRewardedAdResponse::clear_replayed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.replayed_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline bool ClaimRewardedAdResponse::replayed() const {
   // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.replayed)
@@ -3111,7 +3299,7 @@ inline bool ClaimRewardedAdResponse::replayed() const {
 }
 inline void ClaimRewardedAdResponse::set_replayed(bool value) {
   _internal_set_replayed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.replayed)
 }
 inline bool ClaimRewardedAdResponse::_internal_replayed() const {
@@ -3121,6 +3309,81 @@ inline bool ClaimRewardedAdResponse::_internal_replayed() const {
 inline void ClaimRewardedAdResponse::_internal_set_replayed(bool value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.replayed_ = value;
+}
+
+// uint32 reward_kind = 8;
+inline void ClaimRewardedAdResponse::clear_reward_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t ClaimRewardedAdResponse::reward_kind() const {
+  // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.reward_kind)
+  return _internal_reward_kind();
+}
+inline void ClaimRewardedAdResponse::set_reward_kind(::uint32_t value) {
+  _internal_set_reward_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.reward_kind)
+}
+inline ::uint32_t ClaimRewardedAdResponse::_internal_reward_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reward_kind_;
+}
+inline void ClaimRewardedAdResponse::_internal_set_reward_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reward_kind_ = value;
+}
+
+// repeated uint32 rerolled_sigil_ids = 9;
+inline int ClaimRewardedAdResponse::_internal_rerolled_sigil_ids_size() const {
+  return _internal_rerolled_sigil_ids().size();
+}
+inline int ClaimRewardedAdResponse::rerolled_sigil_ids_size() const {
+  return _internal_rerolled_sigil_ids_size();
+}
+inline void ClaimRewardedAdResponse::clear_rerolled_sigil_ids() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.rerolled_sigil_ids_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t ClaimRewardedAdResponse::rerolled_sigil_ids(int index) const {
+  // @@protoc_insertion_point(field_get:ClaimRewardedAdResponse.rerolled_sigil_ids)
+  return _internal_rerolled_sigil_ids().Get(index);
+}
+inline void ClaimRewardedAdResponse::set_rerolled_sigil_ids(int index, ::uint32_t value) {
+  _internal_mutable_rerolled_sigil_ids()->Set(index, value);
+  // @@protoc_insertion_point(field_set:ClaimRewardedAdResponse.rerolled_sigil_ids)
+}
+inline void ClaimRewardedAdResponse::add_rerolled_sigil_ids(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_rerolled_sigil_ids()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:ClaimRewardedAdResponse.rerolled_sigil_ids)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& ClaimRewardedAdResponse::rerolled_sigil_ids() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:ClaimRewardedAdResponse.rerolled_sigil_ids)
+  return _internal_rerolled_sigil_ids();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL ClaimRewardedAdResponse::mutable_rerolled_sigil_ids()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:ClaimRewardedAdResponse.rerolled_sigil_ids)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_rerolled_sigil_ids();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+ClaimRewardedAdResponse::_internal_rerolled_sigil_ids() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.rerolled_sigil_ids_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+ClaimRewardedAdResponse::_internal_mutable_rerolled_sigil_ids() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.rerolled_sigil_ids_;
 }
 
 #ifdef __GNUC__

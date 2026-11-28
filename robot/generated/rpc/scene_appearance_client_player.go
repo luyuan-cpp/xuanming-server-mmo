@@ -169,3 +169,118 @@ func (sceneAppearanceClientPlayerRpc) decodeEquipSkillVfx(reply *base.MessageCon
 	}
 	return resp, nil
 }
+
+// BuyAppearanceSeriesBundle 异步调用 SceneAppearanceClientPlayer.BuyAppearanceSeriesBundle(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) BuyAppearanceSeriesBundle(c *pkg.GameClient, req *scene.BuyAppearanceSeriesBundleRequest, timeout time.Duration, done func(*scene.BuyAppearanceSeriesBundleResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerBuyAppearanceSeriesBundleMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeBuyAppearanceSeriesBundle(reply, err))
+	})
+}
+
+// BuyAppearanceSeriesBundleSync 同步调用 SceneAppearanceClientPlayer.BuyAppearanceSeriesBundle(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) BuyAppearanceSeriesBundleSync(ctx context.Context, c *pkg.GameClient, req *scene.BuyAppearanceSeriesBundleRequest, timeout time.Duration) (*scene.BuyAppearanceSeriesBundleResponse, error) {
+	return r.decodeBuyAppearanceSeriesBundle(c.CallSync(ctx, game.SceneAppearanceClientPlayerBuyAppearanceSeriesBundleMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeBuyAppearanceSeriesBundle(reply *base.MessageContent, err error) (*scene.BuyAppearanceSeriesBundleResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.BuyAppearanceSeriesBundleResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.BuyAppearanceSeriesBundle reply: %w", err)
+	}
+	return resp, nil
+}
+
+// EquipShowcaseCosmetic 异步调用 SceneAppearanceClientPlayer.EquipShowcaseCosmetic(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) EquipShowcaseCosmetic(c *pkg.GameClient, req *scene.EquipShowcaseCosmeticRequest, timeout time.Duration, done func(*scene.EquipShowcaseCosmeticResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerEquipShowcaseCosmeticMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeEquipShowcaseCosmetic(reply, err))
+	})
+}
+
+// EquipShowcaseCosmeticSync 同步调用 SceneAppearanceClientPlayer.EquipShowcaseCosmetic(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) EquipShowcaseCosmeticSync(ctx context.Context, c *pkg.GameClient, req *scene.EquipShowcaseCosmeticRequest, timeout time.Duration) (*scene.EquipShowcaseCosmeticResponse, error) {
+	return r.decodeEquipShowcaseCosmetic(c.CallSync(ctx, game.SceneAppearanceClientPlayerEquipShowcaseCosmeticMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeEquipShowcaseCosmetic(reply *base.MessageContent, err error) (*scene.EquipShowcaseCosmeticResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.EquipShowcaseCosmeticResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.EquipShowcaseCosmetic reply: %w", err)
+	}
+	return resp, nil
+}
+
+// CastCityCelebration 异步调用 SceneAppearanceClientPlayer.CastCityCelebration(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) CastCityCelebration(c *pkg.GameClient, req *scene.CastCityCelebrationRequest, timeout time.Duration, done func(*scene.CastCityCelebrationResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerCastCityCelebrationMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeCastCityCelebration(reply, err))
+	})
+}
+
+// CastCityCelebrationSync 同步调用 SceneAppearanceClientPlayer.CastCityCelebration(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) CastCityCelebrationSync(ctx context.Context, c *pkg.GameClient, req *scene.CastCityCelebrationRequest, timeout time.Duration) (*scene.CastCityCelebrationResponse, error) {
+	return r.decodeCastCityCelebration(c.CallSync(ctx, game.SceneAppearanceClientPlayerCastCityCelebrationMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeCastCityCelebration(reply *base.MessageContent, err error) (*scene.CastCityCelebrationResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.CastCityCelebrationResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.CastCityCelebration reply: %w", err)
+	}
+	return resp, nil
+}
+
+// ClaimCityCelebrationGift 异步调用 SceneAppearanceClientPlayer.ClaimCityCelebrationGift(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) ClaimCityCelebrationGift(c *pkg.GameClient, req *scene.ClaimCityCelebrationGiftRequest, timeout time.Duration, done func(*scene.ClaimCityCelebrationGiftResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerClaimCityCelebrationGiftMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeClaimCityCelebrationGift(reply, err))
+	})
+}
+
+// ClaimCityCelebrationGiftSync 同步调用 SceneAppearanceClientPlayer.ClaimCityCelebrationGift(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) ClaimCityCelebrationGiftSync(ctx context.Context, c *pkg.GameClient, req *scene.ClaimCityCelebrationGiftRequest, timeout time.Duration) (*scene.ClaimCityCelebrationGiftResponse, error) {
+	return r.decodeClaimCityCelebrationGift(c.CallSync(ctx, game.SceneAppearanceClientPlayerClaimCityCelebrationGiftMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeClaimCityCelebrationGift(reply *base.MessageContent, err error) (*scene.ClaimCityCelebrationGiftResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ClaimCityCelebrationGiftResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.ClaimCityCelebrationGift reply: %w", err)
+	}
+	return resp, nil
+}
+
+// SendCosmeticGift 异步调用 SceneAppearanceClientPlayer.SendCosmeticGift(REQUEST),done 的契约见 SceneAppearanceClientPlayer。
+func (r sceneAppearanceClientPlayerRpc) SendCosmeticGift(c *pkg.GameClient, req *scene.SendCosmeticGiftRequest, timeout time.Duration, done func(*scene.SendCosmeticGiftResponse, error)) {
+	c.Call(game.SceneAppearanceClientPlayerSendCosmeticGiftMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSendCosmeticGift(reply, err))
+	})
+}
+
+// SendCosmeticGiftSync 同步调用 SceneAppearanceClientPlayer.SendCosmeticGift(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneAppearanceClientPlayerRpc) SendCosmeticGiftSync(ctx context.Context, c *pkg.GameClient, req *scene.SendCosmeticGiftRequest, timeout time.Duration) (*scene.SendCosmeticGiftResponse, error) {
+	return r.decodeSendCosmeticGift(c.CallSync(ctx, game.SceneAppearanceClientPlayerSendCosmeticGiftMessageId, req, timeout))
+}
+
+func (sceneAppearanceClientPlayerRpc) decodeSendCosmeticGift(reply *base.MessageContent, err error) (*scene.SendCosmeticGiftResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SendCosmeticGiftResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneAppearanceClientPlayer.SendCosmeticGift reply: %w", err)
+	}
+	return resp, nil
+}

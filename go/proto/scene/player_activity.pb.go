@@ -2566,6 +2566,147 @@ func (x *TravelPassTierView) GetPremiumCanClaim() bool {
 	return false
 }
 
+// 永不绝版手记书架的单期目录项（零战力纯展示与进度切换）。
+type TravelPassCatalogEntry struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PassId          uint32                 `protobuf:"varint,1,opt,name=pass_id,json=passId,proto3" json:"pass_id,omitempty"`
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	IconKey         string                 `protobuf:"bytes,3,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`
+	BannerAssetKey  string                 `protobuf:"bytes,4,opt,name=banner_asset_key,json=bannerAssetKey,proto3" json:"banner_asset_key,omitempty"`
+	SortOrder       uint32                 `protobuf:"varint,5,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
+	IsArchived      bool                   `protobuf:"varint,6,opt,name=is_archived,json=isArchived,proto3" json:"is_archived,omitempty"`
+	IsActive        bool                   `protobuf:"varint,7,opt,name=is_active,json=isActive,proto3" json:"is_active,omitempty"`
+	ProgressPoints  uint32                 `protobuf:"varint,8,opt,name=progress_points,json=progressPoints,proto3" json:"progress_points,omitempty"`
+	MaxPoints       uint32                 `protobuf:"varint,9,opt,name=max_points,json=maxPoints,proto3" json:"max_points,omitempty"`
+	PremiumUnlocked bool                   `protobuf:"varint,10,opt,name=premium_unlocked,json=premiumUnlocked,proto3" json:"premium_unlocked,omitempty"`
+	ClaimableCount  uint32                 `protobuf:"varint,11,opt,name=claimable_count,json=claimableCount,proto3" json:"claimable_count,omitempty"`
+	OpenForProgress bool                   `protobuf:"varint,12,opt,name=open_for_progress,json=openForProgress,proto3" json:"open_for_progress,omitempty"`
+	OpenForUnlock   bool                   `protobuf:"varint,13,opt,name=open_for_unlock,json=openForUnlock,proto3" json:"open_for_unlock,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TravelPassCatalogEntry) Reset() {
+	*x = TravelPassCatalogEntry{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TravelPassCatalogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TravelPassCatalogEntry) ProtoMessage() {}
+
+func (x *TravelPassCatalogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TravelPassCatalogEntry.ProtoReflect.Descriptor instead.
+func (*TravelPassCatalogEntry) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TravelPassCatalogEntry) GetPassId() uint32 {
+	if x != nil {
+		return x.PassId
+	}
+	return 0
+}
+
+func (x *TravelPassCatalogEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TravelPassCatalogEntry) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *TravelPassCatalogEntry) GetBannerAssetKey() string {
+	if x != nil {
+		return x.BannerAssetKey
+	}
+	return ""
+}
+
+func (x *TravelPassCatalogEntry) GetSortOrder() uint32 {
+	if x != nil {
+		return x.SortOrder
+	}
+	return 0
+}
+
+func (x *TravelPassCatalogEntry) GetIsArchived() bool {
+	if x != nil {
+		return x.IsArchived
+	}
+	return false
+}
+
+func (x *TravelPassCatalogEntry) GetIsActive() bool {
+	if x != nil {
+		return x.IsActive
+	}
+	return false
+}
+
+func (x *TravelPassCatalogEntry) GetProgressPoints() uint32 {
+	if x != nil {
+		return x.ProgressPoints
+	}
+	return 0
+}
+
+func (x *TravelPassCatalogEntry) GetMaxPoints() uint32 {
+	if x != nil {
+		return x.MaxPoints
+	}
+	return 0
+}
+
+func (x *TravelPassCatalogEntry) GetPremiumUnlocked() bool {
+	if x != nil {
+		return x.PremiumUnlocked
+	}
+	return false
+}
+
+func (x *TravelPassCatalogEntry) GetClaimableCount() uint32 {
+	if x != nil {
+		return x.ClaimableCount
+	}
+	return 0
+}
+
+func (x *TravelPassCatalogEntry) GetOpenForProgress() bool {
+	if x != nil {
+		return x.OpenForProgress
+	}
+	return false
+}
+
+func (x *TravelPassCatalogEntry) GetOpenForUnlock() bool {
+	if x != nil {
+		return x.OpenForUnlock
+	}
+	return false
+}
+
 type TravelPassSnapshot struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
 	Available               bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
@@ -2601,13 +2742,17 @@ type TravelPassSnapshot struct {
 	UnlockedCosmeticKeys    []string              `protobuf:"bytes,30,rep,name=unlocked_cosmetic_keys,json=unlockedCosmeticKeys,proto3" json:"unlocked_cosmetic_keys,omitempty"`
 	EquippedFrameKey        string                `protobuf:"bytes,31,opt,name=equipped_frame_key,json=equippedFrameKey,proto3" json:"equipped_frame_key,omitempty"`
 	EquippedTitleKey        string                `protobuf:"bytes,32,opt,name=equipped_title_key,json=equippedTitleKey,proto3" json:"equipped_title_key,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// 当前生效的在研手记期次 ID（战斗结算游历印注入此期次）。
+	ActivePassId uint32 `protobuf:"varint,33,opt,name=active_pass_id,json=activePassId,proto3" json:"active_pass_id,omitempty"`
+	// 全部可用及已参与的历史手记书架目录（按 sort_order 升序）。
+	Bookshelf     []*TravelPassCatalogEntry `protobuf:"bytes,34,rep,name=bookshelf,proto3" json:"bookshelf,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TravelPassSnapshot) Reset() {
 	*x = TravelPassSnapshot{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[17]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2619,7 +2764,7 @@ func (x *TravelPassSnapshot) String() string {
 func (*TravelPassSnapshot) ProtoMessage() {}
 
 func (x *TravelPassSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[17]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2632,7 +2777,7 @@ func (x *TravelPassSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TravelPassSnapshot.ProtoReflect.Descriptor instead.
 func (*TravelPassSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{17}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TravelPassSnapshot) GetAvailable() bool {
@@ -2859,6 +3004,20 @@ func (x *TravelPassSnapshot) GetEquippedTitleKey() string {
 	return ""
 }
 
+func (x *TravelPassSnapshot) GetActivePassId() uint32 {
+	if x != nil {
+		return x.ActivePassId
+	}
+	return 0
+}
+
+func (x *TravelPassSnapshot) GetBookshelf() []*TravelPassCatalogEntry {
+	if x != nil {
+		return x.Bookshelf
+	}
+	return nil
+}
+
 type GetTravelPassStateRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 0 表示查询当前生效期次（或优先返回已解锁但尚未领完的历史期次）。
@@ -2869,7 +3028,7 @@ type GetTravelPassStateRequest struct {
 
 func (x *GetTravelPassStateRequest) Reset() {
 	*x = GetTravelPassStateRequest{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[18]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2881,7 +3040,7 @@ func (x *GetTravelPassStateRequest) String() string {
 func (*GetTravelPassStateRequest) ProtoMessage() {}
 
 func (x *GetTravelPassStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[18]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2894,7 +3053,7 @@ func (x *GetTravelPassStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTravelPassStateRequest.ProtoReflect.Descriptor instead.
 func (*GetTravelPassStateRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{18}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetTravelPassStateRequest) GetPassId() uint32 {
@@ -2914,7 +3073,7 @@ type GetTravelPassStateResponse struct {
 
 func (x *GetTravelPassStateResponse) Reset() {
 	*x = GetTravelPassStateResponse{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[19]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2926,7 +3085,7 @@ func (x *GetTravelPassStateResponse) String() string {
 func (*GetTravelPassStateResponse) ProtoMessage() {}
 
 func (x *GetTravelPassStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[19]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2939,7 +3098,7 @@ func (x *GetTravelPassStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTravelPassStateResponse.ProtoReflect.Descriptor instead.
 func (*GetTravelPassStateResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{19}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetTravelPassStateResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -2969,7 +3128,7 @@ type UnlockTravelPassPremiumRequest struct {
 
 func (x *UnlockTravelPassPremiumRequest) Reset() {
 	*x = UnlockTravelPassPremiumRequest{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[20]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2981,7 +3140,7 @@ func (x *UnlockTravelPassPremiumRequest) String() string {
 func (*UnlockTravelPassPremiumRequest) ProtoMessage() {}
 
 func (x *UnlockTravelPassPremiumRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[20]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2994,7 +3153,7 @@ func (x *UnlockTravelPassPremiumRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlockTravelPassPremiumRequest.ProtoReflect.Descriptor instead.
 func (*UnlockTravelPassPremiumRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{20}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *UnlockTravelPassPremiumRequest) GetClientRequestId() uint64 {
@@ -3043,7 +3202,7 @@ type UnlockTravelPassPremiumResponse struct {
 
 func (x *UnlockTravelPassPremiumResponse) Reset() {
 	*x = UnlockTravelPassPremiumResponse{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[21]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3055,7 +3214,7 @@ func (x *UnlockTravelPassPremiumResponse) String() string {
 func (*UnlockTravelPassPremiumResponse) ProtoMessage() {}
 
 func (x *UnlockTravelPassPremiumResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[21]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3068,7 +3227,7 @@ func (x *UnlockTravelPassPremiumResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlockTravelPassPremiumResponse.ProtoReflect.Descriptor instead.
 func (*UnlockTravelPassPremiumResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{21}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *UnlockTravelPassPremiumResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3106,7 +3265,7 @@ type ClaimTravelPassRewardRequest struct {
 
 func (x *ClaimTravelPassRewardRequest) Reset() {
 	*x = ClaimTravelPassRewardRequest{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[22]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3118,7 +3277,7 @@ func (x *ClaimTravelPassRewardRequest) String() string {
 func (*ClaimTravelPassRewardRequest) ProtoMessage() {}
 
 func (x *ClaimTravelPassRewardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[22]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3131,7 +3290,7 @@ func (x *ClaimTravelPassRewardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimTravelPassRewardRequest.ProtoReflect.Descriptor instead.
 func (*ClaimTravelPassRewardRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{22}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ClaimTravelPassRewardRequest) GetClientRequestId() uint64 {
@@ -3175,7 +3334,7 @@ type ClaimTravelPassRewardResponse struct {
 
 func (x *ClaimTravelPassRewardResponse) Reset() {
 	*x = ClaimTravelPassRewardResponse{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[23]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3187,7 +3346,7 @@ func (x *ClaimTravelPassRewardResponse) String() string {
 func (*ClaimTravelPassRewardResponse) ProtoMessage() {}
 
 func (x *ClaimTravelPassRewardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[23]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3200,7 +3359,7 @@ func (x *ClaimTravelPassRewardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimTravelPassRewardResponse.ProtoReflect.Descriptor instead.
 func (*ClaimTravelPassRewardResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{23}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ClaimTravelPassRewardResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3250,7 +3409,7 @@ type EquipTravelPassCosmeticRequest struct {
 
 func (x *EquipTravelPassCosmeticRequest) Reset() {
 	*x = EquipTravelPassCosmeticRequest{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[24]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3262,7 +3421,7 @@ func (x *EquipTravelPassCosmeticRequest) String() string {
 func (*EquipTravelPassCosmeticRequest) ProtoMessage() {}
 
 func (x *EquipTravelPassCosmeticRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[24]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3275,7 +3434,7 @@ func (x *EquipTravelPassCosmeticRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipTravelPassCosmeticRequest.ProtoReflect.Descriptor instead.
 func (*EquipTravelPassCosmeticRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{24}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *EquipTravelPassCosmeticRequest) GetCosmeticSlot() uint32 {
@@ -3302,7 +3461,7 @@ type EquipTravelPassCosmeticResponse struct {
 
 func (x *EquipTravelPassCosmeticResponse) Reset() {
 	*x = EquipTravelPassCosmeticResponse{}
-	mi := &file_proto_scene_player_activity_proto_msgTypes[25]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3314,7 +3473,7 @@ func (x *EquipTravelPassCosmeticResponse) String() string {
 func (*EquipTravelPassCosmeticResponse) ProtoMessage() {}
 
 func (x *EquipTravelPassCosmeticResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_activity_proto_msgTypes[25]
+	mi := &file_proto_scene_player_activity_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3327,7 +3486,7 @@ func (x *EquipTravelPassCosmeticResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EquipTravelPassCosmeticResponse.ProtoReflect.Descriptor instead.
 func (*EquipTravelPassCosmeticResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{25}
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *EquipTravelPassCosmeticResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -3338,6 +3497,103 @@ func (x *EquipTravelPassCosmeticResponse) GetErrorMessage() *base.TipInfoMessage
 }
 
 func (x *EquipTravelPassCosmeticResponse) GetSnapshot() *TravelPassSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+// 零消耗、无冷却切换当前在研游历手记期次（永不绝版书架制）。
+type SelectActiveTravelPassRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PassId        uint32                 `protobuf:"varint,1,opt,name=pass_id,json=passId,proto3" json:"pass_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectActiveTravelPassRequest) Reset() {
+	*x = SelectActiveTravelPassRequest{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectActiveTravelPassRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectActiveTravelPassRequest) ProtoMessage() {}
+
+func (x *SelectActiveTravelPassRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectActiveTravelPassRequest.ProtoReflect.Descriptor instead.
+func (*SelectActiveTravelPassRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *SelectActiveTravelPassRequest) GetPassId() uint32 {
+	if x != nil {
+		return x.PassId
+	}
+	return 0
+}
+
+type SelectActiveTravelPassResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Snapshot      *TravelPassSnapshot    `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SelectActiveTravelPassResponse) Reset() {
+	*x = SelectActiveTravelPassResponse{}
+	mi := &file_proto_scene_player_activity_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SelectActiveTravelPassResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SelectActiveTravelPassResponse) ProtoMessage() {}
+
+func (x *SelectActiveTravelPassResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_activity_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SelectActiveTravelPassResponse.ProtoReflect.Descriptor instead.
+func (*SelectActiveTravelPassResponse) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_activity_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *SelectActiveTravelPassResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *SelectActiveTravelPassResponse) GetSnapshot() *TravelPassSnapshot {
 	if x != nil {
 		return x.Snapshot
 	}
@@ -3561,8 +3817,25 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x14premium_cosmetic_key\x18\x13 \x01(\tR\x12premiumCosmeticKey\x122\n" +
 	"\x15premium_cosmetic_name\x18\x14 \x01(\tR\x13premiumCosmeticName\x12'\n" +
 	"\x0fpremium_claimed\x18\x15 \x01(\bR\x0epremiumClaimed\x12*\n" +
-	"\x11premium_can_claim\x18\x16 \x01(\bR\x0fpremiumCanClaim\"\xd1\n" +
+	"\x11premium_can_claim\x18\x16 \x01(\bR\x0fpremiumCanClaim\"\xd7\x03\n" +
+	"\x16TravelPassCatalogEntry\x12\x17\n" +
+	"\apass_id\x18\x01 \x01(\rR\x06passId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\bicon_key\x18\x03 \x01(\tR\aiconKey\x12(\n" +
+	"\x10banner_asset_key\x18\x04 \x01(\tR\x0ebannerAssetKey\x12\x1d\n" +
 	"\n" +
+	"sort_order\x18\x05 \x01(\rR\tsortOrder\x12\x1f\n" +
+	"\vis_archived\x18\x06 \x01(\bR\n" +
+	"isArchived\x12\x1b\n" +
+	"\tis_active\x18\a \x01(\bR\bisActive\x12'\n" +
+	"\x0fprogress_points\x18\b \x01(\rR\x0eprogressPoints\x12\x1d\n" +
+	"\n" +
+	"max_points\x18\t \x01(\rR\tmaxPoints\x12)\n" +
+	"\x10premium_unlocked\x18\n" +
+	" \x01(\bR\x0fpremiumUnlocked\x12'\n" +
+	"\x0fclaimable_count\x18\v \x01(\rR\x0eclaimableCount\x12*\n" +
+	"\x11open_for_progress\x18\f \x01(\bR\x0fopenForProgress\x12&\n" +
+	"\x0fopen_for_unlock\x18\r \x01(\bR\ropenForUnlock\"\xae\v\n" +
 	"\x12TravelPassSnapshot\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x12-\n" +
 	"\x12unavailable_reason\x18\x02 \x01(\tR\x11unavailableReason\x12\"\n" +
@@ -3599,7 +3872,9 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x05tiers\x18\x1d \x03(\v2\x13.TravelPassTierViewR\x05tiers\x124\n" +
 	"\x16unlocked_cosmetic_keys\x18\x1e \x03(\tR\x14unlockedCosmeticKeys\x12,\n" +
 	"\x12equipped_frame_key\x18\x1f \x01(\tR\x10equippedFrameKey\x12,\n" +
-	"\x12equipped_title_key\x18  \x01(\tR\x10equippedTitleKey\"4\n" +
+	"\x12equipped_title_key\x18  \x01(\tR\x10equippedTitleKey\x12$\n" +
+	"\x0eactive_pass_id\x18! \x01(\rR\factivePassId\x125\n" +
+	"\tbookshelf\x18\" \x03(\v2\x17.TravelPassCatalogEntryR\tbookshelf\"4\n" +
 	"\x19GetTravelPassStateRequest\x12\x17\n" +
 	"\apass_id\x18\x01 \x01(\rR\x06passId\"\x83\x01\n" +
 	"\x1aGetTravelPassStateResponse\x124\n" +
@@ -3631,6 +3906,11 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\rcosmetic_slot\x18\x01 \x01(\rR\fcosmeticSlot\x12!\n" +
 	"\fcosmetic_key\x18\x02 \x01(\tR\vcosmeticKey\"\x88\x01\n" +
 	"\x1fEquipTravelPassCosmeticResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x13.TravelPassSnapshotR\bsnapshot\"8\n" +
+	"\x1dSelectActiveTravelPassRequest\x12\x17\n" +
+	"\apass_id\x18\x01 \x01(\rR\x06passId\"\x87\x01\n" +
+	"\x1eSelectActiveTravelPassResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12/\n" +
 	"\bsnapshot\x18\x02 \x01(\v2\x13.TravelPassSnapshotR\bsnapshot*\x8a\x01\n" +
 	"\x14PlayerActivityStatus\x12\x1f\n" +
@@ -3696,7 +3976,7 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"#FESTIVAL_MATERIAL_QUOTA_UNSPECIFIED\x10\x00\x12+\n" +
 	"'FESTIVAL_MATERIAL_QUOTA_STAGE1_LIFETIME\x10\x01\x12)\n" +
 	"%FESTIVAL_MATERIAL_QUOTA_STAGE2_WEEKLY\x10\x02\x12(\n" +
-	"$FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY\x10\x032\xe0\x06\n" +
+	"$FESTIVAL_MATERIAL_QUOTA_DAILY_LEGACY\x10\x032\xbb\a\n" +
 	"\x19SceneActivityClientPlayer\x12D\n" +
 	"\x0fGetActivityList\x12\x17.GetActivityListRequest\x1a\x18.GetActivityListResponse\x12h\n" +
 	"\x1bClaimActivityVitalityReward\x12#.ClaimActivityVitalityRewardRequest\x1a$.ClaimActivityVitalityRewardResponse\x12Y\n" +
@@ -3706,7 +3986,8 @@ const file_proto_scene_player_activity_proto_rawDesc = "" +
 	"\x12GetTravelPassState\x12\x1a.GetTravelPassStateRequest\x1a\x1b.GetTravelPassStateResponse\x12\\\n" +
 	"\x17UnlockTravelPassPremium\x12\x1f.UnlockTravelPassPremiumRequest\x1a .UnlockTravelPassPremiumResponse\x12V\n" +
 	"\x15ClaimTravelPassReward\x12\x1d.ClaimTravelPassRewardRequest\x1a\x1e.ClaimTravelPassRewardResponse\x12\\\n" +
-	"\x17EquipTravelPassCosmetic\x12\x1f.EquipTravelPassCosmeticRequest\x1a .EquipTravelPassCosmeticResponse\x1a\n" +
+	"\x17EquipTravelPassCosmetic\x12\x1f.EquipTravelPassCosmeticRequest\x1a .EquipTravelPassCosmeticResponse\x12Y\n" +
+	"\x16SelectActiveTravelPass\x12\x1e.SelectActiveTravelPassRequest\x1a\x1f.SelectActiveTravelPassResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -3722,7 +4003,7 @@ func file_proto_scene_player_activity_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_player_activity_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_proto_scene_player_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_proto_scene_player_activity_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_proto_scene_player_activity_proto_goTypes = []any{
 	(PlayerActivityStatus)(0),                   // 0: PlayerActivityStatus
 	(PlayerActivityCategory)(0),                 // 1: PlayerActivityCategory
@@ -3750,17 +4031,20 @@ var file_proto_scene_player_activity_proto_goTypes = []any{
 	(*ClaimFestivalBeastRewardRequest)(nil),     // 23: ClaimFestivalBeastRewardRequest
 	(*ClaimFestivalBeastRewardResponse)(nil),    // 24: ClaimFestivalBeastRewardResponse
 	(*TravelPassTierView)(nil),                  // 25: TravelPassTierView
-	(*TravelPassSnapshot)(nil),                  // 26: TravelPassSnapshot
-	(*GetTravelPassStateRequest)(nil),           // 27: GetTravelPassStateRequest
-	(*GetTravelPassStateResponse)(nil),          // 28: GetTravelPassStateResponse
-	(*UnlockTravelPassPremiumRequest)(nil),      // 29: UnlockTravelPassPremiumRequest
-	(*UnlockTravelPassPremiumResponse)(nil),     // 30: UnlockTravelPassPremiumResponse
-	(*ClaimTravelPassRewardRequest)(nil),        // 31: ClaimTravelPassRewardRequest
-	(*ClaimTravelPassRewardResponse)(nil),       // 32: ClaimTravelPassRewardResponse
-	(*EquipTravelPassCosmeticRequest)(nil),      // 33: EquipTravelPassCosmeticRequest
-	(*EquipTravelPassCosmeticResponse)(nil),     // 34: EquipTravelPassCosmeticResponse
-	(*base.TipInfoMessage)(nil),                 // 35: TipInfoMessage
-	(*BagInfo)(nil),                             // 36: BagInfo
+	(*TravelPassCatalogEntry)(nil),              // 26: TravelPassCatalogEntry
+	(*TravelPassSnapshot)(nil),                  // 27: TravelPassSnapshot
+	(*GetTravelPassStateRequest)(nil),           // 28: GetTravelPassStateRequest
+	(*GetTravelPassStateResponse)(nil),          // 29: GetTravelPassStateResponse
+	(*UnlockTravelPassPremiumRequest)(nil),      // 30: UnlockTravelPassPremiumRequest
+	(*UnlockTravelPassPremiumResponse)(nil),     // 31: UnlockTravelPassPremiumResponse
+	(*ClaimTravelPassRewardRequest)(nil),        // 32: ClaimTravelPassRewardRequest
+	(*ClaimTravelPassRewardResponse)(nil),       // 33: ClaimTravelPassRewardResponse
+	(*EquipTravelPassCosmeticRequest)(nil),      // 34: EquipTravelPassCosmeticRequest
+	(*EquipTravelPassCosmeticResponse)(nil),     // 35: EquipTravelPassCosmeticResponse
+	(*SelectActiveTravelPassRequest)(nil),       // 36: SelectActiveTravelPassRequest
+	(*SelectActiveTravelPassResponse)(nil),      // 37: SelectActiveTravelPassResponse
+	(*base.TipInfoMessage)(nil),                 // 38: TipInfoMessage
+	(*BagInfo)(nil),                             // 39: BagInfo
 }
 var file_proto_scene_player_activity_proto_depIdxs = []int32{
 	0,  // 0: PlayerActivityInfo.status:type_name -> PlayerActivityStatus
@@ -3770,56 +4054,61 @@ var file_proto_scene_player_activity_proto_depIdxs = []int32{
 	9,  // 4: PlayerActivityInfo.rewards:type_name -> PlayerActivityRewardItem
 	9,  // 5: PlayerActivityVitalityReward.items:type_name -> PlayerActivityRewardItem
 	11, // 6: PlayerActivityVitalitySnapshot.rewards:type_name -> PlayerActivityVitalityReward
-	35, // 7: GetActivityListResponse.error_message:type_name -> TipInfoMessage
+	38, // 7: GetActivityListResponse.error_message:type_name -> TipInfoMessage
 	10, // 8: GetActivityListResponse.activities:type_name -> PlayerActivityInfo
 	12, // 9: GetActivityListResponse.vitality:type_name -> PlayerActivityVitalitySnapshot
-	35, // 10: ClaimActivityVitalityRewardResponse.error_message:type_name -> TipInfoMessage
+	38, // 10: ClaimActivityVitalityRewardResponse.error_message:type_name -> TipInfoMessage
 	12, // 11: ClaimActivityVitalityRewardResponse.snapshot:type_name -> PlayerActivityVitalitySnapshot
 	6,  // 12: FestivalBeastPendingLaunchInfo.launch_state:type_name -> FestivalBeastLaunchState
 	8,  // 13: FestivalBeastMaterialSummary.quota_mode:type_name -> FestivalBeastMaterialQuotaMode
-	35, // 14: GetFestivalBeastDetailResponse.error_message:type_name -> TipInfoMessage
+	38, // 14: GetFestivalBeastDetailResponse.error_message:type_name -> TipInfoMessage
 	4,  // 15: GetFestivalBeastDetailResponse.phase:type_name -> FestivalBeastPhase
 	5,  // 16: GetFestivalBeastDetailResponse.start_block_code:type_name -> FestivalBeastActionBlockCode
 	5,  // 17: GetFestivalBeastDetailResponse.claim_block_code:type_name -> FestivalBeastActionBlockCode
 	17, // 18: GetFestivalBeastDetailResponse.pending_launch:type_name -> FestivalBeastPendingLaunchInfo
 	18, // 19: GetFestivalBeastDetailResponse.material_summary:type_name -> FestivalBeastMaterialSummary
-	35, // 20: StartFestivalBeastChallengeResponse.error_message:type_name -> TipInfoMessage
+	38, // 20: StartFestivalBeastChallengeResponse.error_message:type_name -> TipInfoMessage
 	6,  // 21: StartFestivalBeastChallengeResponse.launch_state:type_name -> FestivalBeastLaunchState
-	35, // 22: ClaimFestivalBeastRewardResponse.error_message:type_name -> TipInfoMessage
+	38, // 22: ClaimFestivalBeastRewardResponse.error_message:type_name -> TipInfoMessage
 	7,  // 23: ClaimFestivalBeastRewardResponse.outcome:type_name -> FestivalBeastClaimOutcome
 	25, // 24: TravelPassSnapshot.tiers:type_name -> TravelPassTierView
-	35, // 25: GetTravelPassStateResponse.error_message:type_name -> TipInfoMessage
-	26, // 26: GetTravelPassStateResponse.snapshot:type_name -> TravelPassSnapshot
-	35, // 27: UnlockTravelPassPremiumResponse.error_message:type_name -> TipInfoMessage
-	26, // 28: UnlockTravelPassPremiumResponse.snapshot:type_name -> TravelPassSnapshot
-	35, // 29: ClaimTravelPassRewardResponse.error_message:type_name -> TipInfoMessage
-	26, // 30: ClaimTravelPassRewardResponse.snapshot:type_name -> TravelPassSnapshot
-	36, // 31: ClaimTravelPassRewardResponse.bag:type_name -> BagInfo
-	35, // 32: EquipTravelPassCosmeticResponse.error_message:type_name -> TipInfoMessage
-	26, // 33: EquipTravelPassCosmeticResponse.snapshot:type_name -> TravelPassSnapshot
-	13, // 34: SceneActivityClientPlayer.GetActivityList:input_type -> GetActivityListRequest
-	15, // 35: SceneActivityClientPlayer.ClaimActivityVitalityReward:input_type -> ClaimActivityVitalityRewardRequest
-	19, // 36: SceneActivityClientPlayer.GetFestivalBeastDetail:input_type -> GetFestivalBeastDetailRequest
-	21, // 37: SceneActivityClientPlayer.StartFestivalBeastChallenge:input_type -> StartFestivalBeastChallengeRequest
-	23, // 38: SceneActivityClientPlayer.ClaimFestivalBeastReward:input_type -> ClaimFestivalBeastRewardRequest
-	27, // 39: SceneActivityClientPlayer.GetTravelPassState:input_type -> GetTravelPassStateRequest
-	29, // 40: SceneActivityClientPlayer.UnlockTravelPassPremium:input_type -> UnlockTravelPassPremiumRequest
-	31, // 41: SceneActivityClientPlayer.ClaimTravelPassReward:input_type -> ClaimTravelPassRewardRequest
-	33, // 42: SceneActivityClientPlayer.EquipTravelPassCosmetic:input_type -> EquipTravelPassCosmeticRequest
-	14, // 43: SceneActivityClientPlayer.GetActivityList:output_type -> GetActivityListResponse
-	16, // 44: SceneActivityClientPlayer.ClaimActivityVitalityReward:output_type -> ClaimActivityVitalityRewardResponse
-	20, // 45: SceneActivityClientPlayer.GetFestivalBeastDetail:output_type -> GetFestivalBeastDetailResponse
-	22, // 46: SceneActivityClientPlayer.StartFestivalBeastChallenge:output_type -> StartFestivalBeastChallengeResponse
-	24, // 47: SceneActivityClientPlayer.ClaimFestivalBeastReward:output_type -> ClaimFestivalBeastRewardResponse
-	28, // 48: SceneActivityClientPlayer.GetTravelPassState:output_type -> GetTravelPassStateResponse
-	30, // 49: SceneActivityClientPlayer.UnlockTravelPassPremium:output_type -> UnlockTravelPassPremiumResponse
-	32, // 50: SceneActivityClientPlayer.ClaimTravelPassReward:output_type -> ClaimTravelPassRewardResponse
-	34, // 51: SceneActivityClientPlayer.EquipTravelPassCosmetic:output_type -> EquipTravelPassCosmeticResponse
-	43, // [43:52] is the sub-list for method output_type
-	34, // [34:43] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	26, // 25: TravelPassSnapshot.bookshelf:type_name -> TravelPassCatalogEntry
+	38, // 26: GetTravelPassStateResponse.error_message:type_name -> TipInfoMessage
+	27, // 27: GetTravelPassStateResponse.snapshot:type_name -> TravelPassSnapshot
+	38, // 28: UnlockTravelPassPremiumResponse.error_message:type_name -> TipInfoMessage
+	27, // 29: UnlockTravelPassPremiumResponse.snapshot:type_name -> TravelPassSnapshot
+	38, // 30: ClaimTravelPassRewardResponse.error_message:type_name -> TipInfoMessage
+	27, // 31: ClaimTravelPassRewardResponse.snapshot:type_name -> TravelPassSnapshot
+	39, // 32: ClaimTravelPassRewardResponse.bag:type_name -> BagInfo
+	38, // 33: EquipTravelPassCosmeticResponse.error_message:type_name -> TipInfoMessage
+	27, // 34: EquipTravelPassCosmeticResponse.snapshot:type_name -> TravelPassSnapshot
+	38, // 35: SelectActiveTravelPassResponse.error_message:type_name -> TipInfoMessage
+	27, // 36: SelectActiveTravelPassResponse.snapshot:type_name -> TravelPassSnapshot
+	13, // 37: SceneActivityClientPlayer.GetActivityList:input_type -> GetActivityListRequest
+	15, // 38: SceneActivityClientPlayer.ClaimActivityVitalityReward:input_type -> ClaimActivityVitalityRewardRequest
+	19, // 39: SceneActivityClientPlayer.GetFestivalBeastDetail:input_type -> GetFestivalBeastDetailRequest
+	21, // 40: SceneActivityClientPlayer.StartFestivalBeastChallenge:input_type -> StartFestivalBeastChallengeRequest
+	23, // 41: SceneActivityClientPlayer.ClaimFestivalBeastReward:input_type -> ClaimFestivalBeastRewardRequest
+	28, // 42: SceneActivityClientPlayer.GetTravelPassState:input_type -> GetTravelPassStateRequest
+	30, // 43: SceneActivityClientPlayer.UnlockTravelPassPremium:input_type -> UnlockTravelPassPremiumRequest
+	32, // 44: SceneActivityClientPlayer.ClaimTravelPassReward:input_type -> ClaimTravelPassRewardRequest
+	34, // 45: SceneActivityClientPlayer.EquipTravelPassCosmetic:input_type -> EquipTravelPassCosmeticRequest
+	36, // 46: SceneActivityClientPlayer.SelectActiveTravelPass:input_type -> SelectActiveTravelPassRequest
+	14, // 47: SceneActivityClientPlayer.GetActivityList:output_type -> GetActivityListResponse
+	16, // 48: SceneActivityClientPlayer.ClaimActivityVitalityReward:output_type -> ClaimActivityVitalityRewardResponse
+	20, // 49: SceneActivityClientPlayer.GetFestivalBeastDetail:output_type -> GetFestivalBeastDetailResponse
+	22, // 50: SceneActivityClientPlayer.StartFestivalBeastChallenge:output_type -> StartFestivalBeastChallengeResponse
+	24, // 51: SceneActivityClientPlayer.ClaimFestivalBeastReward:output_type -> ClaimFestivalBeastRewardResponse
+	29, // 52: SceneActivityClientPlayer.GetTravelPassState:output_type -> GetTravelPassStateResponse
+	31, // 53: SceneActivityClientPlayer.UnlockTravelPassPremium:output_type -> UnlockTravelPassPremiumResponse
+	33, // 54: SceneActivityClientPlayer.ClaimTravelPassReward:output_type -> ClaimTravelPassRewardResponse
+	35, // 55: SceneActivityClientPlayer.EquipTravelPassCosmetic:output_type -> EquipTravelPassCosmeticResponse
+	37, // 56: SceneActivityClientPlayer.SelectActiveTravelPass:output_type -> SelectActiveTravelPassResponse
+	47, // [47:57] is the sub-list for method output_type
+	37, // [37:47] is the sub-list for method input_type
+	37, // [37:37] is the sub-list for extension type_name
+	37, // [37:37] is the sub-list for extension extendee
+	0,  // [0:37] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_activity_proto_init() }
@@ -3834,7 +4123,7 @@ func file_proto_scene_player_activity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_activity_proto_rawDesc), len(file_proto_scene_player_activity_proto_rawDesc)),
 			NumEnums:      9,
-			NumMessages:   26,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -37,6 +37,7 @@ const (
 	SceneBagClientPlayer_SaveEquipLoadout_FullMethodName             = "/SceneBagClientPlayer/SaveEquipLoadout"
 	SceneBagClientPlayer_SwitchEquipLoadout_FullMethodName           = "/SceneBagClientPlayer/SwitchEquipLoadout"
 	SceneBagClientPlayer_UnlockEquipLoadout_FullMethodName           = "/SceneBagClientPlayer/UnlockEquipLoadout"
+	SceneBagClientPlayer_ExpandBagCapacity_FullMethodName            = "/SceneBagClientPlayer/ExpandBagCapacity"
 )
 
 // SceneBagClientPlayerClient is the client API for SceneBagClientPlayer service.
@@ -70,6 +71,8 @@ type SceneBagClientPlayerClient interface {
 	SaveEquipLoadout(ctx context.Context, in *SaveEquipLoadoutRequest, opts ...grpc.CallOption) (*SaveEquipLoadoutResponse, error)
 	SwitchEquipLoadout(ctx context.Context, in *SwitchEquipLoadoutRequest, opts ...grpc.CallOption) (*SwitchEquipLoadoutResponse, error)
 	UnlockEquipLoadout(ctx context.Context, in *UnlockEquipLoadoutRequest, opts ...grpc.CallOption) (*UnlockEquipLoadoutResponse, error)
+	// ── 仓库扩容（method index 18）──
+	ExpandBagCapacity(ctx context.Context, in *ExpandBagCapacityRequest, opts ...grpc.CallOption) (*ExpandBagCapacityResponse, error)
 }
 
 type sceneBagClientPlayerClient struct {
@@ -260,6 +263,16 @@ func (c *sceneBagClientPlayerClient) UnlockEquipLoadout(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *sceneBagClientPlayerClient) ExpandBagCapacity(ctx context.Context, in *ExpandBagCapacityRequest, opts ...grpc.CallOption) (*ExpandBagCapacityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpandBagCapacityResponse)
+	err := c.cc.Invoke(ctx, SceneBagClientPlayer_ExpandBagCapacity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneBagClientPlayerServer is the server API for SceneBagClientPlayer service.
 // All implementations must embed UnimplementedSceneBagClientPlayerServer
 // for forward compatibility.
@@ -291,6 +304,8 @@ type SceneBagClientPlayerServer interface {
 	SaveEquipLoadout(context.Context, *SaveEquipLoadoutRequest) (*SaveEquipLoadoutResponse, error)
 	SwitchEquipLoadout(context.Context, *SwitchEquipLoadoutRequest) (*SwitchEquipLoadoutResponse, error)
 	UnlockEquipLoadout(context.Context, *UnlockEquipLoadoutRequest) (*UnlockEquipLoadoutResponse, error)
+	// ── 仓库扩容（method index 18）──
+	ExpandBagCapacity(context.Context, *ExpandBagCapacityRequest) (*ExpandBagCapacityResponse, error)
 	mustEmbedUnimplementedSceneBagClientPlayerServer()
 }
 
@@ -354,6 +369,9 @@ func (UnimplementedSceneBagClientPlayerServer) SwitchEquipLoadout(context.Contex
 }
 func (UnimplementedSceneBagClientPlayerServer) UnlockEquipLoadout(context.Context, *UnlockEquipLoadoutRequest) (*UnlockEquipLoadoutResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnlockEquipLoadout not implemented")
+}
+func (UnimplementedSceneBagClientPlayerServer) ExpandBagCapacity(context.Context, *ExpandBagCapacityRequest) (*ExpandBagCapacityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpandBagCapacity not implemented")
 }
 func (UnimplementedSceneBagClientPlayerServer) mustEmbedUnimplementedSceneBagClientPlayerServer() {}
 func (UnimplementedSceneBagClientPlayerServer) testEmbeddedByValue()                              {}
@@ -700,6 +718,24 @@ func _SceneBagClientPlayer_UnlockEquipLoadout_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneBagClientPlayer_ExpandBagCapacity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpandBagCapacityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneBagClientPlayerServer).ExpandBagCapacity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneBagClientPlayer_ExpandBagCapacity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneBagClientPlayerServer).ExpandBagCapacity(ctx, req.(*ExpandBagCapacityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneBagClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneBagClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -778,6 +814,10 @@ var SceneBagClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnlockEquipLoadout",
 			Handler:    _SceneBagClientPlayer_UnlockEquipLoadout_Handler,
+		},
+		{
+			MethodName: "ExpandBagCapacity",
+			Handler:    _SceneBagClientPlayer_ExpandBagCapacity_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

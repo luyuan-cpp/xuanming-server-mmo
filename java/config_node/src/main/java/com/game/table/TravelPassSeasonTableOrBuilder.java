@@ -123,4 +123,16 @@ public interface TravelPassSeasonTableOrBuilder extends
    * @return The configRevision.
    */
   int getConfigRevision();
+
+  /**
+   * <code>uint32 sort_order = 16;</code>
+   * @return The sortOrder.
+   */
+  int getSortOrder();
+
+  /**
+   * <code>uint32 is_archived = 17;</code>
+   * @return The isArchived.
+   */
+  int getIsArchived();
 }

@@ -268,3 +268,21 @@ void ScenePetClientPlayerHandler::AscendPetTier(entt::entity player,const ::Asce
 ///<<< END WRITING YOUR CODE
 
 }
+
+void ScenePetClientPlayerHandler::SavePetSquadPreset(entt::entity player,const ::SavePetSquadPresetRequest* request,
+	::SavePetSquadPresetResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PetSystem::SaveSquadPreset(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}
+
+void ScenePetClientPlayerHandler::UnlockPetSquadPresetSlot(entt::entity player,const ::UnlockPetSquadPresetSlotRequest* request,
+	::UnlockPetSquadPresetSlotResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PetSystem::UnlockSquadPresetSlot(player, *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

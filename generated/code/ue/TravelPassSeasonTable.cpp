@@ -118,6 +118,8 @@ static void TravelPassSeasonTableCheckNarrowedRow(const TSharedPtr<FJsonObject>&
 	TravelPassSeasonTableCheckNarrowedField(RowObject, TEXT("premium_currency_type"), TEXT("premium_currency_type"), RowIndex, 2147483647.0, TEXT("uint32"));
 	TravelPassSeasonTableCheckNarrowedField(RowObject, TEXT("premium_price"), TEXT("premium_price"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	TravelPassSeasonTableCheckNarrowedField(RowObject, TEXT("config_revision"), TEXT("config_revision"), RowIndex, 2147483647.0, TEXT("uint32"));
+	TravelPassSeasonTableCheckNarrowedField(RowObject, TEXT("sort_order"), TEXT("sort_order"), RowIndex, 2147483647.0, TEXT("uint32"));
+	TravelPassSeasonTableCheckNarrowedField(RowObject, TEXT("is_archived"), TEXT("is_archived"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UTravelPassSeasonTable::LoadFromJson(const FString& JsonText, FString& OutError)

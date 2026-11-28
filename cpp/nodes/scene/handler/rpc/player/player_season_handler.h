@@ -53,6 +53,9 @@ public:
     static void ResolveWuxingRealmEvent(entt::entity player,
         const ::ResolveWuxingRealmEventRequest* request,
         ::ResolveWuxingRealmEventResponse* response);
+    static void ExpandSavedBuildSlots(entt::entity player,
+        const ::ExpandSavedBuildSlotsRequest* request,
+        ::ExpandSavedBuildSlotsResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -176,6 +179,15 @@ public:
             ResolveWuxingRealmEvent(player,
                 static_cast<const ::ResolveWuxingRealmEventRequest*>(request),
                 static_cast<::ResolveWuxingRealmEventResponse*>(response));
+			}
+            break;
+        case 13:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::ExpandSavedBuildSlotsResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            ExpandSavedBuildSlots(player,
+                static_cast<const ::ExpandSavedBuildSlotsRequest*>(request),
+                static_cast<::ExpandSavedBuildSlotsResponse*>(response));
 			}
             break;
         default:

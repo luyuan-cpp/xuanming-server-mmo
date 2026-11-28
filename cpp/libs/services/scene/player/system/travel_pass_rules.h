@@ -12,11 +12,12 @@
 
 namespace travel_pass_rules
 {
-	inline constexpr uint32_t kMaxSeasons = 32;
+	inline constexpr uint32_t kMaxSeasons = 64;
 	inline constexpr uint32_t kMaxTiersPerSeason = 64;
 	inline constexpr uint64_t kMaxUnitPrice = 1'000'000'000ULL;
 	inline constexpr std::size_t kMaxCosmeticKeyLength = 64;
 	inline constexpr int kMaxCosmeticsPerSeason = 64;
+	inline constexpr int kMaxBonusCosmetics = 64;
 
 	inline constexpr uint32_t kCosmeticSlotFrame = 1;
 	inline constexpr uint32_t kCosmeticSlotTitle = 2;
@@ -121,6 +122,13 @@ namespace travel_pass_rules
 		{
 			return false;
 		}
+		for (const auto &owned : comp.bonus_cosmetic_keys())
+		{
+			if (owned == key)
+			{
+				return true;
+			}
+		}
 		for (const auto &season : comp.seasons())
 		{
 			for (const auto &owned : season.unlocked_cosmetic_keys())
@@ -132,6 +140,39 @@ namespace travel_pass_rules
 			}
 		}
 		return false;
+	}
+
+	inline bool AddBonusCosmeticKey(PlayerTravelPassComp &comp, std::string_view key, bool *added = nullptr)
+	{
+		if (added != nullptr)
+		{
+			*added = false;
+		}
+		if (key.empty())
+		{
+			return true;
+		}
+		if (!IsValidCosmeticKey(key))
+		{
+			return false;
+		}
+		for (const auto &existing : comp.bonus_cosmetic_keys())
+		{
+			if (existing == key)
+			{
+				return true;
+			}
+		}
+		if (comp.bonus_cosmetic_keys_size() >= kMaxBonusCosmetics)
+		{
+			return false;
+		}
+		comp.add_bonus_cosmetic_keys(std::string(key));
+		if (added != nullptr)
+		{
+			*added = true;
+		}
+		return true;
 	}
 
 	inline bool AddCosmeticKey(TravelPassSeasonProgress &season, std::string_view key)
@@ -186,6 +227,17 @@ namespace travel_pass_rules
 				{
 					return "unlocked_cosmetic_keys contains invalid key";
 				}
+			}
+		}
+		if (comp.bonus_cosmetic_keys_size() > kMaxBonusCosmetics)
+		{
+			return "bonus_cosmetic_keys exceeds capacity";
+		}
+		for (const auto &key : comp.bonus_cosmetic_keys())
+		{
+			if (!IsValidCosmeticKey(key))
+			{
+				return "bonus_cosmetic_keys contains invalid key";
 			}
 		}
 		if (!comp.equipped_frame_key().empty())

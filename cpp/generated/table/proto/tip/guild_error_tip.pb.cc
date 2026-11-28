@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025guild_error_tip.proto*\237\021\n\013guild_error\022"
+    "\n\025guild_error_tip.proto*\230\022\n\013guild_error\022"
     "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu"
     "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot"
     "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea"
@@ -90,14 +90,17 @@ const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "n\020\366m\022\031\n\024kGuildWarServiceBusy\020\367m\022\032\n\025kGuil"
     "dWarFeudCooldown\020\370m\022\037\n\032kGuildWarFeudAlre"
     "adyActive\020\371m\022\032\n\025kGuildWarFeudNotFound\020\372m"
-    "\022\037\n\032kGuildWarFeudInvalidTarget\020\373mB$\n\016com"
-    ".game.tableZ\022generated/pb/tableb\006proto3"
+    "\022\037\n\032kGuildWarFeudInvalidTarget\020\373m\022\030\n\023kGu"
+    "ildEmblemInvalid\020\374m\022 \n\033kGuildEmblemAlrea"
+    "dyUnlocked\020\375m\022\034\n\027kGuildEmblemNotUnlocked"
+    "\020\376m\022\035\n\030kGuildEmblemPriceChanged\020\377mB$\n\016co"
+    "m.game.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_guild_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_guild_5ferror_5ftip_2eproto = {
     false,
     false,
-    2279,
+    2400,
     descriptor_table_protodef_guild_5ferror_5ftip_2eproto,
     "guild_error_tip.proto",
     &descriptor_table_guild_5ferror_5ftip_2eproto_once,
@@ -116,7 +119,7 @@ guild_error_descriptor() {
   return file_level_enum_descriptors_guild_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t guild_error_internal_data_[] = {
-    65536u, 4980736u, 14044u, 14028u, 14060u, 14015u, 14036u, 14052u, 14068u, 14007u, 14023u, 14032u, 14040u, 14048u, 14056u, 14064u, 14072u, 14003u, 14011u, 14019u, 14026u, 14030u, 14034u, 14038u, 14042u, 14046u, 14050u, 14054u, 14058u, 14062u, 14066u, 14070u, 14074u, 14001u, 14005u, 14009u, 14013u, 14017u, 14021u, 14025u, 14027u, 14029u, 14031u, 14033u, 14035u, 14037u, 14039u, 14041u, 14043u, 14045u, 14047u, 14049u, 14051u, 14053u, 14055u, 14057u, 14059u, 14061u, 14063u, 14065u, 14067u, 14069u, 14071u, 14073u, 14075u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, 14018u, 14020u, 14022u, 14024u, };
+    65536u, 5242880u, 14048u, 14031u, 14064u, 14015u, 14040u, 14056u, 14072u, 14007u, 14023u, 14036u, 14044u, 14052u, 14060u, 14068u, 14076u, 14003u, 14011u, 14019u, 14027u, 14034u, 14038u, 14042u, 14046u, 14050u, 14054u, 14058u, 14062u, 14066u, 14070u, 14074u, 14078u, 14001u, 14005u, 14009u, 14013u, 14017u, 14021u, 14025u, 14029u, 14033u, 14035u, 14037u, 14039u, 14041u, 14043u, 14045u, 14047u, 14049u, 14051u, 14053u, 14055u, 14057u, 14059u, 14061u, 14063u, 14065u, 14067u, 14069u, 14071u, 14073u, 14075u, 14077u, 14079u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, 14012u, 14014u, 14016u, 14018u, 14020u, 14022u, 14024u, 14026u, 14028u, 14030u, 14032u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

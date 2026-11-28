@@ -46,6 +46,7 @@ const (
 	GuildChangeKind_GUILD_CHANGE_KIND_DELIVERY_DONE        GuildChangeKind = 13 // B5
 	GuildChangeKind_GUILD_CHANGE_KIND_RENAMED              GuildChangeKind = 14 // 帮会改名
 	GuildChangeKind_GUILD_CHANGE_KIND_WAR_UPDATED          GuildChangeKind = 15 // 帮会全天帮战 V2 状态变动
+	GuildChangeKind_GUILD_CHANGE_KIND_EMBLEM_CHANGED       GuildChangeKind = 16 // 帮会定制徽记变更
 )
 
 // Enum value maps for GuildChangeKind.
@@ -67,6 +68,7 @@ var (
 		13: "GUILD_CHANGE_KIND_DELIVERY_DONE",
 		14: "GUILD_CHANGE_KIND_RENAMED",
 		15: "GUILD_CHANGE_KIND_WAR_UPDATED",
+		16: "GUILD_CHANGE_KIND_EMBLEM_CHANGED",
 	}
 	GuildChangeKind_value = map[string]int32{
 		"GUILD_CHANGE_KIND_UNSPECIFIED":          0,
@@ -85,6 +87,7 @@ var (
 		"GUILD_CHANGE_KIND_DELIVERY_DONE":        13,
 		"GUILD_CHANGE_KIND_RENAMED":              14,
 		"GUILD_CHANGE_KIND_WAR_UPDATED":          15,
+		"GUILD_CHANGE_KIND_EMBLEM_CHANGED":       16,
 	}
 )
 
@@ -812,7 +815,9 @@ type GuildInfo struct {
 	// pending_application_count 只对本帮长老 / 帮主非 0:待审数量是管理侧信息,
 	// 对普通成员与外人一律回 0,不把帮会内部状态泄给任意查询者。
 	PendingApplicationCount uint32 `protobuf:"varint,15,opt,name=pending_application_count,json=pendingApplicationCount,proto3" json:"pending_application_count,omitempty"`
-	RenamedMs               uint64 `protobuf:"varint,16,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"` // 上一次帮会改名时刻 Unix 毫秒;0 = 未改过名
+	RenamedMs               uint64 `protobuf:"varint,16,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"`                              // 上一次帮会改名时刻 Unix 毫秒;0 = 未改过名
+	EmblemSkinId            uint32 `protobuf:"varint,17,opt,name=emblem_skin_id,json=emblemSkinId,proto3" json:"emblem_skin_id,omitempty"`                   // 当前佩戴定制帮徽 ID（0 = 默认免费，1..6 = 定制款，零数值）
+	UnlockedEmblemBits      uint64 `protobuf:"varint,18,opt,name=unlocked_emblem_bits,json=unlockedEmblemBits,proto3" json:"unlocked_emblem_bits,omitempty"` // 本帮永久已解锁定制帮徽位图（bit (emblem_id - 1)）
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -955,6 +960,20 @@ func (x *GuildInfo) GetPendingApplicationCount() uint32 {
 func (x *GuildInfo) GetRenamedMs() uint64 {
 	if x != nil {
 		return x.RenamedMs
+	}
+	return 0
+}
+
+func (x *GuildInfo) GetEmblemSkinId() uint32 {
+	if x != nil {
+		return x.EmblemSkinId
+	}
+	return 0
+}
+
+func (x *GuildInfo) GetUnlockedEmblemBits() uint64 {
+	if x != nil {
+		return x.UnlockedEmblemBits
 	}
 	return 0
 }
@@ -8946,6 +8965,263 @@ func (x *GetGuildJianghuGrudgeWallResponse) GetRecentRecords() []*GuildJianghuGr
 	return nil
 }
 
+// ── 帮会徽记 / 旗帜定制外观（仅帮主个人真实灵石自愿买断，0 数值加成）──
+type UnlockGuildEmblemRequest struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	ClientRequestId      uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`                // 持久化幂等键（必须非 0）
+	EmblemId             uint32                 `protobuf:"varint,2,opt,name=emblem_id,json=emblemId,proto3" json:"emblem_id,omitempty"`                                       // 1..6（1..3=180 真实灵石，4..6=300 真实灵石）
+	ExpectedPriceDiamond uint64                 `protobuf:"varint,3,opt,name=expected_price_diamond,json=expectedPriceDiamond,proto3" json:"expected_price_diamond,omitempty"` // 客户端报价防呆
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *UnlockGuildEmblemRequest) Reset() {
+	*x = UnlockGuildEmblemRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockGuildEmblemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockGuildEmblemRequest) ProtoMessage() {}
+
+func (x *UnlockGuildEmblemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockGuildEmblemRequest.ProtoReflect.Descriptor instead.
+func (*UnlockGuildEmblemRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *UnlockGuildEmblemRequest) GetClientRequestId() uint64 {
+	if x != nil {
+		return x.ClientRequestId
+	}
+	return 0
+}
+
+func (x *UnlockGuildEmblemRequest) GetEmblemId() uint32 {
+	if x != nil {
+		return x.EmblemId
+	}
+	return 0
+}
+
+func (x *UnlockGuildEmblemRequest) GetExpectedPriceDiamond() uint64 {
+	if x != nil {
+		return x.ExpectedPriceDiamond
+	}
+	return 0
+}
+
+type UnlockGuildEmblemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Replayed      bool                   `protobuf:"varint,2,opt,name=replayed,proto3" json:"replayed,omitempty"`
+	OpId          uint64                 `protobuf:"varint,3,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`
+	Status        GuildAssetOrderStatus  `protobuf:"varint,4,opt,name=status,proto3,enum=guildpb.GuildAssetOrderStatus" json:"status,omitempty"`
+	ReasonTipId   uint32                 `protobuf:"varint,5,opt,name=reason_tip_id,json=reasonTipId,proto3" json:"reason_tip_id,omitempty"`
+	EmblemId      uint32                 `protobuf:"varint,6,opt,name=emblem_id,json=emblemId,proto3" json:"emblem_id,omitempty"`
+	CostDiamond   uint64                 `protobuf:"varint,7,opt,name=cost_diamond,json=costDiamond,proto3" json:"cost_diamond,omitempty"`
+	Guild         *GuildInfo             `protobuf:"bytes,8,opt,name=guild,proto3" json:"guild,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UnlockGuildEmblemResponse) Reset() {
+	*x = UnlockGuildEmblemResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UnlockGuildEmblemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UnlockGuildEmblemResponse) ProtoMessage() {}
+
+func (x *UnlockGuildEmblemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UnlockGuildEmblemResponse.ProtoReflect.Descriptor instead.
+func (*UnlockGuildEmblemResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *UnlockGuildEmblemResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *UnlockGuildEmblemResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
+}
+
+func (x *UnlockGuildEmblemResponse) GetOpId() uint64 {
+	if x != nil {
+		return x.OpId
+	}
+	return 0
+}
+
+func (x *UnlockGuildEmblemResponse) GetStatus() GuildAssetOrderStatus {
+	if x != nil {
+		return x.Status
+	}
+	return GuildAssetOrderStatus_GUILD_ASSET_ORDER_STATUS_UNSPECIFIED
+}
+
+func (x *UnlockGuildEmblemResponse) GetReasonTipId() uint32 {
+	if x != nil {
+		return x.ReasonTipId
+	}
+	return 0
+}
+
+func (x *UnlockGuildEmblemResponse) GetEmblemId() uint32 {
+	if x != nil {
+		return x.EmblemId
+	}
+	return 0
+}
+
+func (x *UnlockGuildEmblemResponse) GetCostDiamond() uint64 {
+	if x != nil {
+		return x.CostDiamond
+	}
+	return 0
+}
+
+func (x *UnlockGuildEmblemResponse) GetGuild() *GuildInfo {
+	if x != nil {
+		return x.Guild
+	}
+	return nil
+}
+
+type EquipGuildEmblemRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EmblemId      uint32                 `protobuf:"varint,1,opt,name=emblem_id,json=emblemId,proto3" json:"emblem_id,omitempty"` // 0=默认免费帮徽；1..6=须已在本帮 unlocked_emblem_bits 中解锁
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipGuildEmblemRequest) Reset() {
+	*x = EquipGuildEmblemRequest{}
+	mi := &file_proto_guild_guild_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipGuildEmblemRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipGuildEmblemRequest) ProtoMessage() {}
+
+func (x *EquipGuildEmblemRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipGuildEmblemRequest.ProtoReflect.Descriptor instead.
+func (*EquipGuildEmblemRequest) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *EquipGuildEmblemRequest) GetEmblemId() uint32 {
+	if x != nil {
+		return x.EmblemId
+	}
+	return 0
+}
+
+type EquipGuildEmblemResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Guild         *GuildInfo             `protobuf:"bytes,2,opt,name=guild,proto3" json:"guild,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EquipGuildEmblemResponse) Reset() {
+	*x = EquipGuildEmblemResponse{}
+	mi := &file_proto_guild_guild_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EquipGuildEmblemResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EquipGuildEmblemResponse) ProtoMessage() {}
+
+func (x *EquipGuildEmblemResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EquipGuildEmblemResponse.ProtoReflect.Descriptor instead.
+func (*EquipGuildEmblemResponse) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *EquipGuildEmblemResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *EquipGuildEmblemResponse) GetGuild() *GuildInfo {
+	if x != nil {
+		return x.Guild
+	}
+	return nil
+}
+
 var File_proto_guild_guild_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_proto_rawDesc = "" +
@@ -8960,7 +9236,7 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x06online\x18\x06 \x01(\bR\x06online\x12\x12\n" +
 	"\x04name\x18\a \x01(\tR\x04name\x12-\n" +
 	"\x12contribution_total\x18\b \x01(\x04R\x11contributionTotal\x121\n" +
-	"\x14contribution_balance\x18\t \x01(\x04R\x13contributionBalanceJ\x04\b\x05\x10\x06\"\xa9\x04\n" +
+	"\x14contribution_balance\x18\t \x01(\x04R\x13contributionBalanceJ\x04\b\x05\x10\x06\"\x81\x05\n" +
 	"\tGuildInfo\x12\x19\n" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -8981,7 +9257,9 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"leaderName\x12:\n" +
 	"\x19pending_application_count\x18\x0f \x01(\rR\x17pendingApplicationCount\x12\x1d\n" +
 	"\n" +
-	"renamed_ms\x18\x10 \x01(\x04R\trenamedMs\"4\n" +
+	"renamed_ms\x18\x10 \x01(\x04R\trenamedMs\x12$\n" +
+	"\x0eemblem_skin_id\x18\x11 \x01(\rR\femblemSkinId\x120\n" +
+	"\x14unlocked_emblem_bits\x18\x12 \x01(\x04R\x12unlockedEmblemBits\"4\n" +
 	"\x12CreateGuildRequest\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04nameJ\x04\b\x01\x10\x02J\x04\b\x03\x10\x04\"u\n" +
 	"\x13CreateGuildResponse\x124\n" +
@@ -9691,7 +9969,25 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x19\n" +
 	"\bguild_id\x18\x02 \x01(\x04R\aguildId\x12=\n" +
 	"\x06rivals\x18\x03 \x03(\v2%.guildpb.GuildJianghuRivalSummaryViewR\x06rivals\x12L\n" +
-	"\x0erecent_records\x18\x04 \x03(\v2%.guildpb.GuildJianghuGrudgeRecordViewR\rrecentRecords*\xe8\x04\n" +
+	"\x0erecent_records\x18\x04 \x03(\v2%.guildpb.GuildJianghuGrudgeRecordViewR\rrecentRecords\"\x99\x01\n" +
+	"\x18UnlockGuildEmblemRequest\x12*\n" +
+	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x12\x1b\n" +
+	"\temblem_id\x18\x02 \x01(\rR\bemblemId\x124\n" +
+	"\x16expected_price_diamond\x18\x03 \x01(\x04R\x14expectedPriceDiamond\"\xc8\x02\n" +
+	"\x19UnlockGuildEmblemResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\x1a\n" +
+	"\breplayed\x18\x02 \x01(\bR\breplayed\x12\x13\n" +
+	"\x05op_id\x18\x03 \x01(\x04R\x04opId\x126\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x1e.guildpb.GuildAssetOrderStatusR\x06status\x12\"\n" +
+	"\rreason_tip_id\x18\x05 \x01(\rR\vreasonTipId\x12\x1b\n" +
+	"\temblem_id\x18\x06 \x01(\rR\bemblemId\x12!\n" +
+	"\fcost_diamond\x18\a \x01(\x04R\vcostDiamond\x12(\n" +
+	"\x05guild\x18\b \x01(\v2\x12.guildpb.GuildInfoR\x05guild\"6\n" +
+	"\x17EquipGuildEmblemRequest\x12\x1b\n" +
+	"\temblem_id\x18\x01 \x01(\rR\bemblemId\"z\n" +
+	"\x18EquipGuildEmblemResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12(\n" +
+	"\x05guild\x18\x02 \x01(\v2\x12.guildpb.GuildInfoR\x05guild*\x8e\x05\n" +
 	"\x0fGuildChangeKind\x12!\n" +
 	"\x1dGUILD_CHANGE_KIND_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fGUILD_CHANGE_KIND_MEMBER_JOINED\x10\x01\x12!\n" +
@@ -9709,7 +10005,8 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\"GUILD_CHANGE_KIND_ACTIVITY_CHANGED\x10\f\x12#\n" +
 	"\x1fGUILD_CHANGE_KIND_DELIVERY_DONE\x10\r\x12\x1d\n" +
 	"\x19GUILD_CHANGE_KIND_RENAMED\x10\x0e\x12!\n" +
-	"\x1dGUILD_CHANGE_KIND_WAR_UPDATED\x10\x0f*\x88\x02\n" +
+	"\x1dGUILD_CHANGE_KIND_WAR_UPDATED\x10\x0f\x12$\n" +
+	" GUILD_CHANGE_KIND_EMBLEM_CHANGED\x10\x10*\x88\x02\n" +
 	"\x15GuildAssetOrderStatus\x12(\n" +
 	"$GUILD_ASSET_ORDER_STATUS_UNSPECIFIED\x10\x00\x12$\n" +
 	" GUILD_ASSET_ORDER_STATUS_PENDING\x10\x01\x12$\n" +
@@ -9777,7 +10074,7 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x1cGUILD_WAR_FEUD_STATUS_ACTIVE\x10\x02\x12\"\n" +
 	"\x1eGUILD_WAR_FEUD_STATUS_FINISHED\x10\x03\x12\"\n" +
 	"\x1eGUILD_WAR_FEUD_STATUS_DECLINED\x10\x04\x12!\n" +
-	"\x1dGUILD_WAR_FEUD_STATUS_EXPIRED\x10\x052\x85\x1f\n" +
+	"\x1dGUILD_WAR_FEUD_STATUS_EXPIRED\x10\x052\xba \n" +
 	"\fGuildService\x12H\n" +
 	"\vCreateGuild\x12\x1b.guildpb.CreateGuildRequest\x1a\x1c.guildpb.CreateGuildResponse\x12?\n" +
 	"\bGetGuild\x12\x18.guildpb.GetGuildRequest\x1a\x19.guildpb.GetGuildResponse\x12Q\n" +
@@ -9822,7 +10119,9 @@ const file_proto_guild_guild_proto_rawDesc = "" +
 	"\x16InspectFieldWarTargets\x12&.guildpb.InspectFieldWarTargetsRequest\x1a'.guildpb.InspectFieldWarTargetsResponse\x12Z\n" +
 	"\x11IssueGuildWarFeud\x12!.guildpb.IssueGuildWarFeudRequest\x1a\".guildpb.IssueGuildWarFeudResponse\x12`\n" +
 	"\x13RespondGuildWarFeud\x12#.guildpb.RespondGuildWarFeudRequest\x1a$.guildpb.RespondGuildWarFeudResponse\x12r\n" +
-	"\x19GetGuildJianghuGrudgeWall\x12).guildpb.GetGuildJianghuGrudgeWallRequest\x1a*.guildpb.GetGuildJianghuGrudgeWallResponse\x1a\x05\x88\xa8\xc3\x01\x01B\rZ\vproto/guildb\x06proto3"
+	"\x19GetGuildJianghuGrudgeWall\x12).guildpb.GetGuildJianghuGrudgeWallRequest\x1a*.guildpb.GetGuildJianghuGrudgeWallResponse\x12Z\n" +
+	"\x11UnlockGuildEmblem\x12!.guildpb.UnlockGuildEmblemRequest\x1a\".guildpb.UnlockGuildEmblemResponse\x12W\n" +
+	"\x10EquipGuildEmblem\x12 .guildpb.EquipGuildEmblemRequest\x1a!.guildpb.EquipGuildEmblemResponse\x1a\x05\x88\xa8\xc3\x01\x01B\rZ\vproto/guildb\x06proto3"
 
 var (
 	file_proto_guild_guild_proto_rawDescOnce sync.Once
@@ -9837,7 +10136,7 @@ func file_proto_guild_guild_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_guild_guild_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_proto_guild_guild_proto_msgTypes = make([]protoimpl.MessageInfo, 111)
+var file_proto_guild_guild_proto_msgTypes = make([]protoimpl.MessageInfo, 115)
 var file_proto_guild_guild_proto_goTypes = []any{
 	(GuildChangeKind)(0),                      // 0: guildpb.GuildChangeKind
 	(GuildAssetOrderStatus)(0),                // 1: guildpb.GuildAssetOrderStatus
@@ -9961,74 +10260,78 @@ var file_proto_guild_guild_proto_goTypes = []any{
 	(*GuildJianghuGrudgeRecordView)(nil),      // 119: guildpb.GuildJianghuGrudgeRecordView
 	(*GetGuildJianghuGrudgeWallRequest)(nil),  // 120: guildpb.GetGuildJianghuGrudgeWallRequest
 	(*GetGuildJianghuGrudgeWallResponse)(nil), // 121: guildpb.GetGuildJianghuGrudgeWallResponse
-	(*base.TipInfoMessage)(nil),               // 122: TipInfoMessage
-	(*base.Empty)(nil),                        // 123: Empty
+	(*UnlockGuildEmblemRequest)(nil),          // 122: guildpb.UnlockGuildEmblemRequest
+	(*UnlockGuildEmblemResponse)(nil),         // 123: guildpb.UnlockGuildEmblemResponse
+	(*EquipGuildEmblemRequest)(nil),           // 124: guildpb.EquipGuildEmblemRequest
+	(*EquipGuildEmblemResponse)(nil),          // 125: guildpb.EquipGuildEmblemResponse
+	(*base.TipInfoMessage)(nil),               // 126: TipInfoMessage
+	(*base.Empty)(nil),                        // 127: Empty
 }
 var file_proto_guild_guild_proto_depIdxs = []int32{
 	11,  // 0: guildpb.GuildInfo.members:type_name -> guildpb.GuildMember
-	122, // 1: guildpb.CreateGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 1: guildpb.CreateGuildResponse.error_message:type_name -> TipInfoMessage
 	12,  // 2: guildpb.CreateGuildResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 3: guildpb.GetGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 3: guildpb.GetGuildResponse.error_message:type_name -> TipInfoMessage
 	12,  // 4: guildpb.GetGuildResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 5: guildpb.GetPlayerGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 5: guildpb.GetPlayerGuildResponse.error_message:type_name -> TipInfoMessage
 	12,  // 6: guildpb.GetPlayerGuildResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 7: guildpb.LeaveGuildResponse.error_message:type_name -> TipInfoMessage
-	122, // 8: guildpb.DisbandGuildResponse.error_message:type_name -> TipInfoMessage
-	122, // 9: guildpb.SetAnnouncementResponse.error_message:type_name -> TipInfoMessage
+	126, // 7: guildpb.LeaveGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 8: guildpb.DisbandGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 9: guildpb.SetAnnouncementResponse.error_message:type_name -> TipInfoMessage
 	12,  // 10: guildpb.SetAnnouncementResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 11: guildpb.RenameGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 11: guildpb.RenameGuildResponse.error_message:type_name -> TipInfoMessage
 	12,  // 12: guildpb.RenameGuildResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 13: guildpb.SetGuildMemberRoleResponse.error_message:type_name -> TipInfoMessage
+	126, // 13: guildpb.SetGuildMemberRoleResponse.error_message:type_name -> TipInfoMessage
 	12,  // 14: guildpb.SetGuildMemberRoleResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 15: guildpb.KickGuildMemberResponse.error_message:type_name -> TipInfoMessage
+	126, // 15: guildpb.KickGuildMemberResponse.error_message:type_name -> TipInfoMessage
 	12,  // 16: guildpb.KickGuildMemberResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 17: guildpb.TransferGuildLeaderResponse.error_message:type_name -> TipInfoMessage
+	126, // 17: guildpb.TransferGuildLeaderResponse.error_message:type_name -> TipInfoMessage
 	12,  // 18: guildpb.TransferGuildLeaderResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 19: guildpb.ApplyJoinGuildResponse.error_message:type_name -> TipInfoMessage
-	122, // 20: guildpb.CancelGuildApplicationResponse.error_message:type_name -> TipInfoMessage
-	122, // 21: guildpb.ListMyGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
+	126, // 19: guildpb.ApplyJoinGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 20: guildpb.CancelGuildApplicationResponse.error_message:type_name -> TipInfoMessage
+	126, // 21: guildpb.ListMyGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
 	37,  // 22: guildpb.ListMyGuildApplicationsResponse.applications:type_name -> guildpb.GuildApplicationView
-	122, // 23: guildpb.ListGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
+	126, // 23: guildpb.ListGuildApplicationsResponse.error_message:type_name -> TipInfoMessage
 	40,  // 24: guildpb.ListGuildApplicationsResponse.applicants:type_name -> guildpb.GuildApplicantView
-	122, // 25: guildpb.ReviewGuildApplicationResponse.error_message:type_name -> TipInfoMessage
+	126, // 25: guildpb.ReviewGuildApplicationResponse.error_message:type_name -> TipInfoMessage
 	12,  // 26: guildpb.ReviewGuildApplicationResponse.guild:type_name -> guildpb.GuildInfo
 	0,   // 27: guildpb.GuildChangedS2C.kind:type_name -> guildpb.GuildChangeKind
 	1,   // 28: guildpb.GuildDonationView.status:type_name -> guildpb.GuildAssetOrderStatus
 	1,   // 29: guildpb.GuildShopOrderView.status:type_name -> guildpb.GuildAssetOrderStatus
-	122, // 30: guildpb.GetGuildDonateOptionsResponse.error_message:type_name -> TipInfoMessage
+	126, // 30: guildpb.GetGuildDonateOptionsResponse.error_message:type_name -> TipInfoMessage
 	47,  // 31: guildpb.GetGuildDonateOptionsResponse.options:type_name -> guildpb.GuildDonateOptionView
 	46,  // 32: guildpb.GetGuildDonateOptionsResponse.pending_donations:type_name -> guildpb.GuildDonationView
 	46,  // 33: guildpb.GetGuildDonateOptionsResponse.recent_results:type_name -> guildpb.GuildDonationView
-	122, // 34: guildpb.DonateToGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 34: guildpb.DonateToGuildResponse.error_message:type_name -> TipInfoMessage
 	46,  // 35: guildpb.DonateToGuildResponse.donation:type_name -> guildpb.GuildDonationView
 	12,  // 36: guildpb.DonateToGuildResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 37: guildpb.UpgradeGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 37: guildpb.UpgradeGuildResponse.error_message:type_name -> TipInfoMessage
 	12,  // 38: guildpb.UpgradeGuildResponse.guild:type_name -> guildpb.GuildInfo
-	122, // 39: guildpb.GetGuildShopResponse.error_message:type_name -> TipInfoMessage
+	126, // 39: guildpb.GetGuildShopResponse.error_message:type_name -> TipInfoMessage
 	48,  // 40: guildpb.GetGuildShopResponse.goods:type_name -> guildpb.GuildShopGoodsView
 	49,  // 41: guildpb.GetGuildShopResponse.pending_orders:type_name -> guildpb.GuildShopOrderView
 	49,  // 42: guildpb.GetGuildShopResponse.recent_orders:type_name -> guildpb.GuildShopOrderView
-	122, // 43: guildpb.BuyGuildShopGoodsResponse.error_message:type_name -> TipInfoMessage
+	126, // 43: guildpb.BuyGuildShopGoodsResponse.error_message:type_name -> TipInfoMessage
 	49,  // 44: guildpb.BuyGuildShopGoodsResponse.order:type_name -> guildpb.GuildShopOrderView
 	4,   // 45: guildpb.GuildTrialLobbyView.state:type_name -> guildpb.GuildTrialLobbyState
 	2,   // 46: guildpb.GuildActivityView.type:type_name -> guildpb.GuildActivityType
 	3,   // 47: guildpb.GuildActivityView.state:type_name -> guildpb.GuildActivityState
 	60,  // 48: guildpb.GuildActivityView.reward_items:type_name -> guildpb.GuildRewardItem
 	61,  // 49: guildpb.GuildActivityView.trial_lobby:type_name -> guildpb.GuildTrialLobbyView
-	122, // 50: guildpb.GetGuildActivitiesResponse.error_message:type_name -> TipInfoMessage
+	126, // 50: guildpb.GetGuildActivitiesResponse.error_message:type_name -> TipInfoMessage
 	62,  // 51: guildpb.GetGuildActivitiesResponse.activities:type_name -> guildpb.GuildActivityView
-	122, // 52: guildpb.LightGuildLanternResponse.error_message:type_name -> TipInfoMessage
+	126, // 52: guildpb.LightGuildLanternResponse.error_message:type_name -> TipInfoMessage
 	62,  // 53: guildpb.LightGuildLanternResponse.activity:type_name -> guildpb.GuildActivityView
-	122, // 54: guildpb.ClaimGuildReunionResponse.error_message:type_name -> TipInfoMessage
+	126, // 54: guildpb.ClaimGuildReunionResponse.error_message:type_name -> TipInfoMessage
 	62,  // 55: guildpb.ClaimGuildReunionResponse.activity:type_name -> guildpb.GuildActivityView
-	122, // 56: guildpb.StartGuildTrialResponse.error_message:type_name -> TipInfoMessage
+	126, // 56: guildpb.StartGuildTrialResponse.error_message:type_name -> TipInfoMessage
 	62,  // 57: guildpb.StartGuildTrialResponse.activity:type_name -> guildpb.GuildActivityView
-	122, // 58: guildpb.RespondGuildTrialInviteResponse.error_message:type_name -> TipInfoMessage
+	126, // 58: guildpb.RespondGuildTrialInviteResponse.error_message:type_name -> TipInfoMessage
 	62,  // 59: guildpb.RespondGuildTrialInviteResponse.activity:type_name -> guildpb.GuildActivityView
-	122, // 60: guildpb.UpdateGuildScoreResponse.error_message:type_name -> TipInfoMessage
-	122, // 61: guildpb.GetGuildRankResponse.error_message:type_name -> TipInfoMessage
+	126, // 60: guildpb.UpdateGuildScoreResponse.error_message:type_name -> TipInfoMessage
+	126, // 61: guildpb.GetGuildRankResponse.error_message:type_name -> TipInfoMessage
 	73,  // 62: guildpb.GetGuildRankResponse.entries:type_name -> guildpb.GuildRankEntry
-	122, // 63: guildpb.GetGuildRankByGuildResponse.error_message:type_name -> TipInfoMessage
+	126, // 63: guildpb.GetGuildRankByGuildResponse.error_message:type_name -> TipInfoMessage
 	73,  // 64: guildpb.GetGuildRankByGuildResponse.entry:type_name -> guildpb.GuildRankEntry
 	10,  // 65: guildpb.GuildWarFeudView.status:type_name -> guildpb.GuildWarFeudStatus
 	60,  // 66: guildpb.GuildWarMilestoneView.reward_items:type_name -> guildpb.GuildRewardItem
@@ -10036,7 +10339,7 @@ var file_proto_guild_guild_proto_depIdxs = []int32{
 	7,   // 68: guildpb.GuildWarBountyView.tier:type_name -> guildpb.GuildWarBountyTier
 	8,   // 69: guildpb.GuildWarBountyView.status:type_name -> guildpb.GuildWarBountyStatus
 	6,   // 70: guildpb.GuildWarRecentLogView.war_battle_kind:type_name -> guildpb.GuildWarBattleKind
-	122, // 71: guildpb.GetGuildWarOverviewResponse.error_message:type_name -> TipInfoMessage
+	126, // 71: guildpb.GetGuildWarOverviewResponse.error_message:type_name -> TipInfoMessage
 	81,  // 72: guildpb.GetGuildWarOverviewResponse.my_stance:type_name -> guildpb.GuildWarStanceView
 	82,  // 73: guildpb.GetGuildWarOverviewResponse.banner_honor:type_name -> guildpb.GuildWarBannerHonorView
 	83,  // 74: guildpb.GetGuildWarOverviewResponse.leylines:type_name -> guildpb.GuildWarLeylineView
@@ -10049,127 +10352,136 @@ var file_proto_guild_guild_proto_depIdxs = []int32{
 	90,  // 81: guildpb.GetGuildWarOverviewResponse.bounties:type_name -> guildpb.GuildWarBountyView
 	91,  // 82: guildpb.GetGuildWarOverviewResponse.recent_logs:type_name -> guildpb.GuildWarRecentLogView
 	80,  // 83: guildpb.GetGuildWarOverviewResponse.active_feud:type_name -> guildpb.GuildWarFeudView
-	122, // 84: guildpb.SetGuildWarStanceResponse.error_message:type_name -> TipInfoMessage
+	126, // 84: guildpb.SetGuildWarStanceResponse.error_message:type_name -> TipInfoMessage
 	81,  // 85: guildpb.SetGuildWarStanceResponse.my_stance:type_name -> guildpb.GuildWarStanceView
-	122, // 86: guildpb.RegisterGuildWarGarrisonResponse.error_message:type_name -> TipInfoMessage
+	126, // 86: guildpb.RegisterGuildWarGarrisonResponse.error_message:type_name -> TipInfoMessage
 	88,  // 87: guildpb.RegisterGuildWarGarrisonResponse.garrison_slots:type_name -> guildpb.GuildWarGarrisonSlotView
 	5,   // 88: guildpb.StartGuildWarBattleRequest.target_kind:type_name -> guildpb.GuildWarTargetKind
-	122, // 89: guildpb.StartGuildWarBattleResponse.error_message:type_name -> TipInfoMessage
+	126, // 89: guildpb.StartGuildWarBattleResponse.error_message:type_name -> TipInfoMessage
 	6,   // 90: guildpb.StartGuildWarBattleResponse.war_battle_kind:type_name -> guildpb.GuildWarBattleKind
-	122, // 91: guildpb.ClaimGuildWarMilestoneResponse.error_message:type_name -> TipInfoMessage
+	126, // 91: guildpb.ClaimGuildWarMilestoneResponse.error_message:type_name -> TipInfoMessage
 	84,  // 92: guildpb.ClaimGuildWarMilestoneResponse.milestone:type_name -> guildpb.GuildWarMilestoneView
 	1,   // 93: guildpb.ClaimGuildWarMilestoneResponse.asset_order_status:type_name -> guildpb.GuildAssetOrderStatus
-	122, // 94: guildpb.ClaimGuildWarDividendResponse.error_message:type_name -> TipInfoMessage
+	126, // 94: guildpb.ClaimGuildWarDividendResponse.error_message:type_name -> TipInfoMessage
 	85,  // 95: guildpb.ClaimGuildWarDividendResponse.dividend:type_name -> guildpb.GuildWarDividendView
 	1,   // 96: guildpb.ClaimGuildWarDividendResponse.asset_order_status:type_name -> guildpb.GuildAssetOrderStatus
 	7,   // 97: guildpb.PostGuildWarBountyRequest.tier:type_name -> guildpb.GuildWarBountyTier
-	122, // 98: guildpb.PostGuildWarBountyResponse.error_message:type_name -> TipInfoMessage
+	126, // 98: guildpb.PostGuildWarBountyResponse.error_message:type_name -> TipInfoMessage
 	90,  // 99: guildpb.PostGuildWarBountyResponse.bounty:type_name -> guildpb.GuildWarBountyView
-	122, // 100: guildpb.TrackGuildWarBountyResponse.error_message:type_name -> TipInfoMessage
-	122, // 101: guildpb.GetGuildWarBattleResultResponse.error_message:type_name -> TipInfoMessage
+	126, // 100: guildpb.TrackGuildWarBountyResponse.error_message:type_name -> TipInfoMessage
+	126, // 101: guildpb.GetGuildWarBattleResultResponse.error_message:type_name -> TipInfoMessage
 	6,   // 102: guildpb.GetGuildWarBattleResultResponse.war_battle_kind:type_name -> guildpb.GuildWarBattleKind
 	9,   // 103: guildpb.GuildWarAlertS2C.kind:type_name -> guildpb.GuildWarAlertKind
-	122, // 104: guildpb.IssueGuildWarFeudResponse.error_message:type_name -> TipInfoMessage
+	126, // 104: guildpb.IssueGuildWarFeudResponse.error_message:type_name -> TipInfoMessage
 	80,  // 105: guildpb.IssueGuildWarFeudResponse.feud:type_name -> guildpb.GuildWarFeudView
-	122, // 106: guildpb.RespondGuildWarFeudResponse.error_message:type_name -> TipInfoMessage
+	126, // 106: guildpb.RespondGuildWarFeudResponse.error_message:type_name -> TipInfoMessage
 	80,  // 107: guildpb.RespondGuildWarFeudResponse.feud:type_name -> guildpb.GuildWarFeudView
 	7,   // 108: guildpb.FieldWarTargetBrief.active_bounty_tier:type_name -> guildpb.GuildWarBountyTier
-	122, // 109: guildpb.InspectFieldWarTargetsResponse.error_message:type_name -> TipInfoMessage
+	126, // 109: guildpb.InspectFieldWarTargetsResponse.error_message:type_name -> TipInfoMessage
 	115, // 110: guildpb.InspectFieldWarTargetsResponse.targets:type_name -> guildpb.FieldWarTargetBrief
-	122, // 111: guildpb.GetGuildJianghuGrudgeWallResponse.error_message:type_name -> TipInfoMessage
+	126, // 111: guildpb.GetGuildJianghuGrudgeWallResponse.error_message:type_name -> TipInfoMessage
 	118, // 112: guildpb.GetGuildJianghuGrudgeWallResponse.rivals:type_name -> guildpb.GuildJianghuRivalSummaryView
 	119, // 113: guildpb.GetGuildJianghuGrudgeWallResponse.recent_records:type_name -> guildpb.GuildJianghuGrudgeRecordView
-	13,  // 114: guildpb.GuildService.CreateGuild:input_type -> guildpb.CreateGuildRequest
-	15,  // 115: guildpb.GuildService.GetGuild:input_type -> guildpb.GetGuildRequest
-	17,  // 116: guildpb.GuildService.GetPlayerGuild:input_type -> guildpb.GetPlayerGuildRequest
-	19,  // 117: guildpb.GuildService.LeaveGuild:input_type -> guildpb.LeaveGuildRequest
-	21,  // 118: guildpb.GuildService.DisbandGuild:input_type -> guildpb.DisbandGuildRequest
-	23,  // 119: guildpb.GuildService.SetAnnouncement:input_type -> guildpb.SetAnnouncementRequest
-	25,  // 120: guildpb.GuildService.RenameGuild:input_type -> guildpb.RenameGuildRequest
-	27,  // 121: guildpb.GuildService.SetGuildMemberRole:input_type -> guildpb.SetGuildMemberRoleRequest
-	29,  // 122: guildpb.GuildService.KickGuildMember:input_type -> guildpb.KickGuildMemberRequest
-	31,  // 123: guildpb.GuildService.TransferGuildLeader:input_type -> guildpb.TransferGuildLeaderRequest
-	33,  // 124: guildpb.GuildService.ApplyJoinGuild:input_type -> guildpb.ApplyJoinGuildRequest
-	35,  // 125: guildpb.GuildService.CancelGuildApplication:input_type -> guildpb.CancelGuildApplicationRequest
-	38,  // 126: guildpb.GuildService.ListMyGuildApplications:input_type -> guildpb.ListMyGuildApplicationsRequest
-	41,  // 127: guildpb.GuildService.ListGuildApplications:input_type -> guildpb.ListGuildApplicationsRequest
-	43,  // 128: guildpb.GuildService.ReviewGuildApplication:input_type -> guildpb.ReviewGuildApplicationRequest
-	45,  // 129: guildpb.GuildService.NotifyGuildChanged:input_type -> guildpb.GuildChangedS2C
-	74,  // 130: guildpb.GuildService.UpdateGuildScore:input_type -> guildpb.UpdateGuildScoreRequest
-	76,  // 131: guildpb.GuildService.GetGuildRank:input_type -> guildpb.GetGuildRankRequest
-	78,  // 132: guildpb.GuildService.GetGuildRankByGuild:input_type -> guildpb.GetGuildRankByGuildRequest
-	50,  // 133: guildpb.GuildService.GetGuildDonateOptions:input_type -> guildpb.GetGuildDonateOptionsRequest
-	52,  // 134: guildpb.GuildService.DonateToGuild:input_type -> guildpb.DonateToGuildRequest
-	54,  // 135: guildpb.GuildService.UpgradeGuild:input_type -> guildpb.UpgradeGuildRequest
-	56,  // 136: guildpb.GuildService.GetGuildShop:input_type -> guildpb.GetGuildShopRequest
-	58,  // 137: guildpb.GuildService.BuyGuildShopGoods:input_type -> guildpb.BuyGuildShopGoodsRequest
-	63,  // 138: guildpb.GuildService.GetGuildActivities:input_type -> guildpb.GetGuildActivitiesRequest
-	65,  // 139: guildpb.GuildService.LightGuildLantern:input_type -> guildpb.LightGuildLanternRequest
-	67,  // 140: guildpb.GuildService.ClaimGuildReunion:input_type -> guildpb.ClaimGuildReunionRequest
-	69,  // 141: guildpb.GuildService.StartGuildTrial:input_type -> guildpb.StartGuildTrialRequest
-	71,  // 142: guildpb.GuildService.RespondGuildTrialInvite:input_type -> guildpb.RespondGuildTrialInviteRequest
-	92,  // 143: guildpb.GuildService.GetGuildWarOverview:input_type -> guildpb.GetGuildWarOverviewRequest
-	94,  // 144: guildpb.GuildService.SetGuildWarStance:input_type -> guildpb.SetGuildWarStanceRequest
-	96,  // 145: guildpb.GuildService.RegisterGuildWarGarrison:input_type -> guildpb.RegisterGuildWarGarrisonRequest
-	98,  // 146: guildpb.GuildService.StartGuildWarBattle:input_type -> guildpb.StartGuildWarBattleRequest
-	100, // 147: guildpb.GuildService.ClaimGuildWarMilestone:input_type -> guildpb.ClaimGuildWarMilestoneRequest
-	102, // 148: guildpb.GuildService.ClaimGuildWarDividend:input_type -> guildpb.ClaimGuildWarDividendRequest
-	104, // 149: guildpb.GuildService.PostGuildWarBounty:input_type -> guildpb.PostGuildWarBountyRequest
-	106, // 150: guildpb.GuildService.TrackGuildWarBounty:input_type -> guildpb.TrackGuildWarBountyRequest
-	108, // 151: guildpb.GuildService.GetGuildWarBattleResult:input_type -> guildpb.GetGuildWarBattleResultRequest
-	110, // 152: guildpb.GuildService.NotifyGuildWarAlert:input_type -> guildpb.GuildWarAlertS2C
-	116, // 153: guildpb.GuildService.InspectFieldWarTargets:input_type -> guildpb.InspectFieldWarTargetsRequest
-	111, // 154: guildpb.GuildService.IssueGuildWarFeud:input_type -> guildpb.IssueGuildWarFeudRequest
-	113, // 155: guildpb.GuildService.RespondGuildWarFeud:input_type -> guildpb.RespondGuildWarFeudRequest
-	120, // 156: guildpb.GuildService.GetGuildJianghuGrudgeWall:input_type -> guildpb.GetGuildJianghuGrudgeWallRequest
-	14,  // 157: guildpb.GuildService.CreateGuild:output_type -> guildpb.CreateGuildResponse
-	16,  // 158: guildpb.GuildService.GetGuild:output_type -> guildpb.GetGuildResponse
-	18,  // 159: guildpb.GuildService.GetPlayerGuild:output_type -> guildpb.GetPlayerGuildResponse
-	20,  // 160: guildpb.GuildService.LeaveGuild:output_type -> guildpb.LeaveGuildResponse
-	22,  // 161: guildpb.GuildService.DisbandGuild:output_type -> guildpb.DisbandGuildResponse
-	24,  // 162: guildpb.GuildService.SetAnnouncement:output_type -> guildpb.SetAnnouncementResponse
-	26,  // 163: guildpb.GuildService.RenameGuild:output_type -> guildpb.RenameGuildResponse
-	28,  // 164: guildpb.GuildService.SetGuildMemberRole:output_type -> guildpb.SetGuildMemberRoleResponse
-	30,  // 165: guildpb.GuildService.KickGuildMember:output_type -> guildpb.KickGuildMemberResponse
-	32,  // 166: guildpb.GuildService.TransferGuildLeader:output_type -> guildpb.TransferGuildLeaderResponse
-	34,  // 167: guildpb.GuildService.ApplyJoinGuild:output_type -> guildpb.ApplyJoinGuildResponse
-	36,  // 168: guildpb.GuildService.CancelGuildApplication:output_type -> guildpb.CancelGuildApplicationResponse
-	39,  // 169: guildpb.GuildService.ListMyGuildApplications:output_type -> guildpb.ListMyGuildApplicationsResponse
-	42,  // 170: guildpb.GuildService.ListGuildApplications:output_type -> guildpb.ListGuildApplicationsResponse
-	44,  // 171: guildpb.GuildService.ReviewGuildApplication:output_type -> guildpb.ReviewGuildApplicationResponse
-	123, // 172: guildpb.GuildService.NotifyGuildChanged:output_type -> Empty
-	75,  // 173: guildpb.GuildService.UpdateGuildScore:output_type -> guildpb.UpdateGuildScoreResponse
-	77,  // 174: guildpb.GuildService.GetGuildRank:output_type -> guildpb.GetGuildRankResponse
-	79,  // 175: guildpb.GuildService.GetGuildRankByGuild:output_type -> guildpb.GetGuildRankByGuildResponse
-	51,  // 176: guildpb.GuildService.GetGuildDonateOptions:output_type -> guildpb.GetGuildDonateOptionsResponse
-	53,  // 177: guildpb.GuildService.DonateToGuild:output_type -> guildpb.DonateToGuildResponse
-	55,  // 178: guildpb.GuildService.UpgradeGuild:output_type -> guildpb.UpgradeGuildResponse
-	57,  // 179: guildpb.GuildService.GetGuildShop:output_type -> guildpb.GetGuildShopResponse
-	59,  // 180: guildpb.GuildService.BuyGuildShopGoods:output_type -> guildpb.BuyGuildShopGoodsResponse
-	64,  // 181: guildpb.GuildService.GetGuildActivities:output_type -> guildpb.GetGuildActivitiesResponse
-	66,  // 182: guildpb.GuildService.LightGuildLantern:output_type -> guildpb.LightGuildLanternResponse
-	68,  // 183: guildpb.GuildService.ClaimGuildReunion:output_type -> guildpb.ClaimGuildReunionResponse
-	70,  // 184: guildpb.GuildService.StartGuildTrial:output_type -> guildpb.StartGuildTrialResponse
-	72,  // 185: guildpb.GuildService.RespondGuildTrialInvite:output_type -> guildpb.RespondGuildTrialInviteResponse
-	93,  // 186: guildpb.GuildService.GetGuildWarOverview:output_type -> guildpb.GetGuildWarOverviewResponse
-	95,  // 187: guildpb.GuildService.SetGuildWarStance:output_type -> guildpb.SetGuildWarStanceResponse
-	97,  // 188: guildpb.GuildService.RegisterGuildWarGarrison:output_type -> guildpb.RegisterGuildWarGarrisonResponse
-	99,  // 189: guildpb.GuildService.StartGuildWarBattle:output_type -> guildpb.StartGuildWarBattleResponse
-	101, // 190: guildpb.GuildService.ClaimGuildWarMilestone:output_type -> guildpb.ClaimGuildWarMilestoneResponse
-	103, // 191: guildpb.GuildService.ClaimGuildWarDividend:output_type -> guildpb.ClaimGuildWarDividendResponse
-	105, // 192: guildpb.GuildService.PostGuildWarBounty:output_type -> guildpb.PostGuildWarBountyResponse
-	107, // 193: guildpb.GuildService.TrackGuildWarBounty:output_type -> guildpb.TrackGuildWarBountyResponse
-	109, // 194: guildpb.GuildService.GetGuildWarBattleResult:output_type -> guildpb.GetGuildWarBattleResultResponse
-	123, // 195: guildpb.GuildService.NotifyGuildWarAlert:output_type -> Empty
-	117, // 196: guildpb.GuildService.InspectFieldWarTargets:output_type -> guildpb.InspectFieldWarTargetsResponse
-	112, // 197: guildpb.GuildService.IssueGuildWarFeud:output_type -> guildpb.IssueGuildWarFeudResponse
-	114, // 198: guildpb.GuildService.RespondGuildWarFeud:output_type -> guildpb.RespondGuildWarFeudResponse
-	121, // 199: guildpb.GuildService.GetGuildJianghuGrudgeWall:output_type -> guildpb.GetGuildJianghuGrudgeWallResponse
-	157, // [157:200] is the sub-list for method output_type
-	114, // [114:157] is the sub-list for method input_type
-	114, // [114:114] is the sub-list for extension type_name
-	114, // [114:114] is the sub-list for extension extendee
-	0,   // [0:114] is the sub-list for field type_name
+	126, // 114: guildpb.UnlockGuildEmblemResponse.error_message:type_name -> TipInfoMessage
+	1,   // 115: guildpb.UnlockGuildEmblemResponse.status:type_name -> guildpb.GuildAssetOrderStatus
+	12,  // 116: guildpb.UnlockGuildEmblemResponse.guild:type_name -> guildpb.GuildInfo
+	126, // 117: guildpb.EquipGuildEmblemResponse.error_message:type_name -> TipInfoMessage
+	12,  // 118: guildpb.EquipGuildEmblemResponse.guild:type_name -> guildpb.GuildInfo
+	13,  // 119: guildpb.GuildService.CreateGuild:input_type -> guildpb.CreateGuildRequest
+	15,  // 120: guildpb.GuildService.GetGuild:input_type -> guildpb.GetGuildRequest
+	17,  // 121: guildpb.GuildService.GetPlayerGuild:input_type -> guildpb.GetPlayerGuildRequest
+	19,  // 122: guildpb.GuildService.LeaveGuild:input_type -> guildpb.LeaveGuildRequest
+	21,  // 123: guildpb.GuildService.DisbandGuild:input_type -> guildpb.DisbandGuildRequest
+	23,  // 124: guildpb.GuildService.SetAnnouncement:input_type -> guildpb.SetAnnouncementRequest
+	25,  // 125: guildpb.GuildService.RenameGuild:input_type -> guildpb.RenameGuildRequest
+	27,  // 126: guildpb.GuildService.SetGuildMemberRole:input_type -> guildpb.SetGuildMemberRoleRequest
+	29,  // 127: guildpb.GuildService.KickGuildMember:input_type -> guildpb.KickGuildMemberRequest
+	31,  // 128: guildpb.GuildService.TransferGuildLeader:input_type -> guildpb.TransferGuildLeaderRequest
+	33,  // 129: guildpb.GuildService.ApplyJoinGuild:input_type -> guildpb.ApplyJoinGuildRequest
+	35,  // 130: guildpb.GuildService.CancelGuildApplication:input_type -> guildpb.CancelGuildApplicationRequest
+	38,  // 131: guildpb.GuildService.ListMyGuildApplications:input_type -> guildpb.ListMyGuildApplicationsRequest
+	41,  // 132: guildpb.GuildService.ListGuildApplications:input_type -> guildpb.ListGuildApplicationsRequest
+	43,  // 133: guildpb.GuildService.ReviewGuildApplication:input_type -> guildpb.ReviewGuildApplicationRequest
+	45,  // 134: guildpb.GuildService.NotifyGuildChanged:input_type -> guildpb.GuildChangedS2C
+	74,  // 135: guildpb.GuildService.UpdateGuildScore:input_type -> guildpb.UpdateGuildScoreRequest
+	76,  // 136: guildpb.GuildService.GetGuildRank:input_type -> guildpb.GetGuildRankRequest
+	78,  // 137: guildpb.GuildService.GetGuildRankByGuild:input_type -> guildpb.GetGuildRankByGuildRequest
+	50,  // 138: guildpb.GuildService.GetGuildDonateOptions:input_type -> guildpb.GetGuildDonateOptionsRequest
+	52,  // 139: guildpb.GuildService.DonateToGuild:input_type -> guildpb.DonateToGuildRequest
+	54,  // 140: guildpb.GuildService.UpgradeGuild:input_type -> guildpb.UpgradeGuildRequest
+	56,  // 141: guildpb.GuildService.GetGuildShop:input_type -> guildpb.GetGuildShopRequest
+	58,  // 142: guildpb.GuildService.BuyGuildShopGoods:input_type -> guildpb.BuyGuildShopGoodsRequest
+	63,  // 143: guildpb.GuildService.GetGuildActivities:input_type -> guildpb.GetGuildActivitiesRequest
+	65,  // 144: guildpb.GuildService.LightGuildLantern:input_type -> guildpb.LightGuildLanternRequest
+	67,  // 145: guildpb.GuildService.ClaimGuildReunion:input_type -> guildpb.ClaimGuildReunionRequest
+	69,  // 146: guildpb.GuildService.StartGuildTrial:input_type -> guildpb.StartGuildTrialRequest
+	71,  // 147: guildpb.GuildService.RespondGuildTrialInvite:input_type -> guildpb.RespondGuildTrialInviteRequest
+	92,  // 148: guildpb.GuildService.GetGuildWarOverview:input_type -> guildpb.GetGuildWarOverviewRequest
+	94,  // 149: guildpb.GuildService.SetGuildWarStance:input_type -> guildpb.SetGuildWarStanceRequest
+	96,  // 150: guildpb.GuildService.RegisterGuildWarGarrison:input_type -> guildpb.RegisterGuildWarGarrisonRequest
+	98,  // 151: guildpb.GuildService.StartGuildWarBattle:input_type -> guildpb.StartGuildWarBattleRequest
+	100, // 152: guildpb.GuildService.ClaimGuildWarMilestone:input_type -> guildpb.ClaimGuildWarMilestoneRequest
+	102, // 153: guildpb.GuildService.ClaimGuildWarDividend:input_type -> guildpb.ClaimGuildWarDividendRequest
+	104, // 154: guildpb.GuildService.PostGuildWarBounty:input_type -> guildpb.PostGuildWarBountyRequest
+	106, // 155: guildpb.GuildService.TrackGuildWarBounty:input_type -> guildpb.TrackGuildWarBountyRequest
+	108, // 156: guildpb.GuildService.GetGuildWarBattleResult:input_type -> guildpb.GetGuildWarBattleResultRequest
+	110, // 157: guildpb.GuildService.NotifyGuildWarAlert:input_type -> guildpb.GuildWarAlertS2C
+	116, // 158: guildpb.GuildService.InspectFieldWarTargets:input_type -> guildpb.InspectFieldWarTargetsRequest
+	111, // 159: guildpb.GuildService.IssueGuildWarFeud:input_type -> guildpb.IssueGuildWarFeudRequest
+	113, // 160: guildpb.GuildService.RespondGuildWarFeud:input_type -> guildpb.RespondGuildWarFeudRequest
+	120, // 161: guildpb.GuildService.GetGuildJianghuGrudgeWall:input_type -> guildpb.GetGuildJianghuGrudgeWallRequest
+	122, // 162: guildpb.GuildService.UnlockGuildEmblem:input_type -> guildpb.UnlockGuildEmblemRequest
+	124, // 163: guildpb.GuildService.EquipGuildEmblem:input_type -> guildpb.EquipGuildEmblemRequest
+	14,  // 164: guildpb.GuildService.CreateGuild:output_type -> guildpb.CreateGuildResponse
+	16,  // 165: guildpb.GuildService.GetGuild:output_type -> guildpb.GetGuildResponse
+	18,  // 166: guildpb.GuildService.GetPlayerGuild:output_type -> guildpb.GetPlayerGuildResponse
+	20,  // 167: guildpb.GuildService.LeaveGuild:output_type -> guildpb.LeaveGuildResponse
+	22,  // 168: guildpb.GuildService.DisbandGuild:output_type -> guildpb.DisbandGuildResponse
+	24,  // 169: guildpb.GuildService.SetAnnouncement:output_type -> guildpb.SetAnnouncementResponse
+	26,  // 170: guildpb.GuildService.RenameGuild:output_type -> guildpb.RenameGuildResponse
+	28,  // 171: guildpb.GuildService.SetGuildMemberRole:output_type -> guildpb.SetGuildMemberRoleResponse
+	30,  // 172: guildpb.GuildService.KickGuildMember:output_type -> guildpb.KickGuildMemberResponse
+	32,  // 173: guildpb.GuildService.TransferGuildLeader:output_type -> guildpb.TransferGuildLeaderResponse
+	34,  // 174: guildpb.GuildService.ApplyJoinGuild:output_type -> guildpb.ApplyJoinGuildResponse
+	36,  // 175: guildpb.GuildService.CancelGuildApplication:output_type -> guildpb.CancelGuildApplicationResponse
+	39,  // 176: guildpb.GuildService.ListMyGuildApplications:output_type -> guildpb.ListMyGuildApplicationsResponse
+	42,  // 177: guildpb.GuildService.ListGuildApplications:output_type -> guildpb.ListGuildApplicationsResponse
+	44,  // 178: guildpb.GuildService.ReviewGuildApplication:output_type -> guildpb.ReviewGuildApplicationResponse
+	127, // 179: guildpb.GuildService.NotifyGuildChanged:output_type -> Empty
+	75,  // 180: guildpb.GuildService.UpdateGuildScore:output_type -> guildpb.UpdateGuildScoreResponse
+	77,  // 181: guildpb.GuildService.GetGuildRank:output_type -> guildpb.GetGuildRankResponse
+	79,  // 182: guildpb.GuildService.GetGuildRankByGuild:output_type -> guildpb.GetGuildRankByGuildResponse
+	51,  // 183: guildpb.GuildService.GetGuildDonateOptions:output_type -> guildpb.GetGuildDonateOptionsResponse
+	53,  // 184: guildpb.GuildService.DonateToGuild:output_type -> guildpb.DonateToGuildResponse
+	55,  // 185: guildpb.GuildService.UpgradeGuild:output_type -> guildpb.UpgradeGuildResponse
+	57,  // 186: guildpb.GuildService.GetGuildShop:output_type -> guildpb.GetGuildShopResponse
+	59,  // 187: guildpb.GuildService.BuyGuildShopGoods:output_type -> guildpb.BuyGuildShopGoodsResponse
+	64,  // 188: guildpb.GuildService.GetGuildActivities:output_type -> guildpb.GetGuildActivitiesResponse
+	66,  // 189: guildpb.GuildService.LightGuildLantern:output_type -> guildpb.LightGuildLanternResponse
+	68,  // 190: guildpb.GuildService.ClaimGuildReunion:output_type -> guildpb.ClaimGuildReunionResponse
+	70,  // 191: guildpb.GuildService.StartGuildTrial:output_type -> guildpb.StartGuildTrialResponse
+	72,  // 192: guildpb.GuildService.RespondGuildTrialInvite:output_type -> guildpb.RespondGuildTrialInviteResponse
+	93,  // 193: guildpb.GuildService.GetGuildWarOverview:output_type -> guildpb.GetGuildWarOverviewResponse
+	95,  // 194: guildpb.GuildService.SetGuildWarStance:output_type -> guildpb.SetGuildWarStanceResponse
+	97,  // 195: guildpb.GuildService.RegisterGuildWarGarrison:output_type -> guildpb.RegisterGuildWarGarrisonResponse
+	99,  // 196: guildpb.GuildService.StartGuildWarBattle:output_type -> guildpb.StartGuildWarBattleResponse
+	101, // 197: guildpb.GuildService.ClaimGuildWarMilestone:output_type -> guildpb.ClaimGuildWarMilestoneResponse
+	103, // 198: guildpb.GuildService.ClaimGuildWarDividend:output_type -> guildpb.ClaimGuildWarDividendResponse
+	105, // 199: guildpb.GuildService.PostGuildWarBounty:output_type -> guildpb.PostGuildWarBountyResponse
+	107, // 200: guildpb.GuildService.TrackGuildWarBounty:output_type -> guildpb.TrackGuildWarBountyResponse
+	109, // 201: guildpb.GuildService.GetGuildWarBattleResult:output_type -> guildpb.GetGuildWarBattleResultResponse
+	127, // 202: guildpb.GuildService.NotifyGuildWarAlert:output_type -> Empty
+	117, // 203: guildpb.GuildService.InspectFieldWarTargets:output_type -> guildpb.InspectFieldWarTargetsResponse
+	112, // 204: guildpb.GuildService.IssueGuildWarFeud:output_type -> guildpb.IssueGuildWarFeudResponse
+	114, // 205: guildpb.GuildService.RespondGuildWarFeud:output_type -> guildpb.RespondGuildWarFeudResponse
+	121, // 206: guildpb.GuildService.GetGuildJianghuGrudgeWall:output_type -> guildpb.GetGuildJianghuGrudgeWallResponse
+	123, // 207: guildpb.GuildService.UnlockGuildEmblem:output_type -> guildpb.UnlockGuildEmblemResponse
+	125, // 208: guildpb.GuildService.EquipGuildEmblem:output_type -> guildpb.EquipGuildEmblemResponse
+	164, // [164:209] is the sub-list for method output_type
+	119, // [119:164] is the sub-list for method input_type
+	119, // [119:119] is the sub-list for extension type_name
+	119, // [119:119] is the sub-list for extension extendee
+	0,   // [0:119] is the sub-list for field type_name
 }
 
 func init() { file_proto_guild_guild_proto_init() }
@@ -10184,7 +10496,7 @@ func file_proto_guild_guild_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_proto_rawDesc), len(file_proto_guild_guild_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   111,
+			NumMessages:   115,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

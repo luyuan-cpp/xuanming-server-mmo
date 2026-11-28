@@ -24,17 +24,35 @@ const (
 type AppearanceError int32
 
 const (
-	AppearanceError_kAppearance_errorOK          AppearanceError = 0
-	AppearanceError_kAppearanceInvalid           AppearanceError = 33000
-	AppearanceError_kAppearanceAlreadyCurrent    AppearanceError = 33001
-	AppearanceError_kAppearanceNoCard            AppearanceError = 33002
-	AppearanceError_kAppearanceTrialAlreadyUsed  AppearanceError = 33003
-	AppearanceError_kAppearanceNoActiveTrial     AppearanceError = 33004
-	AppearanceError_kAppearanceFrozen            AppearanceError = 33005
-	AppearanceError_kAppearanceUnavailable       AppearanceError = 33006
-	AppearanceError_kAppearanceNotCardUnlockable AppearanceError = 33007
-	AppearanceError_kAppearanceAlreadyOwned      AppearanceError = 33008
-	AppearanceError_kAppearanceNotOwned          AppearanceError = 33009
+	AppearanceError_kAppearance_errorOK                      AppearanceError = 0
+	AppearanceError_kAppearanceInvalid                       AppearanceError = 33000
+	AppearanceError_kAppearanceAlreadyCurrent                AppearanceError = 33001
+	AppearanceError_kAppearanceNoCard                        AppearanceError = 33002
+	AppearanceError_kAppearanceTrialAlreadyUsed              AppearanceError = 33003
+	AppearanceError_kAppearanceNoActiveTrial                 AppearanceError = 33004
+	AppearanceError_kAppearanceFrozen                        AppearanceError = 33005
+	AppearanceError_kAppearanceUnavailable                   AppearanceError = 33006
+	AppearanceError_kAppearanceNotCardUnlockable             AppearanceError = 33007
+	AppearanceError_kAppearanceAlreadyOwned                  AppearanceError = 33008
+	AppearanceError_kAppearanceNotOwned                      AppearanceError = 33009
+	AppearanceError_kAppearanceSeriesBundleUnavailable       AppearanceError = 33010
+	AppearanceError_kAppearanceSeriesAlreadyCompleted        AppearanceError = 33011
+	AppearanceError_kAppearanceSeriesBundlePriceChanged      AppearanceError = 33012
+	AppearanceError_kAppearanceSeriesBundleCurrencyNotEnough AppearanceError = 33013
+	AppearanceError_kCityCelebrationNotSafeCity              AppearanceError = 33014
+	AppearanceError_kCityCelebrationChannelFull              AppearanceError = 33015
+	AppearanceError_kCityCelebrationNoItem                   AppearanceError = 33016
+	AppearanceError_kCityCelebrationNotFound                 AppearanceError = 33017
+	AppearanceError_kCityCelebrationAlreadyClaimed           AppearanceError = 33018
+	AppearanceError_kCityCelebrationLevelTooLow              AppearanceError = 33019
+	AppearanceError_kCityCelebrationWeeklyCapReached         AppearanceError = 33020
+	AppearanceError_kCosmeticGiftNotFriend7Days              AppearanceError = 33021
+	AppearanceError_kCosmeticGiftTargetAlreadyOwned          AppearanceError = 33022
+	AppearanceError_kCosmeticGiftWeeklyLimitReached          AppearanceError = 33023
+	AppearanceError_kCosmeticGiftInvalidTarget               AppearanceError = 33024
+	AppearanceError_kCosmeticGiftCurrencyNotEnough           AppearanceError = 33025
+	AppearanceError_kCosmeticGiftPriceChanged                AppearanceError = 33026
+	AppearanceError_kCosmeticGiftServiceUnavailable          AppearanceError = 33027
 )
 
 // Enum value maps for AppearanceError.
@@ -51,19 +69,55 @@ var (
 		33007: "kAppearanceNotCardUnlockable",
 		33008: "kAppearanceAlreadyOwned",
 		33009: "kAppearanceNotOwned",
+		33010: "kAppearanceSeriesBundleUnavailable",
+		33011: "kAppearanceSeriesAlreadyCompleted",
+		33012: "kAppearanceSeriesBundlePriceChanged",
+		33013: "kAppearanceSeriesBundleCurrencyNotEnough",
+		33014: "kCityCelebrationNotSafeCity",
+		33015: "kCityCelebrationChannelFull",
+		33016: "kCityCelebrationNoItem",
+		33017: "kCityCelebrationNotFound",
+		33018: "kCityCelebrationAlreadyClaimed",
+		33019: "kCityCelebrationLevelTooLow",
+		33020: "kCityCelebrationWeeklyCapReached",
+		33021: "kCosmeticGiftNotFriend7Days",
+		33022: "kCosmeticGiftTargetAlreadyOwned",
+		33023: "kCosmeticGiftWeeklyLimitReached",
+		33024: "kCosmeticGiftInvalidTarget",
+		33025: "kCosmeticGiftCurrencyNotEnough",
+		33026: "kCosmeticGiftPriceChanged",
+		33027: "kCosmeticGiftServiceUnavailable",
 	}
 	AppearanceError_value = map[string]int32{
-		"kAppearance_errorOK":          0,
-		"kAppearanceInvalid":           33000,
-		"kAppearanceAlreadyCurrent":    33001,
-		"kAppearanceNoCard":            33002,
-		"kAppearanceTrialAlreadyUsed":  33003,
-		"kAppearanceNoActiveTrial":     33004,
-		"kAppearanceFrozen":            33005,
-		"kAppearanceUnavailable":       33006,
-		"kAppearanceNotCardUnlockable": 33007,
-		"kAppearanceAlreadyOwned":      33008,
-		"kAppearanceNotOwned":          33009,
+		"kAppearance_errorOK":                      0,
+		"kAppearanceInvalid":                       33000,
+		"kAppearanceAlreadyCurrent":                33001,
+		"kAppearanceNoCard":                        33002,
+		"kAppearanceTrialAlreadyUsed":              33003,
+		"kAppearanceNoActiveTrial":                 33004,
+		"kAppearanceFrozen":                        33005,
+		"kAppearanceUnavailable":                   33006,
+		"kAppearanceNotCardUnlockable":             33007,
+		"kAppearanceAlreadyOwned":                  33008,
+		"kAppearanceNotOwned":                      33009,
+		"kAppearanceSeriesBundleUnavailable":       33010,
+		"kAppearanceSeriesAlreadyCompleted":        33011,
+		"kAppearanceSeriesBundlePriceChanged":      33012,
+		"kAppearanceSeriesBundleCurrencyNotEnough": 33013,
+		"kCityCelebrationNotSafeCity":              33014,
+		"kCityCelebrationChannelFull":              33015,
+		"kCityCelebrationNoItem":                   33016,
+		"kCityCelebrationNotFound":                 33017,
+		"kCityCelebrationAlreadyClaimed":           33018,
+		"kCityCelebrationLevelTooLow":              33019,
+		"kCityCelebrationWeeklyCapReached":         33020,
+		"kCosmeticGiftNotFriend7Days":              33021,
+		"kCosmeticGiftTargetAlreadyOwned":          33022,
+		"kCosmeticGiftWeeklyLimitReached":          33023,
+		"kCosmeticGiftInvalidTarget":               33024,
+		"kCosmeticGiftCurrencyNotEnough":           33025,
+		"kCosmeticGiftPriceChanged":                33026,
+		"kCosmeticGiftServiceUnavailable":          33027,
 	}
 )
 
@@ -98,7 +152,7 @@ var File_appearance_error_tip_proto protoreflect.FileDescriptor
 
 const file_appearance_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x1aappearance_error_tip.proto*\xd7\x02\n" +
+	"\x1aappearance_error_tip.proto*\xfb\a\n" +
 	"\x10appearance_error\x12\x17\n" +
 	"\x13kAppearance_errorOK\x10\x00\x12\x18\n" +
 	"\x12kAppearanceInvalid\x10\xe8\x81\x02\x12\x1f\n" +
@@ -110,7 +164,25 @@ const file_appearance_error_tip_proto_rawDesc = "" +
 	"\x16kAppearanceUnavailable\x10\xee\x81\x02\x12\"\n" +
 	"\x1ckAppearanceNotCardUnlockable\x10\xef\x81\x02\x12\x1d\n" +
 	"\x17kAppearanceAlreadyOwned\x10\xf0\x81\x02\x12\x19\n" +
-	"\x13kAppearanceNotOwned\x10\xf1\x81\x02B$\n" +
+	"\x13kAppearanceNotOwned\x10\xf1\x81\x02\x12(\n" +
+	"\"kAppearanceSeriesBundleUnavailable\x10\xf2\x81\x02\x12'\n" +
+	"!kAppearanceSeriesAlreadyCompleted\x10\xf3\x81\x02\x12)\n" +
+	"#kAppearanceSeriesBundlePriceChanged\x10\xf4\x81\x02\x12.\n" +
+	"(kAppearanceSeriesBundleCurrencyNotEnough\x10\xf5\x81\x02\x12!\n" +
+	"\x1bkCityCelebrationNotSafeCity\x10\xf6\x81\x02\x12!\n" +
+	"\x1bkCityCelebrationChannelFull\x10\xf7\x81\x02\x12\x1c\n" +
+	"\x16kCityCelebrationNoItem\x10\xf8\x81\x02\x12\x1e\n" +
+	"\x18kCityCelebrationNotFound\x10\xf9\x81\x02\x12$\n" +
+	"\x1ekCityCelebrationAlreadyClaimed\x10\xfa\x81\x02\x12!\n" +
+	"\x1bkCityCelebrationLevelTooLow\x10\xfb\x81\x02\x12&\n" +
+	" kCityCelebrationWeeklyCapReached\x10\xfc\x81\x02\x12!\n" +
+	"\x1bkCosmeticGiftNotFriend7Days\x10\xfd\x81\x02\x12%\n" +
+	"\x1fkCosmeticGiftTargetAlreadyOwned\x10\xfe\x81\x02\x12%\n" +
+	"\x1fkCosmeticGiftWeeklyLimitReached\x10\xff\x81\x02\x12 \n" +
+	"\x1akCosmeticGiftInvalidTarget\x10\x80\x82\x02\x12$\n" +
+	"\x1ekCosmeticGiftCurrencyNotEnough\x10\x81\x82\x02\x12\x1f\n" +
+	"\x19kCosmeticGiftPriceChanged\x10\x82\x82\x02\x12%\n" +
+	"\x1fkCosmeticGiftServiceUnavailable\x10\x83\x82\x02B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

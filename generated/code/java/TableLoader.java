@@ -10,7 +10,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class TableLoader {
 
-    public static final String SCHEMA_DIGEST = "88750c2d961d8710";
+    public static final String SCHEMA_DIGEST = "0fbe086829d8fe21";
 
     private static final Set<String> HOT_RELOADABLE_TABLES = Set.of(
             "ActivitySchedule",
@@ -101,6 +101,8 @@ public class TableLoader {
         ConditionTableManager.getInstance().load(configDir, useBinary);
 
         CooldownTableManager.getInstance().load(configDir, useBinary);
+
+        CosmeticShowcaseTableManager.getInstance().load(configDir, useBinary);
 
         DungeonTableManager.getInstance().load(configDir, useBinary);
 
@@ -241,7 +243,7 @@ public class TableLoader {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(83);
+        CountDownLatch latch = new CountDownLatch(84);
 
         new Thread(() -> {
             try {
@@ -448,6 +450,16 @@ public class TableLoader {
                 CooldownTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Cooldown table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                CosmeticShowcaseTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load CosmeticShowcase table", e);
             } finally {
                 latch.countDown();
             }
@@ -1134,6 +1146,8 @@ public class TableLoader {
         ConditionTableManager.getInstance().load(configDir, useBinary);
 
         CooldownTableManager.getInstance().load(configDir, useBinary);
+
+        CosmeticShowcaseTableManager.getInstance().load(configDir, useBinary);
 
         DungeonTableManager.getInstance().load(configDir, useBinary);
 

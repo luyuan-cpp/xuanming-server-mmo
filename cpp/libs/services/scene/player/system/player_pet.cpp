@@ -23,7 +23,9 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
+#include "player/system/afk_pass.h"
 #include "player/system/attribute_allocation_rules.h"
+#include "player/system/client_request_ledger.h"
 #include "player/system/content_guard_client.h"
 #include "player/system/pet_rules.h"
 #include "player/system/player_tip.h"
@@ -50,6 +52,7 @@
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_pet_comp.pb.h"
+#include "proto/common/rollback/transaction_log.pb.h"
 #include "proto/scene/player_pet.pb.h"
 #include "proto/scene/player_skill.pb.h"
 
@@ -584,6 +587,21 @@ void PetSystem::InitializeOnLoad(entt::entity player) {
 				 << " active_pet_id=" << comp.active_pet_id();
 		comp.set_active_pet_id(0);
 	}
+	// 自动过滤编队预设中已放生/交易失效的 pet_id 引用（布局层绝不留幽灵指针）。
+	for (auto& preset : *comp.mutable_squad_presets()) {
+		std::vector<uint64_t> alive;
+		alive.reserve(static_cast<std::size_t>(preset.pet_ids_size()));
+		for (const uint64_t pid : preset.pet_ids()) {
+			if (pid != 0u && FindPet(comp, pid) != nullptr &&
+				std::find(alive.begin(), alive.end(), pid) == alive.end()) {
+				alive.push_back(pid);
+			}
+		}
+		if (static_cast<int>(alive.size()) != preset.pet_ids_size()) {
+			preset.clear_pet_ids();
+			for (const uint64_t pid : alive) preset.add_pet_ids(pid);
+		}
+	}
 	// 仅旧存档缺少独立身份时采用种类表的显式迁移值；不读 quality/acquisition_tier。
     for (auto& pet : *comp.mutable_pets()) if (pet.cultivation_tier() == 0) {
         if (const auto* row = PetRow(pet.pet_table_id())) pet.set_cultivation_tier(row->cultivation_tier());
@@ -649,6 +667,34 @@ uint32_t PetSystem::BuildList(entt::entity player, PetListInfo& list) {
 	}
 	for (const auto& pet : comp.pets()) {
 		FillPetInfo(player, comp, pet, *pool, *list.add_pets());
+	}
+	const uint32_t permSlots = std::clamp(
+		comp.unlocked_squad_preset_slots() < kFreeSquadPresetSlots ? kFreeSquadPresetSlots : comp.unlocked_squad_preset_slots(),
+		kFreeSquadPresetSlots, kMaxSquadPresetSlots);
+	const uint32_t effSlots = std::min(kMaxSquadPresetSlots,
+		permSlots + (AfkPassSystem::IsActiveNow(player) ? 1u : 0u));
+	list.set_unlocked_squad_preset_slots(permSlots);
+	list.set_effective_squad_preset_slots(effSlots);
+	list.set_max_squad_preset_slots(kMaxSquadPresetSlots);
+	list.set_next_squad_slot_price_diamond(permSlots < kMaxSquadPresetSlots ? kSquadPresetSlotPriceDiamond : 0ULL);
+	std::vector<const PetSquadPreset*> orderedPresets;
+	orderedPresets.reserve(static_cast<std::size_t>(comp.squad_presets_size()));
+	for (const auto& p : comp.squad_presets()) {
+		if (p.slot_id() >= 1u && p.slot_id() <= kMaxSquadPresetSlots) {
+			orderedPresets.push_back(&p);
+		}
+	}
+	std::sort(orderedPresets.begin(), orderedPresets.end(),
+		[](const PetSquadPreset* a, const PetSquadPreset* b) { return a->slot_id() < b->slot_id(); });
+	for (const auto* p : orderedPresets) {
+		auto* dst = list.add_squad_presets();
+		dst->set_slot_id(p->slot_id());
+		dst->set_tag(p->tag() <= kMaxSquadPresetTag ? p->tag() : 0u);
+		for (const uint64_t pid : p->pet_ids()) {
+			if (pid != 0u && FindPet(comp, pid) != nullptr) {
+				dst->add_pet_ids(pid);
+			}
+		}
 	}
 	return kSuccess;
 }
@@ -1449,6 +1495,17 @@ uint32_t PetSystem::RemovePetForTrade(entt::entity player, uint64_t petId, PetIn
 	// 先整条拷出再删:删完就没有第二次机会取快照了,而快照是托管期间唯一的权威副本。
 	snapshotOut = comp.pets(index);
 	comp.mutable_pets()->DeleteSubrange(index, 1);
+	// 同步剔除所有灵宠编队快捷预设中对被交易宠物的引用（实例与布局分层铁律）。
+	for (auto& preset : *comp.mutable_squad_presets()) {
+		std::vector<uint64_t> kept;
+		for (const uint64_t pid : preset.pet_ids()) {
+			if (pid != petId) kept.push_back(pid);
+		}
+		if (static_cast<int>(kept.size()) != preset.pet_ids_size()) {
+			preset.clear_pet_ids();
+			for (const uint64_t pid : kept) preset.add_pet_ids(pid);
+		}
+	}
 	LOG_INFO << "[PlayerPet] Pet removed for trade: player_id=" << tlsEcs.GetPlayerId(player) << " pet_id=" << petId
 			 << " pet_table_id=" << snapshotOut.pet_table_id() << " level=" << snapshotOut.level()
 			 << " left=" << comp.pets_size();
@@ -1648,4 +1705,166 @@ void PetSystem::PushList(entt::entity player) {
 		return;
 	}
 	SendToPlayerClient(ScenePetClientPlayerNotifyPetListChangedMessageId, message, player);
+}
+
+void PetSystem::SaveSquadPreset(entt::entity player, const SavePetSquadPresetRequest& request,
+                                SavePetSquadPresetResponse& response) {
+	response.Clear();
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		response.mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	auto* comp = FindComp(player);
+	if (comp == nullptr) {
+		response.mutable_error_message()->set_id(kServiceUnavailable);
+		return;
+	}
+	if (PlayerBattleSystem::IsInBattle(player) || !player_mutability::IsPlayerMutable(player)) {
+		response.mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	const uint32_t permSlots = std::clamp(
+		comp->unlocked_squad_preset_slots() < kFreeSquadPresetSlots ? kFreeSquadPresetSlots : comp->unlocked_squad_preset_slots(),
+		kFreeSquadPresetSlots, kMaxSquadPresetSlots);
+	const uint32_t effSlots = std::min(kMaxSquadPresetSlots,
+		permSlots + (AfkPassSystem::IsActiveNow(player) ? 1u : 0u));
+	if (request.slot_id() == 0u || request.slot_id() > kMaxSquadPresetSlots || request.tag() > kMaxSquadPresetTag) {
+		response.mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	if (request.slot_id() > effSlots) {
+		response.mutable_error_message()->set_id(kPetSquadSlotLocked);
+		return;
+	}
+	if (static_cast<uint32_t>(request.pet_ids_size()) > kMaxPetsPerSquadPreset) {
+		response.mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	std::vector<uint64_t> validated;
+	validated.reserve(static_cast<std::size_t>(request.pet_ids_size()));
+	for (const uint64_t pid : request.pet_ids()) {
+		if (pid == 0u || FindPet(*comp, pid) == nullptr) {
+			response.mutable_error_message()->set_id(kPetNotFound);
+			return;
+		}
+		if (std::find(validated.begin(), validated.end(), pid) != validated.end()) {
+			response.mutable_error_message()->set_id(kInvalidParameter);
+			return;
+		}
+		validated.push_back(pid);
+	}
+	PetSquadPreset* target = nullptr;
+	for (auto& existing : *comp->mutable_squad_presets()) {
+		if (existing.slot_id() == request.slot_id()) {
+			target = &existing;
+			break;
+		}
+	}
+	if (target == nullptr) {
+		target = comp->add_squad_presets();
+		target->set_slot_id(request.slot_id());
+	}
+	target->set_tag(request.tag());
+	target->clear_pet_ids();
+	for (const uint64_t pid : validated) {
+		target->add_pet_ids(pid);
+	}
+	if (request.summon_first() && !validated.empty() && comp->active_pet_id() != validated.front()) {
+		if (const uint32_t summonErr = Summon(player, validated.front());
+			summonErr != kSuccess && summonErr != kPetAlreadyActive) {
+			response.mutable_error_message()->set_id(summonErr);
+			return;
+		}
+	}
+	(void)PlayerLifecycleSystem::SavePlayerForAssetCommit(player);
+	if (const uint32_t err = BuildList(player, *response.mutable_pets()); err != kSuccess) {
+		response.clear_pets();
+		response.mutable_error_message()->set_id(err);
+	}
+}
+
+void PetSystem::UnlockSquadPresetSlot(entt::entity player, const UnlockPetSquadPresetSlotRequest& request,
+                                      UnlockPetSquadPresetSlotResponse& response) {
+	response.Clear();
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		response.mutable_error_message()->set_id(kEntityIsNull);
+		return;
+	}
+	const uint64_t clientRequestId = request.client_request_id();
+	if (clientRequestId == 0u) {
+		response.mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	const std::string fingerprint = ClientRequestFingerprint(request);
+	ClientRequestResult first;
+	const auto verdict = client_request_dedup::Check(
+		player, clientRequestId, ClientRequestKind::kUnlockPetSquadPresetSlot, fingerprint, first);
+	if (verdict == ClientRequestVerdict::kMismatch) {
+		response.mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	if (verdict == ClientRequestVerdict::kUnavailable) {
+		response.mutable_error_message()->set_id(kServiceUnavailable);
+		return;
+	}
+	if (verdict == ClientRequestVerdict::kReplay) {
+		response.set_replayed(true);
+		response.set_unlocked_slots(first.petSquadUnlockedSlots);
+		response.set_spent_diamond(first.petSquadSpentDiamond);
+		response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+		if (BuildList(player, *response.mutable_pets()) != kSuccess) {
+			response.clear_pets();
+		}
+		return;
+	}
+	auto* comp = FindComp(player);
+	if (comp == nullptr) {
+		response.mutable_error_message()->set_id(kServiceUnavailable);
+		return;
+	}
+	if (PlayerBattleSystem::IsInBattle(player) || !player_mutability::IsPlayerMutable(player)) {
+		response.mutable_error_message()->set_id(kInvalidParameter);
+		return;
+	}
+	const uint32_t curSlots = std::clamp(
+		comp->unlocked_squad_preset_slots() < kFreeSquadPresetSlots ? kFreeSquadPresetSlots : comp->unlocked_squad_preset_slots(),
+		kFreeSquadPresetSlots, kMaxSquadPresetSlots);
+	if (curSlots >= kMaxSquadPresetSlots) {
+		response.mutable_error_message()->set_id(kPetSquadMaxSlotsReached);
+		response.set_unlocked_slots(curSlots);
+		response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+		return;
+	}
+	if (request.expected_unlocked_slots() != curSlots ||
+		request.expected_price_diamond() != kSquadPresetSlotPriceDiamond) {
+		response.mutable_error_message()->set_id(kPetSquadPriceChanged);
+		response.set_unlocked_slots(curSlots);
+		response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+		return;
+	}
+	if (const uint32_t err = CurrencySystem::DeductCurrency(
+			player, kCurrencyDiamond, kSquadPresetSlotPriceDiamond, TX_PET_SQUAD_SLOT_UNLOCK, clientRequestId);
+		err != kSuccess) {
+		response.mutable_error_message()->set_id(err);
+		response.set_unlocked_slots(curSlots);
+		response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+		return;
+	}
+	const uint32_t newSlots = curSlots + 1u;
+	comp->set_unlocked_squad_preset_slots(newSlots);
+	ClientRequestResult rec;
+	rec.petSquadUnlockedSlots = newSlots;
+	rec.petSquadSpentDiamond = kSquadPresetSlotPriceDiamond;
+	client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kUnlockPetSquadPresetSlot, fingerprint, rec);
+	(void)PlayerLifecycleSystem::SavePlayerForAssetCommit(player);
+	LOG_INFO << "[PlayerPet] metric=pet_squad_slot_unlocked player_id=" << tlsEcs.GetPlayerId(player)
+			 << " before=" << curSlots << " after=" << newSlots
+			 << " spent_diamond=" << kSquadPresetSlotPriceDiamond
+			 << " client_request_id=" << clientRequestId;
+	response.set_unlocked_slots(newSlots);
+	response.set_spent_diamond(kSquadPresetSlotPriceDiamond);
+	response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+	if (BuildList(player, *response.mutable_pets()) != kSuccess) {
+		response.clear_pets();
+	}
 }

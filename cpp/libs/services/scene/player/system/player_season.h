@@ -20,6 +20,8 @@ class EquipSeasonSealResponse;
 class EquipWuxingFormationRequest;
 class EquipWuxingFormationResponse;
 class EquipmentEffects;
+class ExpandSavedBuildSlotsRequest;
+class ExpandSavedBuildSlotsResponse;
 class GetSeasonStateResponse;
 class GetWuxingTowerStateResponse;
 class PickWuxingTowerSigilRequest;
@@ -118,6 +120,17 @@ public:
     static void DeleteBattleBuildBookmark(entt::entity player, uint64_t nowMs,
                                           const DeleteBattleBuildBookmarkRequest& request,
                                           DeleteBattleBuildBookmarkResponse& response);
+    static constexpr uint32_t kBaseSavedBuildCapacity = 12u;
+    static constexpr uint32_t kSavedBuildExpandStep = 12u;
+    static constexpr uint32_t kMaxSavedBuildCapacity = 48u;
+    static constexpr uint64_t kSavedBuildExpandPriceDiamond = 60ULL;
+    static void ExpandSavedBuildSlots(entt::entity player, uint64_t nowMs,
+                                      const ExpandSavedBuildSlotsRequest& request,
+                                      ExpandSavedBuildSlotsResponse& response);
+    // B4 激励视频槽位 2：五行幻境 V2 待选奇策重随（M-7 硬锁每局 run_id 最多 1 次，0 资产产出）。
+    static uint32_t RerollWuxingTowerOffersByAd(entt::entity player, uint32_t expectedRunIdLow32,
+                                                uint64_t nowMs, std::vector<uint32_t>& outOffers,
+                                                bool dryRun = false);
 
     using PersistFn = bool (*)(entt::entity);
     static void SetPersistForTest(PersistFn fn);

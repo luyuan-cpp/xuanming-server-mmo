@@ -34,3 +34,27 @@ constexpr uint32_t SceneAppearanceClientPlayerEquipPetCosmeticIndex = 6;
 constexpr uint32_t SceneAppearanceClientPlayerEquipSkillVfxMessageId = 531;
 constexpr uint32_t SceneAppearanceClientPlayerEquipSkillVfxIndex = 7;
 #define SceneAppearanceClientPlayerEquipSkillVfxMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(7)
+
+constexpr uint32_t SceneAppearanceClientPlayerBuyAppearanceSeriesBundleMessageId = 592;
+constexpr uint32_t SceneAppearanceClientPlayerBuyAppearanceSeriesBundleIndex = 8;
+#define SceneAppearanceClientPlayerBuyAppearanceSeriesBundleMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(8)
+
+constexpr uint32_t SceneAppearanceClientPlayerEquipShowcaseCosmeticMessageId = 593;
+constexpr uint32_t SceneAppearanceClientPlayerEquipShowcaseCosmeticIndex = 9;
+#define SceneAppearanceClientPlayerEquipShowcaseCosmeticMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(9)
+
+constexpr uint32_t SceneAppearanceClientPlayerCastCityCelebrationMessageId = 594;
+constexpr uint32_t SceneAppearanceClientPlayerCastCityCelebrationIndex = 10;
+#define SceneAppearanceClientPlayerCastCityCelebrationMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t SceneAppearanceClientPlayerClaimCityCelebrationGiftMessageId = 595;
+constexpr uint32_t SceneAppearanceClientPlayerClaimCityCelebrationGiftIndex = 11;
+#define SceneAppearanceClientPlayerClaimCityCelebrationGiftMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(11)
+
+constexpr uint32_t SceneAppearanceClientPlayerNotifyCityCelebrationMessageId = 596;
+constexpr uint32_t SceneAppearanceClientPlayerNotifyCityCelebrationIndex = 12;
+#define SceneAppearanceClientPlayerNotifyCityCelebrationMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(12)
+
+constexpr uint32_t SceneAppearanceClientPlayerSendCosmeticGiftMessageId = 597;
+constexpr uint32_t SceneAppearanceClientPlayerSendCosmeticGiftIndex = 13;
+#define SceneAppearanceClientPlayerSendCosmeticGiftMethod  ::SceneAppearanceClientPlayer_Stub::descriptor()->method(13)

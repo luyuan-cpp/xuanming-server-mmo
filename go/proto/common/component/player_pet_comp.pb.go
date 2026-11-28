@@ -330,6 +330,67 @@ func (x *PetInstance) GetCosmeticId() uint32 {
 	return 0
 }
 
+// 灵宠编队快捷预设（布局层只存 pet_id 引用，放生/交易时自动过滤失效引用，绝不拷贝宠物实例属性）。
+type PetSquadPreset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SlotId        uint32                 `protobuf:"varint,1,opt,name=slot_id,json=slotId,proto3" json:"slot_id,omitempty"`        // 1..5 槽位号（1..2 免费，3..5 永久付费解锁或月卡临赠 +1）
+	Tag           uint32                 `protobuf:"varint,2,opt,name=tag,proto3" json:"tag,omitempty"`                            // 0默认 / 1日常PVE / 2会武PVP / 3首领试炼
+	PetIds        []uint64               `protobuf:"varint,3,rep,packed,name=pet_ids,json=petIds,proto3" json:"pet_ids,omitempty"` // 最多 3 只宝宝 pet_id（首只为出战首发宠）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PetSquadPreset) Reset() {
+	*x = PetSquadPreset{}
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetSquadPreset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetSquadPreset) ProtoMessage() {}
+
+func (x *PetSquadPreset) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetSquadPreset.ProtoReflect.Descriptor instead.
+func (*PetSquadPreset) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PetSquadPreset) GetSlotId() uint32 {
+	if x != nil {
+		return x.SlotId
+	}
+	return 0
+}
+
+func (x *PetSquadPreset) GetTag() uint32 {
+	if x != nil {
+		return x.Tag
+	}
+	return 0
+}
+
+func (x *PetSquadPreset) GetPetIds() []uint64 {
+	if x != nil {
+		return x.PetIds
+	}
+	return nil
+}
+
 // 玩家宝宝数据(持久化到 player_database.pet_component)
 type PlayerPetComp struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
@@ -342,13 +403,17 @@ type PlayerPetComp struct {
 	LastPurchasePriceGold  uint64 `protobuf:"varint,6,opt,name=last_purchase_price_gold,json=lastPurchasePriceGold,proto3" json:"last_purchase_price_gold,omitempty"`
 	// true = 该角色已完成一次性起步灵狐判定（已发放或老号已有宠不再补发），重登/召回/放生均不重发。
 	StarterPetGranted bool `protobuf:"varint,7,opt,name=starter_pet_granted,json=starterPetGranted,proto3" json:"starter_pet_granted,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 灵宠编队快捷预设列表（按 slot_id 定位，不依赖下标顺序）。
+	SquadPresets []*PetSquadPreset `protobuf:"bytes,8,rep,name=squad_presets,json=squadPresets,proto3" json:"squad_presets,omitempty"`
+	// 永久已解锁的灵宠编队预设槽位数（0 兼容按默认免费 2 套处理，范围 2..5）。
+	UnlockedSquadPresetSlots uint32 `protobuf:"varint,9,opt,name=unlocked_squad_preset_slots,json=unlockedSquadPresetSlots,proto3" json:"unlocked_squad_preset_slots,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *PlayerPetComp) Reset() {
 	*x = PlayerPetComp{}
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -360,7 +425,7 @@ func (x *PlayerPetComp) String() string {
 func (*PlayerPetComp) ProtoMessage() {}
 
 func (x *PlayerPetComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[2]
+	mi := &file_proto_common_component_player_pet_comp_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -373,7 +438,7 @@ func (x *PlayerPetComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerPetComp.ProtoReflect.Descriptor instead.
 func (*PlayerPetComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_component_player_pet_comp_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PlayerPetComp) GetPets() []*PetInstance {
@@ -423,6 +488,20 @@ func (x *PlayerPetComp) GetStarterPetGranted() bool {
 		return x.StarterPetGranted
 	}
 	return false
+}
+
+func (x *PlayerPetComp) GetSquadPresets() []*PetSquadPreset {
+	if x != nil {
+		return x.SquadPresets
+	}
+	return nil
+}
+
+func (x *PlayerPetComp) GetUnlockedSquadPresetSlots() uint32 {
+	if x != nil {
+		return x.UnlockedSquadPresetSlots
+	}
+	return 0
 }
 
 var File_proto_common_component_player_pet_comp_proto protoreflect.FileDescriptor
@@ -483,7 +562,11 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aB\n" +
 	"\x14EntryLastTargetEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xe1\x02\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"T\n" +
+	"\x0ePetSquadPreset\x12\x17\n" +
+	"\aslot_id\x18\x01 \x01(\rR\x06slotId\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\rR\x03tag\x12\x17\n" +
+	"\apet_ids\x18\x03 \x03(\x04R\x06petIds\"\xd6\x03\n" +
 	"\rPlayerPetComp\x12 \n" +
 	"\x04pets\x18\x01 \x03(\v2\f.PetInstanceR\x04pets\x12\"\n" +
 	"\ractive_pet_id\x18\x02 \x01(\x04R\vactivePetId\x124\n" +
@@ -491,7 +574,9 @@ const file_proto_common_component_player_pet_comp_proto_rawDesc = "" +
 	"\x1alast_purchase_pet_table_id\x18\x04 \x01(\rR\x16lastPurchasePetTableId\x12/\n" +
 	"\x14last_purchase_pet_id\x18\x05 \x01(\x04R\x11lastPurchasePetId\x127\n" +
 	"\x18last_purchase_price_gold\x18\x06 \x01(\x04R\x15lastPurchasePriceGold\x12.\n" +
-	"\x13starter_pet_granted\x18\a \x01(\bR\x11starterPetGrantedB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x13starter_pet_granted\x18\a \x01(\bR\x11starterPetGranted\x124\n" +
+	"\rsquad_presets\x18\b \x03(\v2\x0f.PetSquadPresetR\fsquadPresets\x12=\n" +
+	"\x1bunlocked_squad_preset_slots\x18\t \x01(\rR\x18unlockedSquadPresetSlotsB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_pet_comp_proto_rawDescOnce sync.Once
@@ -505,32 +590,34 @@ func file_proto_common_component_player_pet_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_pet_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_common_component_player_pet_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_common_component_player_pet_comp_proto_goTypes = []any{
 	(*PetEntryPreset)(nil), // 0: PetEntryPreset
 	(*PetInstance)(nil),    // 1: PetInstance
-	(*PlayerPetComp)(nil),  // 2: PlayerPetComp
-	nil,                    // 3: PetEntryPreset.AllocatedEntry
-	nil,                    // 4: PetInstance.AllocatedEntry
-	nil,                    // 5: PetInstance.AptitudeEntry
-	nil,                    // 6: PetInstance.SkillRanksEntry
-	nil,                    // 7: PetInstance.EntryAllocatedEntry
-	nil,                    // 8: PetInstance.EntryLastTargetEntry
+	(*PetSquadPreset)(nil), // 2: PetSquadPreset
+	(*PlayerPetComp)(nil),  // 3: PlayerPetComp
+	nil,                    // 4: PetEntryPreset.AllocatedEntry
+	nil,                    // 5: PetInstance.AllocatedEntry
+	nil,                    // 6: PetInstance.AptitudeEntry
+	nil,                    // 7: PetInstance.SkillRanksEntry
+	nil,                    // 8: PetInstance.EntryAllocatedEntry
+	nil,                    // 9: PetInstance.EntryLastTargetEntry
 }
 var file_proto_common_component_player_pet_comp_proto_depIdxs = []int32{
-	3, // 0: PetEntryPreset.allocated:type_name -> PetEntryPreset.AllocatedEntry
-	4, // 1: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
-	5, // 2: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
-	6, // 3: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
-	7, // 4: PetInstance.entry_allocated:type_name -> PetInstance.EntryAllocatedEntry
-	8, // 5: PetInstance.entry_last_target:type_name -> PetInstance.EntryLastTargetEntry
+	4, // 0: PetEntryPreset.allocated:type_name -> PetEntryPreset.AllocatedEntry
+	5, // 1: PetInstance.allocated:type_name -> PetInstance.AllocatedEntry
+	6, // 2: PetInstance.aptitude:type_name -> PetInstance.AptitudeEntry
+	7, // 3: PetInstance.skill_ranks:type_name -> PetInstance.SkillRanksEntry
+	8, // 4: PetInstance.entry_allocated:type_name -> PetInstance.EntryAllocatedEntry
+	9, // 5: PetInstance.entry_last_target:type_name -> PetInstance.EntryLastTargetEntry
 	0, // 6: PetInstance.entry_presets:type_name -> PetEntryPreset
 	1, // 7: PlayerPetComp.pets:type_name -> PetInstance
-	8, // [8:8] is the sub-list for method output_type
-	8, // [8:8] is the sub-list for method input_type
-	8, // [8:8] is the sub-list for extension type_name
-	8, // [8:8] is the sub-list for extension extendee
-	0, // [0:8] is the sub-list for field type_name
+	2, // 8: PlayerPetComp.squad_presets:type_name -> PetSquadPreset
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_component_player_pet_comp_proto_init() }
@@ -544,7 +631,7 @@ func file_proto_common_component_player_pet_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_pet_comp_proto_rawDesc), len(file_proto_common_component_player_pet_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

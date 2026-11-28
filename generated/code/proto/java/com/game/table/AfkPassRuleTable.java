@@ -29,6 +29,9 @@ private static final long serialVersionUID = 0L;
   }
   private AfkPassRuleTable() {
     desc_ = "";
+    bonusFrameKey_ = "";
+    planName_ = "";
+    iconKey_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -154,6 +157,145 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int BONUS_ITEM_ID_FIELD_NUMBER = 8;
+  private int bonusItemId_ = 0;
+  /**
+   * <code>uint32 bonus_item_id = 8;</code>
+   * @return The bonusItemId.
+   */
+  @java.lang.Override
+  public int getBonusItemId() {
+    return bonusItemId_;
+  }
+
+  public static final int BONUS_ITEM_COUNT_FIELD_NUMBER = 9;
+  private int bonusItemCount_ = 0;
+  /**
+   * <code>uint32 bonus_item_count = 9;</code>
+   * @return The bonusItemCount.
+   */
+  @java.lang.Override
+  public int getBonusItemCount() {
+    return bonusItemCount_;
+  }
+
+  public static final int BONUS_FRAME_KEY_FIELD_NUMBER = 10;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object bonusFrameKey_ = "";
+  /**
+   * <code>string bonus_frame_key = 10;</code>
+   * @return The bonusFrameKey.
+   */
+  @java.lang.Override
+  public java.lang.String getBonusFrameKey() {
+    java.lang.Object ref = bonusFrameKey_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      bonusFrameKey_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string bonus_frame_key = 10;</code>
+   * @return The bytes for bonusFrameKey.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBonusFrameKeyBytes() {
+    java.lang.Object ref = bonusFrameKey_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      bonusFrameKey_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int PLAN_NAME_FIELD_NUMBER = 11;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object planName_ = "";
+  /**
+   * <code>string plan_name = 11;</code>
+   * @return The planName.
+   */
+  @java.lang.Override
+  public java.lang.String getPlanName() {
+    java.lang.Object ref = planName_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      planName_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string plan_name = 11;</code>
+   * @return The bytes for planName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPlanNameBytes() {
+    java.lang.Object ref = planName_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      planName_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int ICON_KEY_FIELD_NUMBER = 12;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object iconKey_ = "";
+  /**
+   * <code>string icon_key = 12;</code>
+   * @return The iconKey.
+   */
+  @java.lang.Override
+  public java.lang.String getIconKey() {
+    java.lang.Object ref = iconKey_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      iconKey_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string icon_key = 12;</code>
+   * @return The bytes for iconKey.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getIconKeyBytes() {
+    java.lang.Object ref = iconKey_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      iconKey_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -189,6 +331,21 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 7, desc_);
     }
+    if (bonusItemId_ != 0) {
+      output.writeUInt32(8, bonusItemId_);
+    }
+    if (bonusItemCount_ != 0) {
+      output.writeUInt32(9, bonusItemCount_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(bonusFrameKey_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 10, bonusFrameKey_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(planName_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 11, planName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(iconKey_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 12, iconKey_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -219,6 +376,23 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(7, desc_);
+    }
+    if (bonusItemId_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(8, bonusItemId_);
+    }
+    if (bonusItemCount_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(9, bonusItemCount_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(bonusFrameKey_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(10, bonusFrameKey_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(planName_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(11, planName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(iconKey_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(12, iconKey_);
     }
     return size;
   }
@@ -258,6 +432,16 @@ private static final long serialVersionUID = 0L;
         != other.getRemindBeforeHours()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getBonusItemId()
+        != other.getBonusItemId()) return false;
+    if (getBonusItemCount()
+        != other.getBonusItemCount()) return false;
+    if (!getBonusFrameKey()
+        .equals(other.getBonusFrameKey())) return false;
+    if (!getPlanName()
+        .equals(other.getPlanName())) return false;
+    if (!getIconKey()
+        .equals(other.getIconKey())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -284,6 +468,16 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getRemindBeforeHours();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + BONUS_ITEM_ID_FIELD_NUMBER;
+    hash = (53 * hash) + getBonusItemId();
+    hash = (37 * hash) + BONUS_ITEM_COUNT_FIELD_NUMBER;
+    hash = (53 * hash) + getBonusItemCount();
+    hash = (37 * hash) + BONUS_FRAME_KEY_FIELD_NUMBER;
+    hash = (53 * hash) + getBonusFrameKey().hashCode();
+    hash = (37 * hash) + PLAN_NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getPlanName().hashCode();
+    hash = (37 * hash) + ICON_KEY_FIELD_NUMBER;
+    hash = (53 * hash) + getIconKey().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -422,6 +616,11 @@ private static final long serialVersionUID = 0L;
       maxRemainingDays_ = 0;
       remindBeforeHours_ = 0;
       desc_ = "";
+      bonusItemId_ = 0;
+      bonusItemCount_ = 0;
+      bonusFrameKey_ = "";
+      planName_ = "";
+      iconKey_ = "";
       return this;
     }
 
@@ -476,6 +675,21 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000040) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.bonusItemId_ = bonusItemId_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.bonusItemCount_ = bonusItemCount_;
+      }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.bonusFrameKey_ = bonusFrameKey_;
+      }
+      if (((from_bitField0_ & 0x00000400) != 0)) {
+        result.planName_ = planName_;
+      }
+      if (((from_bitField0_ & 0x00000800) != 0)) {
+        result.iconKey_ = iconKey_;
+      }
     }
 
     @java.lang.Override
@@ -511,6 +725,27 @@ private static final long serialVersionUID = 0L;
       if (!other.getDesc().isEmpty()) {
         desc_ = other.desc_;
         bitField0_ |= 0x00000040;
+        onChanged();
+      }
+      if (other.getBonusItemId() != 0) {
+        setBonusItemId(other.getBonusItemId());
+      }
+      if (other.getBonusItemCount() != 0) {
+        setBonusItemCount(other.getBonusItemCount());
+      }
+      if (!other.getBonusFrameKey().isEmpty()) {
+        bonusFrameKey_ = other.bonusFrameKey_;
+        bitField0_ |= 0x00000200;
+        onChanged();
+      }
+      if (!other.getPlanName().isEmpty()) {
+        planName_ = other.planName_;
+        bitField0_ |= 0x00000400;
+        onChanged();
+      }
+      if (!other.getIconKey().isEmpty()) {
+        iconKey_ = other.iconKey_;
+        bitField0_ |= 0x00000800;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -574,6 +809,31 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000040;
               break;
             } // case 58
+            case 64: {
+              bonusItemId_ = input.readUInt32();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              bonusItemCount_ = input.readUInt32();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
+            case 82: {
+              bonusFrameKey_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 82
+            case 90: {
+              planName_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000400;
+              break;
+            } // case 90
+            case 98: {
+              iconKey_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000800;
+              break;
+            } // case 98
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -851,6 +1111,286 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+
+    private int bonusItemId_ ;
+    /**
+     * <code>uint32 bonus_item_id = 8;</code>
+     * @return The bonusItemId.
+     */
+    @java.lang.Override
+    public int getBonusItemId() {
+      return bonusItemId_;
+    }
+    /**
+     * <code>uint32 bonus_item_id = 8;</code>
+     * @param value The bonusItemId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBonusItemId(int value) {
+
+      bonusItemId_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 bonus_item_id = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBonusItemId() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      bonusItemId_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int bonusItemCount_ ;
+    /**
+     * <code>uint32 bonus_item_count = 9;</code>
+     * @return The bonusItemCount.
+     */
+    @java.lang.Override
+    public int getBonusItemCount() {
+      return bonusItemCount_;
+    }
+    /**
+     * <code>uint32 bonus_item_count = 9;</code>
+     * @param value The bonusItemCount to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBonusItemCount(int value) {
+
+      bonusItemCount_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 bonus_item_count = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBonusItemCount() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      bonusItemCount_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object bonusFrameKey_ = "";
+    /**
+     * <code>string bonus_frame_key = 10;</code>
+     * @return The bonusFrameKey.
+     */
+    public java.lang.String getBonusFrameKey() {
+      java.lang.Object ref = bonusFrameKey_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        bonusFrameKey_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string bonus_frame_key = 10;</code>
+     * @return The bytes for bonusFrameKey.
+     */
+    public com.google.protobuf.ByteString
+        getBonusFrameKeyBytes() {
+      java.lang.Object ref = bonusFrameKey_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        bonusFrameKey_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string bonus_frame_key = 10;</code>
+     * @param value The bonusFrameKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBonusFrameKey(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      bonusFrameKey_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string bonus_frame_key = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBonusFrameKey() {
+      bonusFrameKey_ = getDefaultInstance().getBonusFrameKey();
+      bitField0_ = (bitField0_ & ~0x00000200);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string bonus_frame_key = 10;</code>
+     * @param value The bytes for bonusFrameKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBonusFrameKeyBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      bonusFrameKey_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object planName_ = "";
+    /**
+     * <code>string plan_name = 11;</code>
+     * @return The planName.
+     */
+    public java.lang.String getPlanName() {
+      java.lang.Object ref = planName_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        planName_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string plan_name = 11;</code>
+     * @return The bytes for planName.
+     */
+    public com.google.protobuf.ByteString
+        getPlanNameBytes() {
+      java.lang.Object ref = planName_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        planName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string plan_name = 11;</code>
+     * @param value The planName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlanName(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      planName_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string plan_name = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlanName() {
+      planName_ = getDefaultInstance().getPlanName();
+      bitField0_ = (bitField0_ & ~0x00000400);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string plan_name = 11;</code>
+     * @param value The bytes for planName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlanNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      planName_ = value;
+      bitField0_ |= 0x00000400;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object iconKey_ = "";
+    /**
+     * <code>string icon_key = 12;</code>
+     * @return The iconKey.
+     */
+    public java.lang.String getIconKey() {
+      java.lang.Object ref = iconKey_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        iconKey_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string icon_key = 12;</code>
+     * @return The bytes for iconKey.
+     */
+    public com.google.protobuf.ByteString
+        getIconKeyBytes() {
+      java.lang.Object ref = iconKey_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        iconKey_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string icon_key = 12;</code>
+     * @param value The iconKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconKey(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      iconKey_ = value;
+      bitField0_ |= 0x00000800;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string icon_key = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIconKey() {
+      iconKey_ = getDefaultInstance().getIconKey();
+      bitField0_ = (bitField0_ & ~0x00000800);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string icon_key = 12;</code>
+     * @param value The bytes for iconKey to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconKeyBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      iconKey_ = value;
+      bitField0_ |= 0x00000800;
       onChanged();
       return this;
     }

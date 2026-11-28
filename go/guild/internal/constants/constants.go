@@ -213,7 +213,26 @@ const (
 	ErrWarFeudAlreadyActive        = uint32(table.GuildError_kGuildWarFeudAlreadyActive)
 	ErrWarFeudNotFound             = uint32(table.GuildError_kGuildWarFeudNotFound)
 	ErrWarFeudInvalidTarget        = uint32(table.GuildError_kGuildWarFeudInvalidTarget)
+	// 帮会徽记/旗帜定制外观新增 4 个业务提示码（仅帮主个人真实灵石买断，绝不扣帮会资金）。
+	ErrEmblemInvalid               = uint32(table.GuildError_kGuildEmblemInvalid)
+	ErrEmblemAlreadyUnlocked       = uint32(table.GuildError_kGuildEmblemAlreadyUnlocked)
+	ErrEmblemNotUnlocked           = uint32(table.GuildError_kGuildEmblemNotUnlocked)
+	ErrEmblemPriceChanged          = uint32(table.GuildError_kGuildEmblemPriceChanged)
 )
+
+const MaxGuildEmblemID uint32 = 6
+
+// GuildEmblemPriceDiamond 返回指定帮会徽记款式的个人真实灵石买断价（1..3=180，4..6=300；0=默认免费不可买）。
+func GuildEmblemPriceDiamond(emblemID uint32) (uint64, bool) {
+	switch emblemID {
+	case 1, 2, 3:
+		return 180, true
+	case 4, 5, 6:
+		return 300, true
+	default:
+		return 0, false
+	}
+}
 
 // MaxShopBuyCount:帮会商店单次兑换的份数上限(05-economy.md §5.11.2)。
 //

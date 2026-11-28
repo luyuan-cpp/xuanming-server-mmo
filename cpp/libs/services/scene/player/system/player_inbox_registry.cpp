@@ -11,6 +11,7 @@
 
 #include "engine/core/utils/proto/unknown_field_carry.h"
 #include "player/system/gm_sanction_inbox_executor.h"
+#include "player/system/player_appearance.h"
 #include "battle/system/player_battle.h"
 #include "proto/player_inbox/player_inbox.pb.h"
 
@@ -23,13 +24,16 @@ namespace player_inbox_registry
 		// 不用宏生成(AGENTS §11.2):普通函数指针数组 + static_assert 表长。下标 0 是 UNSPECIFIED,恒为空。
 		// 新增类型时先在 proto 里追加枚举值,这里的 static_assert 会立即编不过,提醒补执行器。
 		constexpr PlayerInboxExecutorFn kExecutors[] = {
-			nullptr,                                       // PLAYER_INBOX_MSG_UNSPECIFIED
-			&GmSanctionInboxExecutor::BlockCurrencyGain,   // PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN
-			&GmSanctionInboxExecutor::UnblockCurrencyGain, // PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
-			&GmSanctionInboxExecutor::AttachCurrencyDebt,  // PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT
-			&PlayerBattleSystem::ApplyInboxSettlement,    // PLAYER_INBOX_MSG_BATTLE_SETTLEMENT
-			&GmSanctionInboxExecutor::BlockItemGain,       // PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN
-			&GmSanctionInboxExecutor::UnblockItemGain,     // PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
+			nullptr,                                         // PLAYER_INBOX_MSG_UNSPECIFIED
+			&GmSanctionInboxExecutor::BlockCurrencyGain,     // PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN
+			&GmSanctionInboxExecutor::UnblockCurrencyGain,   // PLAYER_INBOX_MSG_GM_UNBLOCK_CURRENCY_GAIN
+			&GmSanctionInboxExecutor::AttachCurrencyDebt,    // PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT
+			&PlayerBattleSystem::ApplyInboxSettlement,       // PLAYER_INBOX_MSG_BATTLE_SETTLEMENT
+			&GmSanctionInboxExecutor::BlockItemGain,         // PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN
+			&GmSanctionInboxExecutor::UnblockItemGain,       // PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN
+			&PlayerAppearanceSystem::ApplyCosmeticGiftCredit,// PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT
+			&PlayerAppearanceSystem::ApplyCosmeticGiftRefund,// PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND
+			&PlayerAppearanceSystem::ApplyCosmeticGiftRevoke,// PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE
 		};
 		static_assert(std::size(kExecutors) == static_cast<std::size_t>(player_inbox::PlayerInboxMessageType_ARRAYSIZE),
 					  "执行器表与 PlayerInboxMessageType 脱节:proto 加了类型就在这里补执行器");
@@ -40,6 +44,9 @@ namespace player_inbox_registry
 		static_assert(player_inbox::PLAYER_INBOX_MSG_BATTLE_SETTLEMENT == 4, "执行器表第 4 行错位");
 		static_assert(player_inbox::PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN == 5, "执行器表第 5 行错位");
 		static_assert(player_inbox::PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN == 6, "执行器表第 6 行错位");
+		static_assert(player_inbox::PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT == 7, "执行器表第 7 行错位");
+		static_assert(player_inbox::PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND == 8, "执行器表第 8 行错位");
+		static_assert(player_inbox::PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE == 9, "执行器表第 9 行错位");
 
 		// 类型规格的缓存(读一次描述符,此后只读)。
 		struct TypeEntry

@@ -32,6 +32,7 @@ import (
 	"shared/mergedzone"
 	"shared/noderegistry"
 	"shared/placement"
+	"shared/redisslot"
 	"shared/rolefence"
 	"shared/tablebundle"
 	"shared/workshard"
@@ -227,6 +228,22 @@ func NewServiceContextWithAdmission(c config.Config, writer authoritysql.WriterC
 		commerceEngine = &commerce.Engine{Repo: &data.CommerceRepo{DB: db, Ops: assets.Ops}, IDs: seg, OpIDs: assets.OpIDs,
 			Policy:  commerce.Policy{Items: c.Commerce.ItemConfigs, ItemTitles: titles, Pets: c.Commerce.PetConfigs, Currencies: c.Commerce.CurrencyTypes, AllowInstances: c.Commerce.AllowInstances},
 			Applier: assets.Caller, Ledger: persistedLedger(dsClient), Now: time.Now}
+		if assets.PlayerRedis != nil {
+			playerRedis := assets.PlayerRedis
+			commerceEngine.AfkPassActive = func(ctx context.Context, playerID uint64) bool {
+				if playerID == 0 {
+					return false
+				}
+				probeCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+				defer cancel()
+				val, err := playerRedis.Get(probeCtx, redisslot.AfkPassKey(playerID)).Result()
+				if err != nil {
+					return false
+				}
+				expiry, parseErr := strconv.ParseInt(val, 10, 64)
+				return parseErr == nil && time.Now().Unix() < expiry
+			}
+		}
 		if c.Commerce.PlayerTrade.Mode != "" {
 			commerceEngine.PlayerTradeGuard = &commerce.PlayerTradeGuard{
 				Policy: commerce.PlayerTradePolicy{

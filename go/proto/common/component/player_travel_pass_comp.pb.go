@@ -129,7 +129,7 @@ func (x *TravelPassSeasonProgress) GetLastUpdatedAtMs() uint64 {
 // 玩家游历手记持久组件（挂载于 player_database.travel_pass = 35, OptionPersistGroup = 7 WALLET）。
 type PlayerTravelPassComp struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// 条目间无序，按 pass_id 查找（最多 32 期；已解锁典藏或有未领档位的期次永久保留）。
+	// 条目间无序，按 pass_id 查找（最多 64 期；已解锁典藏或有未领档位的期次永久保留）。
 	Seasons []*TravelPassSeasonProgress `protobuf:"bytes,1,rep,name=seasons,proto3" json:"seasons,omitempty"`
 	// 每次积点、解锁典藏、领奖或换装递增 1。
 	PassRevision uint64 `protobuf:"varint,2,opt,name=pass_revision,json=passRevision,proto3" json:"pass_revision,omitempty"`
@@ -137,8 +137,12 @@ type PlayerTravelPassComp struct {
 	EquippedFrameKey string `protobuf:"bytes,3,opt,name=equipped_frame_key,json=equippedFrameKey,proto3" json:"equipped_frame_key,omitempty"`
 	// 当前展示佩戴的零战力纪念称谓键（空串表示不展示）。
 	EquippedTitleKey string `protobuf:"bytes,4,opt,name=equipped_title_key,json=equippedTitleKey,proto3" json:"equipped_title_key,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 当前选定的在研手记期次 ID（0 = 自动选最新未满开启期次）。
+	ActivePassId uint32 `protobuf:"varint,5,opt,name=active_pass_id,json=activePassId,proto3" json:"active_pass_id,omitempty"`
+	// 外部礼遇（如仙途轻享卡/季享卡一次性直赠）解锁的零战力纪念头像框/称谓键，与各期次合并展示和佩戴校验。
+	BonusCosmeticKeys []string `protobuf:"bytes,6,rep,name=bonus_cosmetic_keys,json=bonusCosmeticKeys,proto3" json:"bonus_cosmetic_keys,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PlayerTravelPassComp) Reset() {
@@ -199,6 +203,20 @@ func (x *PlayerTravelPassComp) GetEquippedTitleKey() string {
 	return ""
 }
 
+func (x *PlayerTravelPassComp) GetActivePassId() uint32 {
+	if x != nil {
+		return x.ActivePassId
+	}
+	return 0
+}
+
+func (x *PlayerTravelPassComp) GetBonusCosmeticKeys() []string {
+	if x != nil {
+		return x.BonusCosmeticKeys
+	}
+	return nil
+}
+
 var File_proto_common_component_player_travel_pass_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_travel_pass_comp_proto_rawDesc = "" +
@@ -212,12 +230,14 @@ const file_proto_common_component_player_travel_pass_comp_proto_rawDesc = "" +
 	"\x11free_claimed_mask\x18\x05 \x01(\x04R\x0ffreeClaimedMask\x120\n" +
 	"\x14premium_claimed_mask\x18\x06 \x01(\x04R\x12premiumClaimedMask\x124\n" +
 	"\x16unlocked_cosmetic_keys\x18\a \x03(\tR\x14unlockedCosmeticKeys\x12+\n" +
-	"\x12last_updated_at_ms\x18\b \x01(\x04R\x0flastUpdatedAtMs\"\xcc\x01\n" +
+	"\x12last_updated_at_ms\x18\b \x01(\x04R\x0flastUpdatedAtMs\"\xa2\x02\n" +
 	"\x14PlayerTravelPassComp\x123\n" +
 	"\aseasons\x18\x01 \x03(\v2\x19.TravelPassSeasonProgressR\aseasons\x12#\n" +
 	"\rpass_revision\x18\x02 \x01(\x04R\fpassRevision\x12,\n" +
 	"\x12equipped_frame_key\x18\x03 \x01(\tR\x10equippedFrameKey\x12,\n" +
-	"\x12equipped_title_key\x18\x04 \x01(\tR\x10equippedTitleKeyB\x18Z\x16proto/common/componentb\x06proto3"
+	"\x12equipped_title_key\x18\x04 \x01(\tR\x10equippedTitleKey\x12$\n" +
+	"\x0eactive_pass_id\x18\x05 \x01(\rR\factivePassId\x12.\n" +
+	"\x13bonus_cosmetic_keys\x18\x06 \x03(\tR\x11bonusCosmeticKeysB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_player_travel_pass_comp_proto_rawDescOnce sync.Once

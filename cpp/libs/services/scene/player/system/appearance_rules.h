@@ -10,6 +10,7 @@
 
 #include "engine/core/utils/bit_index/bit_index_util.h"
 #include "table/code/bit_index/characterappearance_table_id_bit_index.h"
+#include "table/code/bit_index/cosmeticshowcase_table_id_bit_index.h"
 #include "table/code/bit_index/petcosmetic_table_id_bit_index.h"
 #include "table/code/bit_index/skillvfxcosmetic_table_id_bit_index.h"
 
@@ -132,6 +133,18 @@ namespace player_appearance
 		return MarkBit(ownedBits, configId);
 	}
 
+	// 支付撤单连坐回收时清除指定角色形象拥有位(保留其他位与未知高位)。
+	inline bool ClearOwned(std::string &ownedBits, uint32_t configId)
+	{
+		const auto idx = AppearanceBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		ClearPackedBit(ownedBits, *idx);
+		return true;
+	}
+
 	enum class SwitchPlan : uint8_t
 	{
 		kFreeSwitch,
@@ -162,6 +175,49 @@ namespace player_appearance
 	inline bool IsSeriesCompleted(uint32_t ownedCount, uint32_t totalCount)
 	{
 		return totalCount > 0 && ownedCount >= totalCount;
+	}
+
+	// ── Steam 式按缺口 8.5 折系列补齐包纯规则 ──
+	inline constexpr uint32_t kBundleDiscountBpsBase = 10'000u;
+	inline constexpr uint32_t kMinBundleDiscountBps = 5'000u;
+	inline constexpr uint32_t kMaxBundleDiscountBps = 9'999u;
+	inline constexpr uint32_t kMaxBundleUnitPriceDiamond = 1'000'000u;
+
+	inline bool BundlePricingValid(uint32_t discountBps, uint32_t unitPriceDiamond)
+	{
+		if (discountBps == 0)
+		{
+			return true;
+		}
+		return discountBps >= kMinBundleDiscountBps && discountBps <= kMaxBundleDiscountBps &&
+			   unitPriceDiamond > 0 && unitPriceDiamond <= kMaxBundleUnitPriceDiamond;
+	}
+
+	// 缺口 >= 2 整册打包，或总成员 >= 2 且已拥有 >= 1 时仅差 1 人同样享 Steam 式补齐折价。
+	inline bool IsSeriesBundleEligible(uint32_t discountBps,
+									   uint32_t unitPriceDiamond,
+									   uint32_t totalCount,
+									   uint32_t ownedCount,
+									   uint32_t missingUnlockableCount)
+	{
+		if (discountBps == 0 || unitPriceDiamond == 0 || missingUnlockableCount == 0)
+		{
+			return false;
+		}
+		return missingUnlockableCount >= 2u || (totalCount >= 2u && ownedCount >= 1u);
+	}
+
+	// 整数向上取整，绝不出现 0 灵石漏洞。
+	inline uint64_t ComputeSeriesBundleDiscountPrice(uint32_t missingCount,
+													 uint32_t unitPriceDiamond,
+													 uint32_t discountBps)
+	{
+		if (missingCount == 0 || unitPriceDiamond == 0 || discountBps == 0)
+		{
+			return 0ULL;
+		}
+		const uint64_t original = static_cast<uint64_t>(missingCount) * static_cast<uint64_t>(unitPriceDiamond);
+		return (original * static_cast<uint64_t>(discountBps) + (kBundleDiscountBpsBase - 1u)) / kBundleDiscountBpsBase;
 	}
 
 	inline bool IsBlankText(std::string_view value)
@@ -235,6 +291,17 @@ namespace player_appearance
 		return true;
 	}
 
+	inline bool ClearPetCosmeticOwned(std::string &bits, uint32_t configId)
+	{
+		const auto idx = PetCosmeticBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		ClearPackedBit(bits, *idx);
+		return true;
+	}
+
 	inline std::optional<uint32_t> SkillVfxBitIndex(uint32_t configId)
 	{
 		return GetBitIndex(SkillVfxCosmeticBitMap, configId);
@@ -256,6 +323,99 @@ namespace player_appearance
 		SetPackedBit(bits, *idx);
 		return true;
 	}
+
+	inline bool ClearSkillVfxOwned(std::string &bits, uint32_t configId)
+	{
+		const auto idx = SkillVfxBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		ClearPackedBit(bits, *idx);
+		return true;
+	}
+
+	// ── 批次 B2：排面装饰、全城同乐社交耗材与好友纯外观/手记赠礼纯规则 ──
+	inline constexpr uint32_t kShowcaseSlotFormation = 1u;
+	inline constexpr uint32_t kShowcaseSlotEntranceVictory = 2u;
+	inline constexpr uint32_t kShowcaseSlotChatBubble = 3u;
+	inline constexpr uint32_t kShowcaseSlotShareCard = 4u;
+	inline constexpr uint32_t kShowcaseSlotProfileCard = 5u;
+
+	inline bool IsValidShowcaseSlot(uint32_t slotKind)
+	{
+		return slotKind >= kShowcaseSlotFormation && slotKind <= kShowcaseSlotProfileCard;
+	}
+
+	inline std::optional<uint32_t> ShowcaseCosmeticBitIndex(uint32_t configId)
+	{
+		return GetBitIndex(CosmeticShowcaseBitMap, configId);
+	}
+
+	inline bool IsShowcaseCosmeticOwned(std::string_view bits, uint32_t configId)
+	{
+		const auto idx = ShowcaseCosmeticBitIndex(configId);
+		return idx.has_value() && TestPackedBit(bits, *idx);
+	}
+
+	inline bool MarkShowcaseCosmeticOwned(std::string &bits, uint32_t configId)
+	{
+		const auto idx = ShowcaseCosmeticBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		SetPackedBit(bits, *idx);
+		return true;
+	}
+
+	inline bool ClearShowcaseCosmeticOwned(std::string &bits, uint32_t configId)
+	{
+		const auto idx = ShowcaseCosmeticBitIndex(configId);
+		if (!idx.has_value())
+		{
+			return false;
+		}
+		ClearPackedBit(bits, *idx);
+		return true;
+	}
+
+	// 主城全城同乐社交气氛道具规则（仅发 CURRENCY_TYPE_BIND_GOLD=3，周上限 3000，同分线并发上限 5）。
+	inline constexpr uint32_t kCelebrationItemLantern = 3418u;
+	inline constexpr uint32_t kCelebrationItemFirework = 3419u;
+	inline constexpr uint32_t kCelebrationItemTeaTable = 3420u;
+	inline constexpr uint64_t kCelebrationDurationSec = 120ULL;
+	inline constexpr uint32_t kCelebrationMaxActivePerScene = 5u;
+	inline constexpr uint32_t kCelebrationMinLevel = 10u;
+	inline constexpr uint32_t kCelebrationWeeklyBindGoldCap = 3000u;
+
+	inline uint32_t CelebrationBindGoldReward(uint32_t itemConfigId)
+	{
+		switch (itemConfigId)
+		{
+		case kCelebrationItemLantern:
+			return 150u;
+		case kCelebrationItemFirework:
+			return 300u;
+		case kCelebrationItemTeaTable:
+			return 400u;
+		default:
+			return 0u;
+		}
+	}
+
+	inline bool IsSafeCitySceneConfig(uint32_t sceneConfigId)
+	{
+		return sceneConfigId == 1u || sceneConfigId == 4u;
+	}
+
+	// 好友纯绑定外观/手记典藏赠礼规则（严守 7 天好友无拉黑 + 每周 5 笔 + 仅扣真实灵石）。
+	inline constexpr uint64_t kCosmeticGiftMinFriendDurationMs = 7ULL * 86'400ULL * 1000ULL;
+	inline constexpr uint32_t kCosmeticGiftWeeklyLimit = 5u;
+	inline constexpr uint64_t kCosmeticGiftCharacterDiamondPrice = 100ULL;
+	inline constexpr uint64_t kCosmeticGiftPetDiamondPrice = 120ULL;
+	inline constexpr uint64_t kCosmeticGiftSkillVfxDiamondPrice = 180ULL;
+	inline constexpr uint64_t kCosmeticGiftShowcaseDiamondPrice = 80ULL;
 
 	// 灵宠幻化物种适配：targetPetTableId == 0 表示通用，所有灵宠均可幻化。
 	inline bool IsPetSpeciesCompatible(uint32_t targetPetTableId, uint32_t petTableId)

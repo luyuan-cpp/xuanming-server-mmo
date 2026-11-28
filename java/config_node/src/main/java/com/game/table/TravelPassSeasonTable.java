@@ -329,6 +329,28 @@ private static final long serialVersionUID = 0L;
     return configRevision_;
   }
 
+  public static final int SORT_ORDER_FIELD_NUMBER = 16;
+  private int sortOrder_ = 0;
+  /**
+   * <code>uint32 sort_order = 16;</code>
+   * @return The sortOrder.
+   */
+  @java.lang.Override
+  public int getSortOrder() {
+    return sortOrder_;
+  }
+
+  public static final int IS_ARCHIVED_FIELD_NUMBER = 17;
+  private int isArchived_ = 0;
+  /**
+   * <code>uint32 is_archived = 17;</code>
+   * @return The isArchived.
+   */
+  @java.lang.Override
+  public int getIsArchived() {
+    return isArchived_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -387,6 +409,12 @@ private static final long serialVersionUID = 0L;
     }
     if (configRevision_ != 0) {
       output.writeUInt32(15, configRevision_);
+    }
+    if (sortOrder_ != 0) {
+      output.writeUInt32(16, sortOrder_);
+    }
+    if (isArchived_ != 0) {
+      output.writeUInt32(17, isArchived_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -448,6 +476,14 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(15, configRevision_);
     }
+    if (sortOrder_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(16, sortOrder_);
+    }
+    if (isArchived_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(17, isArchived_);
+    }
     return size;
   }
   @java.lang.Override
@@ -502,6 +538,10 @@ private static final long serialVersionUID = 0L;
         != other.getPremiumPrice()) return false;
     if (getConfigRevision()
         != other.getConfigRevision()) return false;
+    if (getSortOrder()
+        != other.getSortOrder()) return false;
+    if (getIsArchived()
+        != other.getIsArchived()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -546,6 +586,10 @@ private static final long serialVersionUID = 0L;
         getPremiumPrice());
     hash = (37 * hash) + CONFIG_REVISION_FIELD_NUMBER;
     hash = (53 * hash) + getConfigRevision();
+    hash = (37 * hash) + SORT_ORDER_FIELD_NUMBER;
+    hash = (53 * hash) + getSortOrder();
+    hash = (37 * hash) + IS_ARCHIVED_FIELD_NUMBER;
+    hash = (53 * hash) + getIsArchived();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -692,6 +736,8 @@ private static final long serialVersionUID = 0L;
       premiumCurrencyType_ = 0;
       premiumPrice_ = 0L;
       configRevision_ = 0;
+      sortOrder_ = 0;
+      isArchived_ = 0;
       return this;
     }
 
@@ -770,6 +816,12 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00004000) != 0)) {
         result.configRevision_ = configRevision_;
       }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.sortOrder_ = sortOrder_;
+      }
+      if (((from_bitField0_ & 0x00010000) != 0)) {
+        result.isArchived_ = isArchived_;
+      }
     }
 
     @java.lang.Override
@@ -836,6 +888,12 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getConfigRevision() != 0) {
         setConfigRevision(other.getConfigRevision());
+      }
+      if (other.getSortOrder() != 0) {
+        setSortOrder(other.getSortOrder());
+      }
+      if (other.getIsArchived() != 0) {
+        setIsArchived(other.getIsArchived());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -938,6 +996,16 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00004000;
               break;
             } // case 120
+            case 128: {
+              sortOrder_ = input.readUInt32();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 128
+            case 136: {
+              isArchived_ = input.readUInt32();
+              bitField0_ |= 0x00010000;
+              break;
+            } // case 136
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1591,6 +1659,70 @@ private static final long serialVersionUID = 0L;
     public Builder clearConfigRevision() {
       bitField0_ = (bitField0_ & ~0x00004000);
       configRevision_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int sortOrder_ ;
+    /**
+     * <code>uint32 sort_order = 16;</code>
+     * @return The sortOrder.
+     */
+    @java.lang.Override
+    public int getSortOrder() {
+      return sortOrder_;
+    }
+    /**
+     * <code>uint32 sort_order = 16;</code>
+     * @param value The sortOrder to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSortOrder(int value) {
+
+      sortOrder_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 sort_order = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSortOrder() {
+      bitField0_ = (bitField0_ & ~0x00008000);
+      sortOrder_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int isArchived_ ;
+    /**
+     * <code>uint32 is_archived = 17;</code>
+     * @return The isArchived.
+     */
+    @java.lang.Override
+    public int getIsArchived() {
+      return isArchived_;
+    }
+    /**
+     * <code>uint32 is_archived = 17;</code>
+     * @param value The isArchived to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIsArchived(int value) {
+
+      isArchived_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 is_archived = 17;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIsArchived() {
+      bitField0_ = (bitField0_ & ~0x00010000);
+      isArchived_ = 0;
       onChanged();
       return this;
     }

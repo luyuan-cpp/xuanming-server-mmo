@@ -181,3 +181,7 @@ c�c:	改名卡BQ使用后可修改一次角色名（冷却 7 天，旧名保�
 ��:封卷道籍B已封缄的可交易常规技能书，可上架聚宝斋/集市或面对面交易，开卷回书架后即可研习或拆页。JUI/Icons/item_sealed_skill_book
 ��c:金帖生死状B�仅自用绑定江湖战书：在天墉生死擂下帖成局后触发金色横幅全服播报、公开围观与战报金框留痕（0 战力加成，拒战或作废不扣消耗）。J)UI/Ugui/JianghuDuelV1/item_gold_duel_writ
 ��c:清风洗尘符B�仅自用绑定江湖符箓：立即消除天墉生死状战败社交印记，并附赠 30 分钟「清风拂尘」洒脱徽记（纯社交外观，0 战力加成）。J+UI/Ugui/JianghuDuelV1/item_clear_dust_charm
+��c:排面装饰券B�仅自用绑定外观券：可在衣柜「排面装饰」页永久解锁一款阵纹、入场横幅、聊天气泡或分享卡底纹（纯视觉零数值）。J5UI/Ugui/ShowcaseCosmeticsV1/icon_friend_cosmetic_gift
+��c:天墉灵灯B�仅自用绑定主城同乐气氛道具：在归元城/天墉城和平分线施放，全图赏灯并邀≥10级道友沾喜气领150绑定银两（周封顶3000绑银）。J-UI/Ugui/ShowcaseCosmeticsV1/icon_city_lantern
+��c:庆功烟花B�仅自用绑定主城同乐气氛道具：在归元城/天墉城和平分线燃放烟花，全图欢庆并邀≥10级道友领300绑定银两（周封顶3000绑银）。J.UI/Ugui/ShowcaseCosmeticsV1/icon_city_firework
+��c:仙茶同乐席B�仅自用绑定主城同乐气氛道具：在归元城/天墉城和平分线摆开仙茶席，全图共饮并邀≥10级道友领400绑定银两（周封顶3000绑银）。J/UI/Ugui/ShowcaseCosmeticsV1/icon_city_tea_table

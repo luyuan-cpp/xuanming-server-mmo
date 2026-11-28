@@ -99,4 +99,16 @@ public interface AppearanceSeriesTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getEpilogueBodyBytes();
+
+  /**
+   * <code>uint32 bundle_discount_bps = 10;</code>
+   * @return The bundleDiscountBps.
+   */
+  int getBundleDiscountBps();
+
+  /**
+   * <code>uint32 unit_price_diamond = 11;</code>
+   * @return The unitPriceDiamond.
+   */
+  int getUnitPriceDiamond();
 }

@@ -45,4 +45,8 @@ enum bag_error {
 
   kBagTemporaryRetrieveBusy = 6017;
 
+  kBagExpandMaxReached = 6018;
+
+  kBagExpandPriceChanged = 6019;
+
 };

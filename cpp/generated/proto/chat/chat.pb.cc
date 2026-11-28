@@ -931,11 +931,11 @@ constexpr ChatMessage::ParseTableT_ ChatMessage::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -955,19 +955,25 @@ constexpr ChatMessage::ParseTableT_ ChatMessage::InternalGenerateParseTable_(con
        {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.target_player_id_)}},
       // .chatpb.ChatChannelType channel = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatMessage, _impl_.channel_), 4>(),
-       {24, 4, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatMessage, _impl_.channel_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_)}},
       // string content = 4;
       {::_pbi::TcParser::FastUS1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.content_)}},
       // int64 send_time_ms = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.send_time_ms_), 3>(),
-       {40, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ChatMessage, _impl_.send_time_ms_), 5>(),
+       {40, 5, 0,
         PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.send_time_ms_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 bubble_skin_id = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatMessage, _impl_.bubble_skin_id_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.bubble_skin_id_)}},
+      // uint32 share_card_skin_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ChatMessage, _impl_.share_card_skin_id_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.share_card_skin_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -976,11 +982,15 @@ constexpr ChatMessage::ParseTableT_ ChatMessage::InternalGenerateParseTable_(con
       // uint64 target_player_id = 2;
       {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.target_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .chatpb.ChatChannelType channel = 3;
-      {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // string content = 4;
       {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.content_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int64 send_time_ms = 5;
-      {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.send_time_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.send_time_ms_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt64)},
+      // uint32 bubble_skin_id = 6;
+      {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.bubble_skin_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 share_card_skin_id = 7;
+      {PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.share_card_skin_id_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -1001,8 +1011,10 @@ inline constexpr ChatMessage::Impl_::Impl_(
             ::_pbi::ConstantInitialized()),
         sender_player_id_{::uint64_t{0u}},
         target_player_id_{::uint64_t{0u}},
+        channel_{static_cast< ::chatpb::ChatChannelType >(0)},
+        bubble_skin_id_{0u},
         send_time_ms_{::int64_t{0}},
-        channel_{static_cast< ::chatpb::ChatChannelType >(0)} {}
+        share_card_skin_id_{0u} {}
 
 template <typename>
 constexpr ChatMessage::ChatMessage(::_pbi::ConstantInitialized,
@@ -2030,17 +2042,21 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_._has_bits_),
-        8, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.sender_player_id_),
         PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.target_player_id_),
         PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.channel_),
         PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.content_),
         PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.send_time_ms_),
+        PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.bubble_skin_id_),
+        PROTOBUF_FIELD_OFFSET(::chatpb::ChatMessage, _impl_.share_card_skin_id_),
         1,
         2,
-        4,
-        0,
         3,
+        0,
+        5,
+        4,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::chatpb::SendChatRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -2145,17 +2161,17 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::chatpb::ChatMessage)},
-        {13, sizeof(::chatpb::SendChatRequest)},
-        {20, sizeof(::chatpb::SendChatResponse)},
-        {25, sizeof(::chatpb::PullChatHistoryRequest)},
-        {34, sizeof(::chatpb::PullChatHistoryResponse)},
-        {41, sizeof(::chatpb::ChatRetractedNotify)},
-        {52, sizeof(::chatpb::ReportChatRequest)},
-        {65, sizeof(::chatpb::ReportChatResponse)},
-        {70, sizeof(::chatpb::RetractWorldChatRequest)},
-        {79, sizeof(::chatpb::RetractWorldChatResponse)},
-        {86, sizeof(::chatpb::PublishSystemWorldNoticeRequest)},
-        {105, sizeof(::chatpb::PublishSystemWorldNoticeResponse)},
+        {17, sizeof(::chatpb::SendChatRequest)},
+        {24, sizeof(::chatpb::SendChatResponse)},
+        {29, sizeof(::chatpb::PullChatHistoryRequest)},
+        {38, sizeof(::chatpb::PullChatHistoryResponse)},
+        {45, sizeof(::chatpb::ChatRetractedNotify)},
+        {56, sizeof(::chatpb::ReportChatRequest)},
+        {69, sizeof(::chatpb::ReportChatResponse)},
+        {74, sizeof(::chatpb::RetractWorldChatRequest)},
+        {83, sizeof(::chatpb::RetractWorldChatResponse)},
+        {90, sizeof(::chatpb::PublishSystemWorldNoticeRequest)},
+        {109, sizeof(::chatpb::PublishSystemWorldNoticeResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2177,70 +2193,72 @@ const char descriptor_table_protodef_proto_2fchat_2fchat_2eproto[] ABSL_ATTRIBUT
     "\n\025proto/chat/chat.proto\022\006chatpb\032\033proto/d"
     "b/proto_option.proto\032\035proto/common/base/"
     "empty.proto\032\033proto/common/base/tip.proto"
-    "\"\222\001\n\013ChatMessage\022\030\n\020sender_player_id\030\001 \001"
+    "\"\306\001\n\013ChatMessage\022\030\n\020sender_player_id\030\001 \001"
     "(\004\022\030\n\020target_player_id\030\002 \001(\004\022(\n\007channel\030"
     "\003 \001(\0162\027.chatpb.ChatChannelType\022\017\n\007conten"
-    "t\030\004 \001(\t\022\024\n\014send_time_ms\030\005 \001(\003\"K\n\017SendCha"
-    "tRequest\022$\n\007message\030\001 \001(\0132\023.chatpb.ChatM"
-    "essage\022\022\n\nrequest_id\030\002 \001(\t\":\n\020SendChatRe"
-    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
-    "essage\"i\n\026PullChatHistoryRequest\022(\n\007chan"
-    "nel\030\001 \001(\0162\027.chatpb.ChatChannelType\022\026\n\016pe"
-    "er_player_id\030\002 \001(\004\022\r\n\005limit\030\003 \001(\r\"h\n\027Pul"
-    "lChatHistoryResponse\022&\n\rerror_message\030\001 "
-    "\001(\0132\017.TipInfoMessage\022%\n\010messages\030\002 \003(\0132\023"
-    ".chatpb.ChatMessage\"\177\n\023ChatRetractedNoti"
-    "fy\022(\n\007channel\030\001 \001(\0162\027.chatpb.ChatChannel"
-    "Type\022\030\n\020sender_player_id\030\002 \001(\004\022\024\n\014send_t"
-    "ime_ms\030\003 \001(\003\022\016\n\006reason\030\004 \001(\t\"\224\001\n\021ReportC"
-    "hatRequest\022(\n\007channel\030\001 \001(\0162\027.chatpb.Cha"
-    "tChannelType\022\037\n\027target_sender_player_id\030"
-    "\002 \001(\004\022\024\n\014send_time_ms\030\003 \001(\003\022\016\n\006reason\030\004 "
-    "\001(\r\022\016\n\006detail\030\005 \001(\t\"<\n\022ReportChatRespons"
-    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
-    "e\"Y\n\027RetractWorldChatRequest\022\030\n\020sender_p"
-    "layer_id\030\001 \001(\004\022\024\n\014send_time_ms\030\002 \001(\003\022\016\n\006"
-    "reason\030\003 \001(\t\"U\n\030RetractWorldChatResponse"
-    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
-    "\022\021\n\tretracted\030\002 \001(\010\"\352\001\n\037PublishSystemWor"
-    "ldNoticeRequest\022\021\n\tnotice_id\030\001 \001(\t\0226\n\013te"
-    "mplate_id\030\002 \001(\0162!.chatpb.SystemWorldNoti"
-    "ceTemplate\022\021\n\tbattle_id\030\003 \001(\004\022\024\n\014actor_a"
-    "_name\030\004 \001(\t\022\024\n\014actor_b_name\030\005 \001(\t\022\024\n\014tot"
-    "al_rounds\030\006 \001(\r\022\024\n\014streak_count\030\007 \001(\r\022\021\n"
-    "\tteam_size\030\010 \001(\r\"`\n PublishSystemWorldNo"
-    "ticeResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
-    "pInfoMessage\022\024\n\014deduplicated\030\002 \001(\010*\252\001\n\017C"
-    "hatChannelType\022!\n\035CHAT_CHANNEL_TYPE_UNSP"
-    "ECIFIED\020\000\022\033\n\027CHAT_CHANNEL_TYPE_WORLD\020\001\022\032"
-    "\n\026CHAT_CHANNEL_TYPE_TEAM\020\002\022\035\n\031CHAT_CHANN"
-    "EL_TYPE_PRIVATE\020\003\022\034\n\030CHAT_CHANNEL_TYPE_S"
-    "YSTEM\020\004*\243\003\n\031SystemWorldNoticeTemplate\022,\n"
-    "(SYSTEM_WORLD_NOTICE_TEMPLATE_UNSPECIFIE"
-    "D\020\000\0221\n-SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_"
-    "START_SILVER\020\001\022/\n+SYSTEM_WORLD_NOTICE_JI"
-    "ANGHU_DUEL_START_GOLD\020\002\022/\n+SYSTEM_WORLD_"
-    "NOTICE_JIANGHU_DUEL_WIN_SILVER\020\003\022-\n)SYST"
-    "EM_WORLD_NOTICE_JIANGHU_DUEL_WIN_GOLD\020\004\022"
-    ")\n%SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_DRAW"
-    "\020\005\0225\n1SYSTEM_WORLD_NOTICE_JIANGHU_DUEL_S"
-    "TREAK_MILESTONE\020\006\0222\n.SYSTEM_WORLD_NOTICE"
-    "_JIANGHU_DUEL_STREAK_BROKEN\020\0072\304\004\n\020Client"
-    "PlayerChat\022=\n\010SendChat\022\027.chatpb.SendChat"
-    "Request\032\030.chatpb.SendChatResponse\022R\n\017Pul"
-    "lChatHistory\022\036.chatpb.PullChatHistoryReq"
-    "uest\032\037.chatpb.PullChatHistoryResponse\022C\n"
-    "\nReportChat\022\031.chatpb.ReportChatRequest\032\032"
-    ".chatpb.ReportChatResponse\022\\\n\020RetractWor"
-    "ldChat\022\037.chatpb.RetractWorldChatRequest\032"
-    " .chatpb.RetractWorldChatResponse\"\005\210\231\310\001\003"
-    "\022t\n\030PublishSystemWorldNotice\022\'.chatpb.Pu"
-    "blishSystemWorldNoticeRequest\032(.chatpb.P"
-    "ublishSystemWorldNoticeResponse\"\005\210\231\310\001\003\0225"
-    "\n\017NotifyWorldChat\022\023.chatpb.ChatMessage\032\006"
-    ".Empty\"\005\210\231\310\001\002\022F\n\030NotifyWorldChatRetracte"
-    "d\022\033.chatpb.ChatRetractedNotify\032\006.Empty\"\005"
-    "\210\231\310\001\002\032\005\210\250\303\001\001B\rZ\004chat\200\001\000\230\324a\016b\006proto3"
+    "t\030\004 \001(\t\022\024\n\014send_time_ms\030\005 \001(\003\022\026\n\016bubble_"
+    "skin_id\030\006 \001(\r\022\032\n\022share_card_skin_id\030\007 \001("
+    "\r\"K\n\017SendChatRequest\022$\n\007message\030\001 \001(\0132\023."
+    "chatpb.ChatMessage\022\022\n\nrequest_id\030\002 \001(\t\":"
+    "\n\020SendChatResponse\022&\n\rerror_message\030\001 \001("
+    "\0132\017.TipInfoMessage\"i\n\026PullChatHistoryReq"
+    "uest\022(\n\007channel\030\001 \001(\0162\027.chatpb.ChatChann"
+    "elType\022\026\n\016peer_player_id\030\002 \001(\004\022\r\n\005limit\030"
+    "\003 \001(\r\"h\n\027PullChatHistoryResponse\022&\n\rerro"
+    "r_message\030\001 \001(\0132\017.TipInfoMessage\022%\n\010mess"
+    "ages\030\002 \003(\0132\023.chatpb.ChatMessage\"\177\n\023ChatR"
+    "etractedNotify\022(\n\007channel\030\001 \001(\0162\027.chatpb"
+    ".ChatChannelType\022\030\n\020sender_player_id\030\002 \001"
+    "(\004\022\024\n\014send_time_ms\030\003 \001(\003\022\016\n\006reason\030\004 \001(\t"
+    "\"\224\001\n\021ReportChatRequest\022(\n\007channel\030\001 \001(\0162"
+    "\027.chatpb.ChatChannelType\022\037\n\027target_sende"
+    "r_player_id\030\002 \001(\004\022\024\n\014send_time_ms\030\003 \001(\003\022"
+    "\016\n\006reason\030\004 \001(\r\022\016\n\006detail\030\005 \001(\t\"<\n\022Repor"
+    "tChatResponse\022&\n\rerror_message\030\001 \001(\0132\017.T"
+    "ipInfoMessage\"Y\n\027RetractWorldChatRequest"
+    "\022\030\n\020sender_player_id\030\001 \001(\004\022\024\n\014send_time_"
+    "ms\030\002 \001(\003\022\016\n\006reason\030\003 \001(\t\"U\n\030RetractWorld"
+    "ChatResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\021\n\tretracted\030\002 \001(\010\"\352\001\n\037Publ"
+    "ishSystemWorldNoticeRequest\022\021\n\tnotice_id"
+    "\030\001 \001(\t\0226\n\013template_id\030\002 \001(\0162!.chatpb.Sys"
+    "temWorldNoticeTemplate\022\021\n\tbattle_id\030\003 \001("
+    "\004\022\024\n\014actor_a_name\030\004 \001(\t\022\024\n\014actor_b_name\030"
+    "\005 \001(\t\022\024\n\014total_rounds\030\006 \001(\r\022\024\n\014streak_co"
+    "unt\030\007 \001(\r\022\021\n\tteam_size\030\010 \001(\r\"`\n PublishS"
+    "ystemWorldNoticeResponse\022&\n\rerror_messag"
+    "e\030\001 \001(\0132\017.TipInfoMessage\022\024\n\014deduplicated"
+    "\030\002 \001(\010*\252\001\n\017ChatChannelType\022!\n\035CHAT_CHANN"
+    "EL_TYPE_UNSPECIFIED\020\000\022\033\n\027CHAT_CHANNEL_TY"
+    "PE_WORLD\020\001\022\032\n\026CHAT_CHANNEL_TYPE_TEAM\020\002\022\035"
+    "\n\031CHAT_CHANNEL_TYPE_PRIVATE\020\003\022\034\n\030CHAT_CH"
+    "ANNEL_TYPE_SYSTEM\020\004*\243\003\n\031SystemWorldNotic"
+    "eTemplate\022,\n(SYSTEM_WORLD_NOTICE_TEMPLAT"
+    "E_UNSPECIFIED\020\000\0221\n-SYSTEM_WORLD_NOTICE_J"
+    "IANGHU_DUEL_START_SILVER\020\001\022/\n+SYSTEM_WOR"
+    "LD_NOTICE_JIANGHU_DUEL_START_GOLD\020\002\022/\n+S"
+    "YSTEM_WORLD_NOTICE_JIANGHU_DUEL_WIN_SILV"
+    "ER\020\003\022-\n)SYSTEM_WORLD_NOTICE_JIANGHU_DUEL"
+    "_WIN_GOLD\020\004\022)\n%SYSTEM_WORLD_NOTICE_JIANG"
+    "HU_DUEL_DRAW\020\005\0225\n1SYSTEM_WORLD_NOTICE_JI"
+    "ANGHU_DUEL_STREAK_MILESTONE\020\006\0222\n.SYSTEM_"
+    "WORLD_NOTICE_JIANGHU_DUEL_STREAK_BROKEN\020"
+    "\0072\304\004\n\020ClientPlayerChat\022=\n\010SendChat\022\027.cha"
+    "tpb.SendChatRequest\032\030.chatpb.SendChatRes"
+    "ponse\022R\n\017PullChatHistory\022\036.chatpb.PullCh"
+    "atHistoryRequest\032\037.chatpb.PullChatHistor"
+    "yResponse\022C\n\nReportChat\022\031.chatpb.ReportC"
+    "hatRequest\032\032.chatpb.ReportChatResponse\022\\"
+    "\n\020RetractWorldChat\022\037.chatpb.RetractWorld"
+    "ChatRequest\032 .chatpb.RetractWorldChatRes"
+    "ponse\"\005\210\231\310\001\003\022t\n\030PublishSystemWorldNotice"
+    "\022\'.chatpb.PublishSystemWorldNoticeReques"
+    "t\032(.chatpb.PublishSystemWorldNoticeRespo"
+    "nse\"\005\210\231\310\001\003\0225\n\017NotifyWorldChat\022\023.chatpb.C"
+    "hatMessage\032\006.Empty\"\005\210\231\310\001\002\022F\n\030NotifyWorld"
+    "ChatRetracted\022\033.chatpb.ChatRetractedNoti"
+    "fy\032\006.Empty\"\005\210\231\310\001\002\032\005\210\250\303\001\001B\rZ\004chat\200\001\000\230\324a\016b"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fchat_2fchat_2eproto_deps[3] = {
@@ -2252,7 +2270,7 @@ static ::absl::once_flag descriptor_table_proto_2fchat_2fchat_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fchat_2fchat_2eproto = {
     false,
     false,
-    2675,
+    2727,
     descriptor_table_protodef_proto_2fchat_2fchat_2eproto,
     "proto/chat/chat.proto",
     &descriptor_table_proto_2fchat_2fchat_2eproto_once,
@@ -2317,9 +2335,9 @@ ChatMessage::ChatMessage(
                offsetof(Impl_, sender_player_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, sender_player_id_),
-           offsetof(Impl_, channel_) -
+           offsetof(Impl_, share_card_skin_id_) -
                offsetof(Impl_, sender_player_id_) +
-               sizeof(Impl_::channel_));
+               sizeof(Impl_::share_card_skin_id_));
 
   // @@protoc_insertion_point(copy_constructor:chatpb.ChatMessage)
 }
@@ -2334,9 +2352,9 @@ inline void ChatMessage::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, sender_player_id_),
            0,
-           offsetof(Impl_, channel_) -
+           offsetof(Impl_, share_card_skin_id_) -
                offsetof(Impl_, sender_player_id_) +
-               sizeof(Impl_::channel_));
+               sizeof(Impl_::share_card_skin_id_));
 }
 ChatMessage::~ChatMessage() {
   // @@protoc_insertion_point(destructor:chatpb.ChatMessage)
@@ -2390,10 +2408,10 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.content_.ClearNonDefaultToEmpty();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
     ::memset(&_impl_.sender_player_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.channel_) -
-        reinterpret_cast<char*>(&_impl_.sender_player_id_)) + sizeof(_impl_.channel_));
+        reinterpret_cast<char*>(&_impl_.share_card_skin_id_) -
+        reinterpret_cast<char*>(&_impl_.sender_player_id_)) + sizeof(_impl_.share_card_skin_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2437,7 +2455,7 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   }
 
   // .chatpb.ChatChannelType channel = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_channel() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -2456,11 +2474,29 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
   }
 
   // int64 send_time_ms = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (this_._internal_send_time_ms() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt64ToArrayWithField<5>(
               stream, this_._internal_send_time_ms(), target);
+    }
+  }
+
+  // uint32 bubble_skin_id = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_bubble_skin_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_bubble_skin_id(), target);
+    }
+  }
+
+  // uint32 share_card_skin_id = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_share_card_skin_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_share_card_skin_id(), target);
     }
   }
 
@@ -2489,7 +2525,7 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // string content = 4;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_content().empty()) {
@@ -2511,18 +2547,32 @@ PROTOBUF_NOINLINE void ChatMessage::Clear() {
             this_._internal_target_player_id());
       }
     }
-    // int64 send_time_ms = 5;
+    // .chatpb.ChatChannelType channel = 3;
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_channel() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_channel());
+      }
+    }
+    // uint32 bubble_skin_id = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_bubble_skin_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_bubble_skin_id());
+      }
+    }
+    // int64 send_time_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (this_._internal_send_time_ms() != 0) {
         total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(
             this_._internal_send_time_ms());
       }
     }
-    // .chatpb.ChatChannelType channel = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (this_._internal_channel() != 0) {
-        total_size += 1 +
-                      ::_pbi::WireFormatLite::EnumSize(this_._internal_channel());
+    // uint32 share_card_skin_id = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_share_card_skin_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_share_card_skin_id());
       }
     }
   }
@@ -2543,7 +2593,7 @@ void ChatMessage::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_content().empty()) {
         _this->_internal_set_content(from._internal_content());
@@ -2564,13 +2614,23 @@ void ChatMessage::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_channel() != 0) {
+        _this->_impl_.channel_ = from._impl_.channel_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_bubble_skin_id() != 0) {
+        _this->_impl_.bubble_skin_id_ = from._impl_.bubble_skin_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       if (from._internal_send_time_ms() != 0) {
         _this->_impl_.send_time_ms_ = from._impl_.send_time_ms_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_channel() != 0) {
-        _this->_impl_.channel_ = from._impl_.channel_;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_share_card_skin_id() != 0) {
+        _this->_impl_.share_card_skin_id_ = from._impl_.share_card_skin_id_;
       }
     }
   }
@@ -2595,8 +2655,8 @@ void ChatMessage::InternalSwap(ChatMessage* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.content_, &other->_impl_.content_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.channel_)
-      + sizeof(ChatMessage::_impl_.channel_)
+      PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.share_card_skin_id_)
+      + sizeof(ChatMessage::_impl_.share_card_skin_id_)
       - PROTOBUF_FIELD_OFFSET(ChatMessage, _impl_.sender_player_id_)>(
           reinterpret_cast<char*>(&_impl_.sender_player_id_),
           reinterpret_cast<char*>(&other->_impl_.sender_player_id_));

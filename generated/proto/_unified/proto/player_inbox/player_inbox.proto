@@ -35,6 +35,7 @@ enum PlayerInboxProducerKind {
   PLAYER_INBOX_PRODUCER_UNSPECIFIED = 0;
   PLAYER_INBOX_PRODUCER_GM = 1;       // PlayerInboxAdmin.GmSanctionPlayer
   PLAYER_INBOX_PRODUCER_MATCH = 2;    // Match SQL 永久终局来源，独立内部签名
+  PLAYER_INBOX_PRODUCER_SCENE = 3;    // Scene 跨角色纯外观赠礼/退还内部投递
 }
 
 // 域规格:挂在 PlayerInboxDomain 的枚举值上。
@@ -68,6 +69,11 @@ enum PlayerInboxDomain {
   PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT = 2 [(OptionPlayerInboxDomain) = {
     max_pending: 1
     requires_out_of_battle: false
+  }];
+  // 好友纯外观/手记典藏赠礼到账与竞态退还域（绝不双人直接改存档，遵守 Actor 边界）。
+  PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT = 3 [(OptionPlayerInboxDomain) = {
+    max_pending: 64
+    requires_out_of_battle: true
   }];
 }
 
@@ -116,6 +122,27 @@ enum PlayerInboxMessageType {
     klass: PLAYER_INBOX_CLASS_DURABLE
     payload_message: "player_inbox.GmItemGainPayload"
     max_payload_bytes: 64
+  }];
+  // 好友赠送的纯绑定外观/游历手记典藏到账（受赠方已拥有时自动生成退还单原路退给送礼方）。
+  PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT = 7 [(OptionPlayerInboxType) = {
+    domain: PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT
+    klass: PLAYER_INBOX_CLASS_DURABLE
+    payload_message: "player_inbox.CosmeticGiftCreditPayload"
+    max_payload_bytes: 512
+  }];
+  // 好友赠礼因并发已拥有自动退还送礼方真实灵石（按 gift_id 幂等防双退）。
+  PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND = 8 [(OptionPlayerInboxType) = {
+    domain: PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT
+    klass: PLAYER_INBOX_CLASS_DURABLE
+    payload_message: "player_inbox.CosmeticGiftRefundPayload"
+    max_payload_bytes: 512
+  }];
+  // 渠道退款/黑卡撤单连坐精准回收受赠外观位图或回退未领手记典藏态（归属 GM_SANCTION 严格顺序执行）。
+  PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE = 9 [(OptionPlayerInboxType) = {
+    domain: PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION
+    klass: PLAYER_INBOX_CLASS_DURABLE
+    payload_message: "player_inbox.CosmeticGiftRevokePayload"
+    max_payload_bytes: 512
   }];
 }
 
@@ -202,6 +229,35 @@ message GmCurrencyDebtPayload {
 // 表里没有的配置本节点本来就发不出来,封禁照样记下,换到认识它的版本 / 节点时已经生效(设计 §2.2)。
 message GmItemGainPayload {
   uint32 item_config_id = 1;          // Item 表 id(配置号,不是实例 guid);必须非 0
+}
+
+// 好友纯绑定外观/手记典藏赠礼到账载荷（target_kind: 1=角色形象, 2=灵宠幻化, 3=技能特效, 4=游历手记典藏, 5=排面装饰）。
+message CosmeticGiftCreditPayload {
+  uint64 gift_id = 1;
+  uint64 sender_player_id = 2;
+  string sender_name = 3;
+  uint32 target_kind = 4;
+  uint32 target_id_u32 = 5;
+  string target_id_str = 6;
+  uint64 paid_diamond = 7;
+}
+
+// 好友赠礼因并发已拥有原路退还载荷。
+message CosmeticGiftRefundPayload {
+  uint64 gift_id = 1;
+  uint64 recipient_player_id = 2;
+  uint64 refund_diamond = 3;
+  string reason = 4;
+}
+
+// 渠道支付撤单（TX_PAYMENT_REVERSAL）连坐精准回收受赠外观/手记典藏载荷。
+message CosmeticGiftRevokePayload {
+  uint64 gift_id = 1;
+  uint64 sender_player_id = 2;
+  uint32 target_kind = 3;
+  uint32 target_id_u32 = 4;
+  string target_id_str = 5;
+  string reason = 6;
 }
 
 // Scene 分方法签名后拉取/确认；Match 用独立签名专门入箱/查询永久结算原收据。

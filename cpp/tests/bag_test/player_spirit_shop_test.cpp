@@ -636,4 +636,20 @@ TEST_F(PlayerSpiritShopTest, V2ChooseOneBundleValidatesChoiceAndQuoteAndIdempote
 	EXPECT_EQ(760u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
 }
 
+TEST_F(PlayerSpiritShopTest, OfficialUnsealAndInheritTalismansAreShelvedAsBoundGoods)
+{
+	::BuySpiritShopGoodsResponse resp;
+	auto buyUnseal = BuildBuyRequestFromShelf(203, 1, 9101);
+	EXPECT_EQ(60u, buyUnseal.expected_unit_price());
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, buyUnseal, kNowMs, resp));
+	EXPECT_EQ(1u, Inventory(player).GetTotalItemCount(3409));
+	EXPECT_EQ(0u, BagService::RemovableTradableCount(player, Inventory(player), 3409));
+
+	auto buyInherit = BuildBuyRequestFromShelf(204, 1, 9102);
+	EXPECT_EQ(120u, buyInherit.expected_unit_price());
+	ASSERT_EQ(kSuccess, PlayerSpiritShopSystem::Buy(player, buyInherit, kNowMs, resp));
+	EXPECT_EQ(1u, Inventory(player).GetTotalItemCount(3410));
+	EXPECT_EQ(0u, BagService::RemovableTradableCount(player, Inventory(player), 3410));
+}
+
 } // namespace

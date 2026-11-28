@@ -93,7 +93,7 @@
 
 **方案**：
 - 键：每个 UTC 小时一个哈希 `craft_proxy_hot:{ctl:<zone>}:<hour>`，`hour = UTC 秒 / 3600`，与摊位目录、待回账表同一个 hash tag（同槽）。
-- 写：买家成交时对当前小时的桶 `HINCRBY <M>:o 1`；产出极品时再 `HINCRBY <M>:s <n>`；随后 `EXPIRE <桶> 90000`，每写一次就续 25 小时。C++ 是 `RecordProxyOrderReputation` → 台账接缝 `addHot`（生产实现 `RedisHIncrByHotBucket`）。
+- 写：买家成交时对当前小时的桶 `HINCRBY <M>:o 1`；产出极品时再 `HINCRBY <M>:s <n>`；最后 `EXPIRE <桶> 90000`，每写一次就续 25 小时。三步放在一段写脚本 `kAddProxyHotLua` 里一次执行（Python 版 `ADD_PROXY_HOT_LUA` 同文）。分开发时，加数与续期之间断连、或续期那条没发出去，就会留下没设过期、永不回收的桶；它出窗后没人再读，内存却一直占着。C++ 调用链是 `RecordProxyOrderReputation` → 台账接缝 `addHot`（生产实现 `RedisHIncrByHotBucket`）。
 - 读：每 5 秒整表刷新时，读当前小时与前 23 个小时共 24 个桶，按宗师求和，覆盖本节点热榜镜像。
   - 用一段只读 Lua `kSumProxyHotLua`：`KEYS` 为 `ProxyHotWindowBucketKeys(zone, 最新小时)` 的 24 个桶，同槽一次执行完，Redis 端按字段求和，应答形状同 `HGETALL`。
   - C++ 走台账接缝 `readHot`：生产实现 `RedisReadHotTotals` 用 `commandArgv` 发出（`SideEffects::kNone`），`ParseProxyHotTotals` 解析；应答不明时保留旧镜像。`RefreshProxyHotRanking(最新小时)` 拿到桶和后整体覆盖镜像。
@@ -147,6 +147,7 @@
 | Redis 重启/清空导致永久口碑丢失或负值下溢 | 永久累计值存于角色 DB `PlayerCraftComp`；pending 仅作增量中转，读取时钳制 `>= 0` 永不下溢 |
 | 极品数/单数整数溢出 | 全路径饱和加法（`uint32_max` / `uint64_max` 封顶） |
 | 热榜计数只累加不归零，「近 24 小时」成了累计榜 | 按 UTC 小时分桶、桶带 25 小时过期，读时只加近 24 个桶（§2.6） |
+| 热榜桶加了数却没设上过期，永不回收 | 加数与续期在同一段写脚本 `kAddProxyHotLua` 里一次执行（§2.6） |
 | 客户端未导入 Codex 新切图时出现白块/报错 | 所有新切图路径均做 `null` 判空并优雅回退现有已过审通用卷轴/印章/按钮控件 |
 
 ---

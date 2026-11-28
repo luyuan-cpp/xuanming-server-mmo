@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1arewardedadslot_table.proto\"\xfa\x01\n\x13RewardedAdSlotTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x02 \x01(\r\x12\x11\n\tmin_level\x18\x03 \x01(\r\x12\x13\n\x0b\x64\x61ily_limit\x18\x04 \x01(\r\x12\x14\n\x0c\x63ooldown_sec\x18\x05 \x01(\r\x12\x15\n\rmin_watch_sec\x18\x06 \x01(\r\x12\x17\n\x0fsession_ttl_sec\x18\x07 \x01(\r\x12\x15\n\rcurrency_type\x18\x08 \x01(\r\x12\x15\n\rreward_amount\x18\t \x01(\x04\x12\x13\n\x0brequire_ssv\x18\n \x01(\r\x12\x15\n\rplatform_mask\x18\x0b \x01(\r\"=\n\x17RewardedAdSlotTableData\x12\"\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x14.RewardedAdSlotTableBE\n\x0e\x63om.game.tableB\x1dRewardedAdSlotTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1arewardedadslot_table.proto\"\x8f\x02\n\x13RewardedAdSlotTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0f\n\x07\x65nabled\x18\x02 \x01(\r\x12\x11\n\tmin_level\x18\x03 \x01(\r\x12\x13\n\x0b\x64\x61ily_limit\x18\x04 \x01(\r\x12\x14\n\x0c\x63ooldown_sec\x18\x05 \x01(\r\x12\x15\n\rmin_watch_sec\x18\x06 \x01(\r\x12\x17\n\x0fsession_ttl_sec\x18\x07 \x01(\r\x12\x15\n\rcurrency_type\x18\x08 \x01(\r\x12\x15\n\rreward_amount\x18\t \x01(\x04\x12\x13\n\x0brequire_ssv\x18\n \x01(\r\x12\x15\n\rplatform_mask\x18\x0b \x01(\r\x12\x13\n\x0breward_kind\x18\x0c \x01(\r\"=\n\x17RewardedAdSlotTableData\x12\"\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x14.RewardedAdSlotTableBE\n\x0e\x63om.game.tableB\x1dRewardedAdSlotTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\035RewardedAdSlotTableOuterClassP\001Z\022generated/pb/table'
   _globals['_REWARDEDADSLOTTABLE']._serialized_start=31
-  _globals['_REWARDEDADSLOTTABLE']._serialized_end=281
-  _globals['_REWARDEDADSLOTTABLEDATA']._serialized_start=283
-  _globals['_REWARDEDADSLOTTABLEDATA']._serialized_end=344
+  _globals['_REWARDEDADSLOTTABLE']._serialized_end=302
+  _globals['_REWARDEDADSLOTTABLEDATA']._serialized_start=304
+  _globals['_REWARDEDADSLOTTABLEDATA']._serialized_end=365
 # @@protoc_insertion_point(module_scope)

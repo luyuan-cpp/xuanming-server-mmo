@@ -29,6 +29,7 @@ message RewardedAdSlotView {
   uint64 cooldown_until_ms = 7;    // 冷却结束时间戳(0 = 无冷却)
   uint32 currency_type = 8;        // CurrencyType(默认 3 = CURRENCY_TYPE_BIND_GOLD)
   uint64 reward_amount = 9;
+  uint32 reward_kind = 10;         // 1=绑定银两,2=幻境奇策重随,3=衣柜1h试穿,4=神秘商人个人换货
 }
 
 message GetRewardedAdInfoRequest {
@@ -59,6 +60,8 @@ message ClaimRewardedAdRequest {
   uint32 slot_id = 2;
   uint64 ad_session_id = 3;        // BeginRewardedAdSession 签发的会话号
   string ssv_proof = 4;            // V1 留空;V2 强制 SSV 模式用于传递平台回执标识
+  uint32 target_param_u32 = 5;     // 槽位 2 传 run_id 低 32 位(0=当前局),槽位 4 传 round_id(0=当前轮)
+  string target_param_str = 6;     // 槽位 3 传目标未拥有角色外观 appearance_id
 }
 
 message ClaimRewardedAdResponse {
@@ -69,6 +72,8 @@ message ClaimRewardedAdResponse {
   uint64 gold_balance = 5;         // 当前流通银两余额
   RewardedAdSlotView slot = 6;     // 领奖后最新槽位状态
   bool replayed = 7;               // true = 幂等重放命中首次记录
+  uint32 reward_kind = 8;          // 对应槽位 reward_kind(1..4)
+  repeated uint32 rerolled_sigil_ids = 9; // 槽位 2 重随后的最新 3 选 1 奇策 ID
 }
 
 service SceneRewardedAdClientPlayer {

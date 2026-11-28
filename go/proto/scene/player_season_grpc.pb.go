@@ -32,6 +32,7 @@ const (
 	SceneSeasonClientPlayer_SetRetroHonorTarget_FullMethodName       = "/SceneSeasonClientPlayer/SetRetroHonorTarget"
 	SceneSeasonClientPlayer_ChooseWuxingRealmBranch_FullMethodName   = "/SceneSeasonClientPlayer/ChooseWuxingRealmBranch"
 	SceneSeasonClientPlayer_ResolveWuxingRealmEvent_FullMethodName   = "/SceneSeasonClientPlayer/ResolveWuxingRealmEvent"
+	SceneSeasonClientPlayer_ExpandSavedBuildSlots_FullMethodName     = "/SceneSeasonClientPlayer/ExpandSavedBuildSlots"
 )
 
 // SceneSeasonClientPlayerClient is the client API for SceneSeasonClientPlayer service.
@@ -52,6 +53,7 @@ type SceneSeasonClientPlayerClient interface {
 	SetRetroHonorTarget(ctx context.Context, in *SetRetroHonorTargetRequest, opts ...grpc.CallOption) (*SetRetroHonorTargetResponse, error)
 	ChooseWuxingRealmBranch(ctx context.Context, in *ChooseWuxingRealmBranchRequest, opts ...grpc.CallOption) (*ChooseWuxingRealmBranchResponse, error)
 	ResolveWuxingRealmEvent(ctx context.Context, in *ResolveWuxingRealmEventRequest, opts ...grpc.CallOption) (*ResolveWuxingRealmEventResponse, error)
+	ExpandSavedBuildSlots(ctx context.Context, in *ExpandSavedBuildSlotsRequest, opts ...grpc.CallOption) (*ExpandSavedBuildSlotsResponse, error)
 }
 
 type sceneSeasonClientPlayerClient struct {
@@ -192,6 +194,16 @@ func (c *sceneSeasonClientPlayerClient) ResolveWuxingRealmEvent(ctx context.Cont
 	return out, nil
 }
 
+func (c *sceneSeasonClientPlayerClient) ExpandSavedBuildSlots(ctx context.Context, in *ExpandSavedBuildSlotsRequest, opts ...grpc.CallOption) (*ExpandSavedBuildSlotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpandSavedBuildSlotsResponse)
+	err := c.cc.Invoke(ctx, SceneSeasonClientPlayer_ExpandSavedBuildSlots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneSeasonClientPlayerServer is the server API for SceneSeasonClientPlayer service.
 // All implementations must embed UnimplementedSceneSeasonClientPlayerServer
 // for forward compatibility.
@@ -210,6 +222,7 @@ type SceneSeasonClientPlayerServer interface {
 	SetRetroHonorTarget(context.Context, *SetRetroHonorTargetRequest) (*SetRetroHonorTargetResponse, error)
 	ChooseWuxingRealmBranch(context.Context, *ChooseWuxingRealmBranchRequest) (*ChooseWuxingRealmBranchResponse, error)
 	ResolveWuxingRealmEvent(context.Context, *ResolveWuxingRealmEventRequest) (*ResolveWuxingRealmEventResponse, error)
+	ExpandSavedBuildSlots(context.Context, *ExpandSavedBuildSlotsRequest) (*ExpandSavedBuildSlotsResponse, error)
 	mustEmbedUnimplementedSceneSeasonClientPlayerServer()
 }
 
@@ -258,6 +271,9 @@ func (UnimplementedSceneSeasonClientPlayerServer) ChooseWuxingRealmBranch(contex
 }
 func (UnimplementedSceneSeasonClientPlayerServer) ResolveWuxingRealmEvent(context.Context, *ResolveWuxingRealmEventRequest) (*ResolveWuxingRealmEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveWuxingRealmEvent not implemented")
+}
+func (UnimplementedSceneSeasonClientPlayerServer) ExpandSavedBuildSlots(context.Context, *ExpandSavedBuildSlotsRequest) (*ExpandSavedBuildSlotsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpandSavedBuildSlots not implemented")
 }
 func (UnimplementedSceneSeasonClientPlayerServer) mustEmbedUnimplementedSceneSeasonClientPlayerServer() {
 }
@@ -515,6 +531,24 @@ func _SceneSeasonClientPlayer_ResolveWuxingRealmEvent_Handler(srv interface{}, c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneSeasonClientPlayer_ExpandSavedBuildSlots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpandSavedBuildSlotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneSeasonClientPlayerServer).ExpandSavedBuildSlots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneSeasonClientPlayer_ExpandSavedBuildSlots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneSeasonClientPlayerServer).ExpandSavedBuildSlots(ctx, req.(*ExpandSavedBuildSlotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneSeasonClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneSeasonClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -573,6 +607,10 @@ var SceneSeasonClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveWuxingRealmEvent",
 			Handler:    _SceneSeasonClientPlayer_ResolveWuxingRealmEvent_Handler,
+		},
+		{
+			MethodName: "ExpandSavedBuildSlots",
+			Handler:    _SceneSeasonClientPlayer_ExpandSavedBuildSlots_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -8553,3 +8553,33 @@ Gemini 4 Neon Extra 已收到[人物志与角色收藏设计](design/character-b
      - `.venv\Scripts\python -m pytest -q tests/test_login_flow.py tests/test_login_full.py tests/test_login_state.py tests/test_cellroute_and_owner_authority.py tests/test_cpp_6b4a_trade_login_dualcontrol.py`(`FakeRedis` 的其他使用方)
      - 最后全量 `.venv\Scripts\python -m pytest -q`
   3. 未做(不阻塞):在真实 Redis 7.2 与 8.x 上,各跑一次 `kSumProxyHotLua` 与取走脚本 `kTakeProxyReputationLua`;C++ 与 Python 同区混跑冒烟。
+
+## 2026-11-27 Claude:Python 代打目录刷新的三条命令改为各自成败(补充「热榜读取改走台账接缝」)
+
+- **问题**:Python `CraftProxyStallDirectory.refresh` 在一个 pipeline 里发摊位 HGETALL、待回账 HGETALL 和求和 EVAL。原先默认任一条报错整次刷新作废(比如某个键类型不对或脚本出错),摊位目录与待回账也跟着停刷。C++ 这三条命令各有回调,互不影响。
+- **改法**:`execute(raise_on_error=False)` 后逐条判断,报错的那份保留旧镜像,另外两份照常覆盖。测试替身 `FakeRedis` 的 pipeline `execute` 同样支持 `raise_on_error`,默认行为不变。新用例 `test_refresh_parts_fail_independently`(Python 仓 `tests/test_craft_proxy_reputation_ledger.py`,现 14 例)。设计稿 Python 仓 `craft-proxy-shared-ledger-redis.md` §2.2 第 3 步已改。
+- **未运行**。交 Gemini 的命令不变,按上一条执行。
+
+
+## 2026-11-27 Antigravity：不肝不氪增收体系 V2（批次 B1–B5 四仓 + 36 张透明 PNG-32 切片全量落地与验真）
+
+- **策划与交接**：`docs/planning/fair-monetization-expansion-v2.md`、`docs/planning/ui-handoff/fair-monetization-expansion-v2-ui-handoff.md`；36 张 Codex 无字透明 PNG-32 切片（含 `.meta`）全量导入 `mmorpg-client/Assets/Resources/UI/Ugui/{TravelPassV2,ShowcaseCosmeticsV1,CelebrationProps,GuildEmblemV1,RewardedAdV1}/`。
+- **五批次落地清单（配表推进至 84 表 v112，`schema_digest=0fbe086829d8fe21`，RPC `591..603`）**：
+  - **B1**：`SpiritShopGoods` 上架 `203`（`3409 解封剥离符`）/ `204`（`3410 流派副套继承符`）；游历手记永不绝版书架制（`591`，1–6 期 60 档，M-1 单册注点）；轻享卡 30 天/90 天季享卡（共 180 天上限，直赠绑符与头像框 + 集市挂单 10→20 + 离线摆摊 48h→96h + 每周 3 次随心试穿）；衣柜 Steam 式按缺口 8.5 折系列补齐包（`592`，仅扣真实灵石）。
+  - **B2**：`CosmeticShowcase.xlsx`（13 项：五行阵纹/擂台入场横幅/聊天气泡/战报分享卡底纹 + Steam 创始阵纹 `#13`）、`593 EquipShowcaseCosmetic` + M-6 战内/聊天白名单过滤；主城「全城同乐」气氛耗材（`594..596`，`3418..3420`，M-5 同线并发 ≤ 5 + 路人周领绑银封顶 3,000）；好友纯外观/手记真实灵石赠礼与 M-4 拒付精准撤单回收（`597`，7 天好友门禁、周限 5 笔）。
+  - **B3**：仓库扩容（`600`，200→300 格）、灵宠编队预设槽（`601/602`，免费 2 + 轻享卡 +1 + 付费扩至 5 槽）、战报配装收藏扩容与永久置顶（`603`，12→48 槽 + `pin_replay=14`）、帮主个人灵石买断帮徽（`598/599`，绝不动帮会资金）、横向技能卷宗 8/9（`16001..16011`，稀世占比 `1/11 = 9.09% ≤ 10%`）。
+  - **B4**：`RewardedAdSlot.xlsx` 扩至 4 槽且首审全默认 `enabled=0`（1 绑银 14 次/周、2 五行幻境奇策重随 7 次/周 + M-7 每局 `run_id` 限 1 次、3 衣柜额外 1 小时试穿 7 次/周不污染拥有位图、4 神秘商人个人 SplitMix64 换货 5 次/周每轮限 1 次，非货币槽位 `reward_amount==0`）；同步根治 `player_rewarded_ad.cpp` 既有 4 处裸读 `LevelComp.level()`。
+  - **B5**：`go/payment` 新增 `steam_dlc.go`（Steam `CheckAppOwnership/v3` 核验、`留灯院创始支持者典藏包` 幂等发货与退款撤回）及全仓 M-8 渠道分发合规矩阵（无版号小游戏隐藏全部 IAP/赠礼/DLC，Steam PC 隐藏全部激励视频，全渠道永久零外链切支付）。
+- **验证证据**：
+  - **C++（本仓）**：7 项静态门禁全绿（`check_log_text_english.py`、`test_cpp_no_raw_pointer_member.py` 13/13、`test_cpp_thread_sources.py` 5/5、`test_cpp_async_callback_capture.py` 13/13、`test_cpp_grpc_dependency_boundary.py` 9/9、`test_cpp_level_comp_reads.py` 15/15、`gen_docs_index.py --check`）；串行 MSBuild `/m:1` 编译 `proto`/`table`/`core`/`scene` 库与 `scene.exe`/`bag_test.exe` 0 错误；`scene.exe --validate-tables generated/tables` **PASS（version=112, tables=84）**；`bag_test.exe` B1–B4 全专项 PASS。
+  - **Go（本仓）**：`go/trade`、`go/friend`、`go/guild`、`go/payment`（5/5 包含 `steam_dlc_test.go`）全绿。
+  - **Unity（`mmorpg-client`）**：`gen_proto.ps1`（93 proto）0 错误，`client_compile_check.ps1` **837/837 0 错误**，Roslyn+NUnit B1–B5（含全客户端诱导词零命中扫描、切片校验与 M-8 矩阵）**11/11 PASS**。
+  - **Java（`xuanming-server-mmo`）**：`ContractSync` 全量同步，持久台账推进至第 33 代 `0033.schema`（`HEAD_SHA256=71aab870...`），`PlayerStateSchemaLedgerTest`、`game-scene`、`game-guild`、`game-friend` 全绿，已登记 `PARITY.md`。
+  - **Python（`xuanming-server-mmo-python`）**：84 表与协议同步完成，B1–B5 全部 `pytest` 全绿。
+- **未执行项**：未做真实 Steam Web API / 微信小游戏广告 SDK / 真实 MySQL+Redis 端到端联调；未执行任何 `git commit` / `git push` / `git tag`（待负责人确认）。
+
+## 2026-11-27 Claude:代打热榜桶的加数与续期合进一段写脚本(C++ + Python)
+
+- **问题**:热榜桶写入原先分开发 `HINCRBY`(单数、极品数)与 `EXPIRE`(续 25 小时)。C++ 是三条独立命令,Python 是 pipeline 里的几条。两步之间断连,或续期那条没发出去,就会留下没设过期的桶;它出窗后没人再读,但永远不会被回收,内存一点点漏。
+- **改法**:三步放进一段写脚本,一次执行:C++ `kAddProxyHotLua`(`RedisHIncrByHotBucket` 只发一条 `EVAL`),Python `ADD_PROXY_HOT_LUA`,两边同文。Python 单测钉文本,`FakeRedis` 注册了这段脚本的双生体。设计稿 §2.6「写」与 §4 表、Python 仓 `craft-proxy-shared-ledger-redis.md` §2.1 / §2.2 / §4 已改。
+- **已跑**:`test_cpp_no_raw_pointer_member.py`、`test_cpp_async_callback_capture.py` 两个只读预检,各 13 项 OK。其余未编译、未运行;交 Gemini 的命令不变,按「热榜读取改走台账接缝」一条执行。真实 Redis 7.2 / 8.x 上的验证要连这段写脚本一起跑。

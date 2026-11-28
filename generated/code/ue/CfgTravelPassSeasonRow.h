@@ -59,7 +59,7 @@ struct FCfgTravelPassSeasonRow : public FTableRowBase
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TravelPassSeason")
 	int32 id = 0;
 
-	/** 启用开关：0 = 停用，1 = 启用（全表同一时段至多 1 条启用期次） */
+	/** 启用开关：0 = 停用，1 = 启用（永不绝版书架制：支持多期同时启用，玩家自由切换唯一在研期次） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TravelPassSeason")
 	int32 enabled = 0;
 
@@ -114,4 +114,12 @@ struct FCfgTravelPassSeasonRow : public FTableRowBase
 	/** 配置修订号（改价或调整关键配置时递增，用于报价防呆） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|TravelPassSeason")
 	int32 config_revision = 0;
+
+	/** 书架展示排序（升序；0 回退按 id 排序） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TravelPassSeason")
+	int32 sort_order = 0;
+
+	/** 往期典藏角标标记：0 = 当期推荐，1 = 往期典藏（纯展示，不阻断积点与解锁） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|TravelPassSeason")
+	int32 is_archived = 0;
 };

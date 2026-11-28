@@ -95,6 +95,7 @@ import (
 	"github.com/zeromicro/go-zero/core/metric"
 	"google.golang.org/protobuf/proto"
 
+	"guild/internal/constants"
 	assetpb "proto/common/asset"
 	pb "proto/guild"
 
@@ -967,6 +968,12 @@ func lockCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, sta
 		if locks.memberOK, err = lockRowExists(ctx, tx, sqlLockMemberRole, row.GuildID, row.PlayerID); err != nil {
 			return locks, fmt.Errorf("lock donor %d of guild %d: %w", row.PlayerID, row.GuildID, err)
 		}
+	case row.Kind == pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK && status == assetop.StatusApplied:
+		ok, err := lockRowExists(ctx, tx, sqlLockGuildFunds, row.GuildID)
+		if err != nil {
+			return locks, fmt.Errorf("lock guild %d for emblem unlock: %w", row.GuildID, err)
+		}
+		locks.guildOK = ok
 	case row.Kind == pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP && refundsCounterparty(status):
 		ok, err := lockRowExists(ctx, tx, sqlLockMemberRole, row.GuildID, row.PlayerID)
 		if err != nil {
@@ -1075,6 +1082,16 @@ func applyCounterparty(ctx context.Context, tx *sql.Tx, row assetOpImmutable, st
 			return out, fmt.Errorf("finalize bounty escrow op %d: %w", row.OpID, err)
 		}
 		out.touched = true
+	case pb.GuildAssetOpKind_GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK:
+		if status == assetop.StatusApplied && locks.guildOK && row.RefID >= 1 && row.RefID <= constants.MaxGuildEmblemID {
+			bit := uint64(1) << (row.RefID - 1)
+			if _, err := tx.ExecContext(ctx,
+				"UPDATE `guild` SET `unlocked_emblem_bits` = (`unlocked_emblem_bits` | ?), `emblem_skin_id` = ? WHERE `guild_id` = ?",
+				bit, row.RefID, row.GuildID); err != nil {
+				return out, fmt.Errorf("unlock guild %d emblem %d: %w", row.GuildID, row.RefID, err)
+			}
+			out.touched = true
+		}
 	default:
 		out.unknownKind = true
 	}

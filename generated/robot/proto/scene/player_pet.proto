@@ -81,11 +81,22 @@ message PetInfo {
   string cosmetic_art_key = 23;          // 当前生效的灵宠幻化客户端资源键（空串 = 原形；缺图回退原形）
 }
 
+message PetSquadPresetInfo {
+  uint32 slot_id = 1;            // 1..5
+  uint32 tag = 2;                // 0默认 / 1日常PVE / 2会武PVP / 3首领试炼
+  repeated uint64 pet_ids = 3;   // 已自动剔除已放生/已交易失效引用的宝宝 ID 列表（最多 3 只）
+}
+
 message PetListInfo {
   repeated PetInfo pets = 1;
   uint64 active_pet_id = 2;
   uint32 max_pets = 3;          // 可携带上限(PetRule.max_pets)
   uint64 rename_cost_gold = 4;  // 改名金币(0 = 免费)
+  repeated PetSquadPresetInfo squad_presets = 5;
+  uint32 unlocked_squad_preset_slots = 6;     // 永久已解锁套数（2..5）
+  uint32 effective_squad_preset_slots = 7;    // 当前生效可用套数（含轻享卡临时 +1，封顶 5）
+  uint32 max_squad_preset_slots = 8;          // 总上限（5）
+  uint64 next_squad_slot_price_diamond = 9;   // 解锁下一套永久槽位报价（真实灵石 60；已满为 0）
 }
 
 message GetPetListRequest {
@@ -305,6 +316,33 @@ message AscendPetTierResponse {
   uint32 new_tier = 6;
 }
 
+// 保存或一键套用灵宠编队快捷预设（战外免费；仅保存本人当前拥有的 pet_id 引用，summon_first=true 时同步切出战首发宠）。
+message SavePetSquadPresetRequest {
+  uint32 slot_id = 1;            // 1..effective_squad_preset_slots
+  uint32 tag = 2;                // 0..3
+  repeated uint64 pet_ids = 3;   // 最多 3 只；空列表表示清空该预设槽
+  bool summon_first = 4;         // true = 同时将 pet_ids[0] 设为当前出战宝宝（若非空）
+}
+message SavePetSquadPresetResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 永久解锁下一套灵宠编队快捷预设槽位（3..5 套，每套 60 真实灵石，零战力纯切换便利）。
+message UnlockPetSquadPresetSlotRequest {
+  uint64 client_request_id = 1;
+  uint32 expected_unlocked_slots = 2;
+  uint64 expected_price_diamond = 3;
+}
+message UnlockPetSquadPresetSlotResponse {
+  TipInfoMessage error_message = 1;
+  bool replayed = 2;
+  uint32 unlocked_slots = 3;
+  uint64 spent_diamond = 4;
+  uint64 diamond_balance = 5;
+  PetListInfo pets = 6;
+}
+
 service ScenePetClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
@@ -326,4 +364,6 @@ service ScenePetClientPlayer {
   // ── 以下按 method index 顺序追加，不可重排 ──
   rpc SwitchPetEntryPreset (SwitchPetEntryPresetRequest) returns (SwitchPetEntryPresetResponse);
   rpc AscendPetTier (AscendPetTierRequest) returns (AscendPetTierResponse);
+  rpc SavePetSquadPreset (SavePetSquadPresetRequest) returns (SavePetSquadPresetResponse);
+  rpc UnlockPetSquadPresetSlot (UnlockPetSquadPresetSlotRequest) returns (UnlockPetSquadPresetSlotResponse);
 }

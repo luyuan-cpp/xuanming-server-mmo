@@ -45,16 +45,17 @@ public final class AppearanceSeriesTableOuterClass extends com.google.protobuf.G
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\034appearanceseries_table.proto\"\306\001\n\025Appea" +
+      "\n\034appearanceseries_table.proto\"\377\001\n\025Appea" +
       "ranceSeriesTable\022\n\n\002id\030\001 \001(\r\022\022\n\nseries_k" +
       "ey\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\022\n\nsort_order\030\004 \001" +
       "(\r\022\017\n\007enabled\030\005 \001(\r\022\014\n\004desc\030\006 \001(\t\022\035\n\025com" +
       "pletion_badge_name\030\007 \001(\t\022\026\n\016epilogue_tit" +
-      "le\030\010 \001(\t\022\025\n\repilogue_body\030\t \001(\t\"A\n\031Appea" +
-      "ranceSeriesTableData\022$\n\004data\030\001 \003(\0132\026.App" +
-      "earanceSeriesTableBG\n\016com.game.tableB\037Ap" +
-      "pearanceSeriesTableOuterClassP\001Z\022generat" +
-      "ed/pb/tableb\006proto3"
+      "le\030\010 \001(\t\022\025\n\repilogue_body\030\t \001(\t\022\033\n\023bundl" +
+      "e_discount_bps\030\n \001(\r\022\032\n\022unit_price_diamo" +
+      "nd\030\013 \001(\r\"A\n\031AppearanceSeriesTableData\022$\n" +
+      "\004data\030\001 \003(\0132\026.AppearanceSeriesTableBG\n\016c" +
+      "om.game.tableB\037AppearanceSeriesTableOute" +
+      "rClassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -65,7 +66,7 @@ public final class AppearanceSeriesTableOuterClass extends com.google.protobuf.G
     internal_static_AppearanceSeriesTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_AppearanceSeriesTable_descriptor,
-        new java.lang.String[] { "Id", "SeriesKey", "Name", "SortOrder", "Enabled", "Desc", "CompletionBadgeName", "EpilogueTitle", "EpilogueBody", });
+        new java.lang.String[] { "Id", "SeriesKey", "Name", "SortOrder", "Enabled", "Desc", "CompletionBadgeName", "EpilogueTitle", "EpilogueBody", "BundleDiscountBps", "UnitPriceDiamond", });
     internal_static_AppearanceSeriesTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_AppearanceSeriesTableData_fieldAccessorTable = new

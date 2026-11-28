@@ -80,6 +80,7 @@ var Faults = []Fault{
 	{Code: 30011, Group: "mystery_merchant_error", Name: "MysteryMerchantInternalError"},
 	{Code: 32004, Group: "afk_pass_error", Name: "AfkPassUnavailable"},
 	{Code: 33006, Group: "appearance_error", Name: "AppearanceUnavailable"},
+	{Code: 33027, Group: "appearance_error", Name: "CosmeticGiftServiceUnavailable"},
 	{Code: 34011, Group: "season_error", Name: "SeasonUnavailable"},
 	{Code: 35000, Group: "trial_journal_error", Name: "TrialJournalUnavailable"},
 	{Code: 36001, Group: "festival_beast_error", Name: "FestivalBeastConfigInvalid"},

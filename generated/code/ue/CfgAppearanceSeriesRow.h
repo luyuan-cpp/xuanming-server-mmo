@@ -90,4 +90,12 @@ struct FCfgAppearanceSeriesRow : public FTableRowBase
 	/** 集齐解锁合篇故事正文（纯叙事，零数值属性；客户端查本地表在 completed=true 时解锁阅读） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|AppearanceSeries")
 	FString epilogue_body;
+
+	/** Steam 式按缺口补齐折扣万分比（0 = 不开放补齐包，8500 = 8.5 折；5000..9999） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AppearanceSeries")
+	int32 bundle_discount_bps = 0;
+
+	/** 系列补齐折前单角色参考灵石价（对齐角色形象卡单价，默认 100；bundle_discount_bps > 0 时须 > 0） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AppearanceSeries")
+	int32 unit_price_diamond = 0;
 };

@@ -153,6 +153,22 @@ extern const ::google::protobuf::internal::ClassDataFull EquipWuxingFormationRes
 #else
 extern const EquipWuxingFormationResponseGlobalsTypeInternal EquipWuxingFormationResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class ExpandSavedBuildSlotsRequest;
+struct ExpandSavedBuildSlotsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ExpandSavedBuildSlotsRequestGlobalsTypeInternal ExpandSavedBuildSlotsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ExpandSavedBuildSlotsRequest_class_data_;
+#else
+extern const ExpandSavedBuildSlotsRequestGlobalsTypeInternal ExpandSavedBuildSlotsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class ExpandSavedBuildSlotsResponse;
+struct ExpandSavedBuildSlotsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern ExpandSavedBuildSlotsResponseGlobalsTypeInternal ExpandSavedBuildSlotsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull ExpandSavedBuildSlotsResponse_class_data_;
+#else
+extern const ExpandSavedBuildSlotsResponseGlobalsTypeInternal ExpandSavedBuildSlotsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetSeasonStateRequest;
 struct GetSeasonStateRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2653,6 +2669,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmarkView final 
     kSeasonSealIdFieldNumber = 8,
     kActivePetTableIdFieldNumber = 9,
     kSavedAtMsFieldNumber = 13,
+    kPinReplayFieldNumber = 14,
   };
   // repeated uint32 skill_table_ids = 11;
   [[nodiscard]] int skill_table_ids_size()
@@ -2819,11 +2836,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmarkView final 
   void _internal_set_saved_at_ms(::uint64_t value);
 
   public:
+  // bool pin_replay = 14;
+  void clear_pin_replay() ;
+  [[nodiscard]] bool pin_replay() const;
+  void set_pin_replay(bool value);
+
+  private:
+  bool _internal_pin_replay() const;
+  void _internal_set_pin_replay(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SavedBattleBuildBookmarkView)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 83,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2867,6 +2894,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmarkView final 
     ::uint32_t season_seal_id_;
     ::uint32_t active_pet_table_id_;
     ::uint64_t saved_at_ms_;
+    bool pin_replay_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3584,6 +3612,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateRequest final : publi
   friend class ::google::protobuf::Arena::InternalHelper;
   using InternalArenaConstructable_ = void;
   using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ExpandSavedBuildSlotsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ExpandSavedBuildSlotsRequest) */ {
+ public:
+  inline ExpandSavedBuildSlotsRequest() : ExpandSavedBuildSlotsRequest(nullptr) {}
+  ~ExpandSavedBuildSlotsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ExpandSavedBuildSlotsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ExpandSavedBuildSlotsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ExpandSavedBuildSlotsRequest(const ExpandSavedBuildSlotsRequest& from) : ExpandSavedBuildSlotsRequest(nullptr, from) {}
+  inline ExpandSavedBuildSlotsRequest(ExpandSavedBuildSlotsRequest&& from) noexcept : ExpandSavedBuildSlotsRequest(nullptr, ::std::move(from)) {}
+  inline ExpandSavedBuildSlotsRequest& operator=(const ExpandSavedBuildSlotsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ExpandSavedBuildSlotsRequest& operator=(ExpandSavedBuildSlotsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ExpandSavedBuildSlotsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ExpandSavedBuildSlotsRequest>(&ExpandSavedBuildSlotsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 34;
+  friend void swap(ExpandSavedBuildSlotsRequest& a, ExpandSavedBuildSlotsRequest& b) { a.Swap(&b); }
+  inline void Swap(ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ExpandSavedBuildSlotsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ExpandSavedBuildSlotsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ExpandSavedBuildSlotsRequest& from) { ExpandSavedBuildSlotsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ExpandSavedBuildSlotsRequest"; }
+
+  explicit ExpandSavedBuildSlotsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ExpandSavedBuildSlotsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ExpandSavedBuildSlotsRequest& from);
+  ExpandSavedBuildSlotsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ExpandSavedBuildSlotsRequest&& from) noexcept
+      : ExpandSavedBuildSlotsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kExpectedPriceDiamondFieldNumber = 3,
+    kExpectedCapacityFieldNumber = 2,
+  };
+  // uint64 client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // uint64 expected_price_diamond = 3;
+  void clear_expected_price_diamond() ;
+  [[nodiscard]] ::uint64_t expected_price_diamond() const;
+  void set_expected_price_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_price_diamond() const;
+  void _internal_set_expected_price_diamond(::uint64_t value);
+
+  public:
+  // uint32 expected_capacity = 2;
+  void clear_expected_capacity() ;
+  [[nodiscard]] ::uint32_t expected_capacity() const;
+  void set_expected_capacity(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_expected_capacity() const;
+  void _internal_set_expected_capacity(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ExpandSavedBuildSlotsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ExpandSavedBuildSlotsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t client_request_id_;
+    ::uint64_t expected_price_diamond_;
+    ::uint32_t expected_capacity_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
   friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
 };
 // -------------------------------------------------------------------
@@ -5634,6 +5887,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     kCyclePoolSizeFieldNumber = 37,
     kRetroHonorTargetSeasonIdFieldNumber = 38,
     kRetroHonorTargetExplicitFieldNumber = 39,
+    kSavedBuildCapacityFieldNumber = 40,
+    kNextSavedBuildExpandPriceDiamondFieldNumber = 42,
+    kMaxSavedBuildCapacityFieldNumber = 41,
   };
   // repeated .SeasonSealOption seals = 29;
   [[nodiscard]] int seals_size()
@@ -6095,12 +6351,42 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
   void _internal_set_retro_honor_target_explicit(bool value);
 
   public:
+  // uint32 saved_build_capacity = 40;
+  void clear_saved_build_capacity() ;
+  [[nodiscard]] ::uint32_t saved_build_capacity() const;
+  void set_saved_build_capacity(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_saved_build_capacity() const;
+  void _internal_set_saved_build_capacity(::uint32_t value);
+
+  public:
+  // uint64 next_saved_build_expand_price_diamond = 42;
+  void clear_next_saved_build_expand_price_diamond() ;
+  [[nodiscard]] ::uint64_t next_saved_build_expand_price_diamond() const;
+  void set_next_saved_build_expand_price_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_saved_build_expand_price_diamond() const;
+  void _internal_set_next_saved_build_expand_price_diamond(::uint64_t value);
+
+  public:
+  // uint32 max_saved_build_capacity = 41;
+  void clear_max_saved_build_capacity() ;
+  [[nodiscard]] ::uint32_t max_saved_build_capacity() const;
+  void set_max_saved_build_capacity(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_saved_build_capacity() const;
+  void _internal_set_max_saved_build_capacity(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SeasonStateSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 39,
-                          5, 125,
+      ::google::protobuf::internal::TcParseTable<5, 42,
+                          5, 133,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -6167,6 +6453,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SeasonStateSnapshot final : public 
     ::uint32_t cycle_pool_size_;
     ::uint32_t retro_honor_target_season_id_;
     bool retro_honor_target_explicit_;
+    ::uint32_t saved_build_capacity_;
+    ::uint64_t next_saved_build_expand_price_diamond_;
+    ::uint32_t max_saved_build_capacity_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -8221,6 +8510,291 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetSeasonStateResponse final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ExpandSavedBuildSlotsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:ExpandSavedBuildSlotsResponse) */ {
+ public:
+  inline ExpandSavedBuildSlotsResponse() : ExpandSavedBuildSlotsResponse(nullptr) {}
+  ~ExpandSavedBuildSlotsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(ExpandSavedBuildSlotsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr ExpandSavedBuildSlotsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline ExpandSavedBuildSlotsResponse(const ExpandSavedBuildSlotsResponse& from) : ExpandSavedBuildSlotsResponse(nullptr, from) {}
+  inline ExpandSavedBuildSlotsResponse(ExpandSavedBuildSlotsResponse&& from) noexcept : ExpandSavedBuildSlotsResponse(nullptr, ::std::move(from)) {}
+  inline ExpandSavedBuildSlotsResponse& operator=(const ExpandSavedBuildSlotsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ExpandSavedBuildSlotsResponse& operator=(ExpandSavedBuildSlotsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const ExpandSavedBuildSlotsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ExpandSavedBuildSlotsResponse>(&ExpandSavedBuildSlotsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 35;
+  friend void swap(ExpandSavedBuildSlotsResponse& a, ExpandSavedBuildSlotsResponse& b) { a.Swap(&b); }
+  inline void Swap(ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<ExpandSavedBuildSlotsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const ExpandSavedBuildSlotsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const ExpandSavedBuildSlotsResponse& from) { ExpandSavedBuildSlotsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "ExpandSavedBuildSlotsResponse"; }
+
+  explicit ExpandSavedBuildSlotsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  ExpandSavedBuildSlotsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const ExpandSavedBuildSlotsResponse& from);
+  ExpandSavedBuildSlotsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, ExpandSavedBuildSlotsResponse&& from) noexcept
+      : ExpandSavedBuildSlotsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kStateFieldNumber = 7,
+    kReplayedFieldNumber = 2,
+    kNewCapacityFieldNumber = 3,
+    kSpentDiamondFieldNumber = 5,
+    kDiamondBalanceFieldNumber = 6,
+    kMaxCapacityFieldNumber = 4,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .SeasonStateSnapshot state = 7;
+  [[nodiscard]] bool has_state()
+      const;
+  void clear_state() ;
+  [[nodiscard]] const ::SeasonStateSnapshot& state() const;
+  [[nodiscard]] ::SeasonStateSnapshot* PROTOBUF_NULLABLE release_state();
+  ::SeasonStateSnapshot* PROTOBUF_NONNULL mutable_state();
+  void set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value);
+  ::SeasonStateSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_state();
+
+  private:
+  const ::SeasonStateSnapshot& _internal_state() const;
+  ::SeasonStateSnapshot* PROTOBUF_NONNULL _internal_mutable_state();
+
+  public:
+  // bool replayed = 2;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // uint32 new_capacity = 3;
+  void clear_new_capacity() ;
+  [[nodiscard]] ::uint32_t new_capacity() const;
+  void set_new_capacity(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_new_capacity() const;
+  void _internal_set_new_capacity(::uint32_t value);
+
+  public:
+  // uint64 spent_diamond = 5;
+  void clear_spent_diamond() ;
+  [[nodiscard]] ::uint64_t spent_diamond() const;
+  void set_spent_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_spent_diamond() const;
+  void _internal_set_spent_diamond(::uint64_t value);
+
+  public:
+  // uint64 diamond_balance = 6;
+  void clear_diamond_balance() ;
+  [[nodiscard]] ::uint64_t diamond_balance() const;
+  void set_diamond_balance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_diamond_balance() const;
+  void _internal_set_diamond_balance(::uint64_t value);
+
+  public:
+  // uint32 max_capacity = 4;
+  void clear_max_capacity() ;
+  [[nodiscard]] ::uint32_t max_capacity() const;
+  void set_max_capacity(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_capacity() const;
+  void _internal_set_max_capacity(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:ExpandSavedBuildSlotsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const ExpandSavedBuildSlotsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::SeasonStateSnapshot* PROTOBUF_NULLABLE state_;
+    bool replayed_;
+    ::uint32_t new_capacity_;
+    ::uint64_t spent_diamond_;
+    ::uint64_t diamond_balance_;
+    ::uint32_t max_capacity_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5fseason_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipWuxingFormationResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:EquipWuxingFormationResponse) */ {
  public:
@@ -9464,6 +10038,10 @@ class SceneSeasonClientPlayer : public ::google::protobuf::Service {
                         const ::ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL request,
                         ::ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void ExpandSavedBuildSlots(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL request,
+                        ::ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -9547,6 +10125,10 @@ class SceneSeasonClientPlayer_Stub final : public SceneSeasonClientPlayer {
   void ResolveWuxingRealmEvent(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::ResolveWuxingRealmEventRequest* PROTOBUF_NONNULL request,
                         ::ResolveWuxingRealmEventResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void ExpandSavedBuildSlots(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::ExpandSavedBuildSlotsRequest* PROTOBUF_NONNULL request,
+                        ::ExpandSavedBuildSlotsResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -12617,6 +13199,78 @@ inline void SeasonStateSnapshot::_internal_set_retro_honor_target_explicit(bool 
   _impl_.retro_honor_target_explicit_ = value;
 }
 
+// uint32 saved_build_capacity = 40;
+inline void SeasonStateSnapshot::clear_saved_build_capacity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.saved_build_capacity_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000080U);
+}
+inline ::uint32_t SeasonStateSnapshot::saved_build_capacity() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.saved_build_capacity)
+  return _internal_saved_build_capacity();
+}
+inline void SeasonStateSnapshot::set_saved_build_capacity(::uint32_t value) {
+  _internal_set_saved_build_capacity(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000080U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.saved_build_capacity)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_saved_build_capacity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.saved_build_capacity_;
+}
+inline void SeasonStateSnapshot::_internal_set_saved_build_capacity(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.saved_build_capacity_ = value;
+}
+
+// uint32 max_saved_build_capacity = 41;
+inline void SeasonStateSnapshot::clear_max_saved_build_capacity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_saved_build_capacity_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000200U);
+}
+inline ::uint32_t SeasonStateSnapshot::max_saved_build_capacity() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.max_saved_build_capacity)
+  return _internal_max_saved_build_capacity();
+}
+inline void SeasonStateSnapshot::set_max_saved_build_capacity(::uint32_t value) {
+  _internal_set_max_saved_build_capacity(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000200U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.max_saved_build_capacity)
+}
+inline ::uint32_t SeasonStateSnapshot::_internal_max_saved_build_capacity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_saved_build_capacity_;
+}
+inline void SeasonStateSnapshot::_internal_set_max_saved_build_capacity(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_saved_build_capacity_ = value;
+}
+
+// uint64 next_saved_build_expand_price_diamond = 42;
+inline void SeasonStateSnapshot::clear_next_saved_build_expand_price_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_saved_build_expand_price_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[1], 0x00000100U);
+}
+inline ::uint64_t SeasonStateSnapshot::next_saved_build_expand_price_diamond() const {
+  // @@protoc_insertion_point(field_get:SeasonStateSnapshot.next_saved_build_expand_price_diamond)
+  return _internal_next_saved_build_expand_price_diamond();
+}
+inline void SeasonStateSnapshot::set_next_saved_build_expand_price_diamond(::uint64_t value) {
+  _internal_set_next_saved_build_expand_price_diamond(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000100U);
+  // @@protoc_insertion_point(field_set:SeasonStateSnapshot.next_saved_build_expand_price_diamond)
+}
+inline ::uint64_t SeasonStateSnapshot::_internal_next_saved_build_expand_price_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_saved_build_expand_price_diamond_;
+}
+inline void SeasonStateSnapshot::_internal_set_next_saved_build_expand_price_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_saved_build_expand_price_diamond_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // SavedBattleBuildBookmarkView
@@ -13105,6 +13759,30 @@ inline ::uint64_t SavedBattleBuildBookmarkView::_internal_saved_at_ms() const {
 inline void SavedBattleBuildBookmarkView::_internal_set_saved_at_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.saved_at_ms_ = value;
+}
+
+// bool pin_replay = 14;
+inline void SavedBattleBuildBookmarkView::clear_pin_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pin_replay_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool SavedBattleBuildBookmarkView::pin_replay() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmarkView.pin_replay)
+  return _internal_pin_replay();
+}
+inline void SavedBattleBuildBookmarkView::set_pin_replay(bool value) {
+  _internal_set_pin_replay(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmarkView.pin_replay)
+}
+inline bool SavedBattleBuildBookmarkView::_internal_pin_replay() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pin_replay_;
+}
+inline void SavedBattleBuildBookmarkView::_internal_set_pin_replay(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pin_replay_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -17529,6 +18207,397 @@ inline void SetRetroHonorTargetResponse::set_allocated_state(::SeasonStateSnapsh
 
   _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
   // @@protoc_insertion_point(field_set_allocated:SetRetroHonorTargetResponse.state)
+}
+
+// -------------------------------------------------------------------
+
+// ExpandSavedBuildSlotsRequest
+
+// uint64 client_request_id = 1;
+inline void ExpandSavedBuildSlotsRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t ExpandSavedBuildSlotsRequest::client_request_id() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsRequest.client_request_id)
+  return _internal_client_request_id();
+}
+inline void ExpandSavedBuildSlotsRequest::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsRequest.client_request_id)
+}
+inline ::uint64_t ExpandSavedBuildSlotsRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void ExpandSavedBuildSlotsRequest::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
+// uint32 expected_capacity = 2;
+inline void ExpandSavedBuildSlotsRequest::clear_expected_capacity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_capacity_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ExpandSavedBuildSlotsRequest::expected_capacity() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsRequest.expected_capacity)
+  return _internal_expected_capacity();
+}
+inline void ExpandSavedBuildSlotsRequest::set_expected_capacity(::uint32_t value) {
+  _internal_set_expected_capacity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsRequest.expected_capacity)
+}
+inline ::uint32_t ExpandSavedBuildSlotsRequest::_internal_expected_capacity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_capacity_;
+}
+inline void ExpandSavedBuildSlotsRequest::_internal_set_expected_capacity(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_capacity_ = value;
+}
+
+// uint64 expected_price_diamond = 3;
+inline void ExpandSavedBuildSlotsRequest::clear_expected_price_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_price_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ExpandSavedBuildSlotsRequest::expected_price_diamond() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsRequest.expected_price_diamond)
+  return _internal_expected_price_diamond();
+}
+inline void ExpandSavedBuildSlotsRequest::set_expected_price_diamond(::uint64_t value) {
+  _internal_set_expected_price_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsRequest.expected_price_diamond)
+}
+inline ::uint64_t ExpandSavedBuildSlotsRequest::_internal_expected_price_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_price_diamond_;
+}
+inline void ExpandSavedBuildSlotsRequest::_internal_set_expected_price_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_price_diamond_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// ExpandSavedBuildSlotsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool ExpandSavedBuildSlotsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& ExpandSavedBuildSlotsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& ExpandSavedBuildSlotsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.error_message)
+  return _internal_error_message();
+}
+inline void ExpandSavedBuildSlotsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ExpandSavedBuildSlotsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ExpandSavedBuildSlotsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE ExpandSavedBuildSlotsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ExpandSavedBuildSlotsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ExpandSavedBuildSlotsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL ExpandSavedBuildSlotsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:ExpandSavedBuildSlotsResponse.error_message)
+  return _msg;
+}
+inline void ExpandSavedBuildSlotsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ExpandSavedBuildSlotsResponse.error_message)
+}
+
+// bool replayed = 2;
+inline void ExpandSavedBuildSlotsResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline bool ExpandSavedBuildSlotsResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.replayed)
+  return _internal_replayed();
+}
+inline void ExpandSavedBuildSlotsResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsResponse.replayed)
+}
+inline bool ExpandSavedBuildSlotsResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void ExpandSavedBuildSlotsResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
+}
+
+// uint32 new_capacity = 3;
+inline void ExpandSavedBuildSlotsResponse::clear_new_capacity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.new_capacity_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ExpandSavedBuildSlotsResponse::new_capacity() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.new_capacity)
+  return _internal_new_capacity();
+}
+inline void ExpandSavedBuildSlotsResponse::set_new_capacity(::uint32_t value) {
+  _internal_set_new_capacity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsResponse.new_capacity)
+}
+inline ::uint32_t ExpandSavedBuildSlotsResponse::_internal_new_capacity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.new_capacity_;
+}
+inline void ExpandSavedBuildSlotsResponse::_internal_set_new_capacity(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.new_capacity_ = value;
+}
+
+// uint32 max_capacity = 4;
+inline void ExpandSavedBuildSlotsResponse::clear_max_capacity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_capacity_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t ExpandSavedBuildSlotsResponse::max_capacity() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.max_capacity)
+  return _internal_max_capacity();
+}
+inline void ExpandSavedBuildSlotsResponse::set_max_capacity(::uint32_t value) {
+  _internal_set_max_capacity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsResponse.max_capacity)
+}
+inline ::uint32_t ExpandSavedBuildSlotsResponse::_internal_max_capacity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_capacity_;
+}
+inline void ExpandSavedBuildSlotsResponse::_internal_set_max_capacity(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_capacity_ = value;
+}
+
+// uint64 spent_diamond = 5;
+inline void ExpandSavedBuildSlotsResponse::clear_spent_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spent_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t ExpandSavedBuildSlotsResponse::spent_diamond() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.spent_diamond)
+  return _internal_spent_diamond();
+}
+inline void ExpandSavedBuildSlotsResponse::set_spent_diamond(::uint64_t value) {
+  _internal_set_spent_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsResponse.spent_diamond)
+}
+inline ::uint64_t ExpandSavedBuildSlotsResponse::_internal_spent_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spent_diamond_;
+}
+inline void ExpandSavedBuildSlotsResponse::_internal_set_spent_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spent_diamond_ = value;
+}
+
+// uint64 diamond_balance = 6;
+inline void ExpandSavedBuildSlotsResponse::clear_diamond_balance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.diamond_balance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t ExpandSavedBuildSlotsResponse::diamond_balance() const {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.diamond_balance)
+  return _internal_diamond_balance();
+}
+inline void ExpandSavedBuildSlotsResponse::set_diamond_balance(::uint64_t value) {
+  _internal_set_diamond_balance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ExpandSavedBuildSlotsResponse.diamond_balance)
+}
+inline ::uint64_t ExpandSavedBuildSlotsResponse::_internal_diamond_balance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.diamond_balance_;
+}
+inline void ExpandSavedBuildSlotsResponse::_internal_set_diamond_balance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.diamond_balance_ = value;
+}
+
+// .SeasonStateSnapshot state = 7;
+inline bool ExpandSavedBuildSlotsResponse::has_state() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
+  return value;
+}
+inline void ExpandSavedBuildSlotsResponse::clear_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ != nullptr) _impl_.state_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::SeasonStateSnapshot& ExpandSavedBuildSlotsResponse::_internal_state() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::SeasonStateSnapshot* p = _impl_.state_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::SeasonStateSnapshot>(&::SeasonStateSnapshot_globals_);
+}
+inline const ::SeasonStateSnapshot& ExpandSavedBuildSlotsResponse::state() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:ExpandSavedBuildSlotsResponse.state)
+  return _internal_state();
+}
+inline void ExpandSavedBuildSlotsResponse::unsafe_arena_set_allocated_state(
+    ::SeasonStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+  _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:ExpandSavedBuildSlotsResponse.state)
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NULLABLE ExpandSavedBuildSlotsResponse::release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* released = _impl_.state_;
+  _impl_.state_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NULLABLE ExpandSavedBuildSlotsResponse::unsafe_arena_release_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:ExpandSavedBuildSlotsResponse.state)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* temp = _impl_.state_;
+  _impl_.state_ = nullptr;
+  return temp;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NONNULL ExpandSavedBuildSlotsResponse::_internal_mutable_state() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.state_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::SeasonStateSnapshot>(GetArena());
+    _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(p);
+  }
+  return _impl_.state_;
+}
+inline ::SeasonStateSnapshot* PROTOBUF_NONNULL ExpandSavedBuildSlotsResponse::mutable_state()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::SeasonStateSnapshot* _msg = _internal_mutable_state();
+  // @@protoc_insertion_point(field_mutable:ExpandSavedBuildSlotsResponse.state)
+  return _msg;
+}
+inline void ExpandSavedBuildSlotsResponse::set_allocated_state(::SeasonStateSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.state_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.state_ = reinterpret_cast<::SeasonStateSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:ExpandSavedBuildSlotsResponse.state)
 }
 
 #ifdef __GNUC__

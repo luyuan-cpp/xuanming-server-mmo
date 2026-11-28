@@ -124,6 +124,139 @@ func (x *HostedRecapSummary) GetPendingAck() bool {
 	return false
 }
 
+// 轻享卡单档套餐报价与开卡一次性直赠预览（绝不拆成每日登录领）。
+type AfkPassPlanView struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	PlanId            uint32                 `protobuf:"varint,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`                                    // AfkPassRule.id（1 = 30天月享卡，2 = 90天季享卡）
+	PlanName          string                 `protobuf:"bytes,2,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`                               // 套餐展示名
+	PeriodDays        uint32                 `protobuf:"varint,3,opt,name=period_days,json=periodDays,proto3" json:"period_days,omitempty"`                        // 单次开通增加天数
+	PriceCurrencyType uint32                 `protobuf:"varint,4,opt,name=price_currency_type,json=priceCurrencyType,proto3" json:"price_currency_type,omitempty"` // 结算货币（CurrencyType）
+	Price             uint64                 `protobuf:"varint,5,opt,name=price,proto3" json:"price,omitempty"`                                                    // 价格
+	BonusItemId       uint32                 `protobuf:"varint,6,opt,name=bonus_item_id,json=bonusItemId,proto3" json:"bonus_item_id,omitempty"`                   // 开卡一次性直赠绑定道具 ID（0 = 无）
+	BonusItemCount    uint32                 `protobuf:"varint,7,opt,name=bonus_item_count,json=bonusItemCount,proto3" json:"bonus_item_count,omitempty"`          // 开卡一次性直赠绑定道具数量
+	BonusItemName     string                 `protobuf:"bytes,8,opt,name=bonus_item_name,json=bonusItemName,proto3" json:"bonus_item_name,omitempty"`              // 道具展示名
+	BonusItemIconKey  string                 `protobuf:"bytes,9,opt,name=bonus_item_icon_key,json=bonusItemIconKey,proto3" json:"bonus_item_icon_key,omitempty"`   // 道具图标资源键
+	BonusFrameKey     string                 `protobuf:"bytes,10,opt,name=bonus_frame_key,json=bonusFrameKey,proto3" json:"bonus_frame_key,omitempty"`             // 开卡一次性附赠的零战力纪念头像框键（空 = 无）
+	IconKey           string                 `protobuf:"bytes,11,opt,name=icon_key,json=iconKey,proto3" json:"icon_key,omitempty"`                                 // 套餐令牌图标资源键
+	Desc              string                 `protobuf:"bytes,12,opt,name=desc,proto3" json:"desc,omitempty"`                                                      // 套餐说明
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AfkPassPlanView) Reset() {
+	*x = AfkPassPlanView{}
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AfkPassPlanView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AfkPassPlanView) ProtoMessage() {}
+
+func (x *AfkPassPlanView) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AfkPassPlanView.ProtoReflect.Descriptor instead.
+func (*AfkPassPlanView) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AfkPassPlanView) GetPlanId() uint32 {
+	if x != nil {
+		return x.PlanId
+	}
+	return 0
+}
+
+func (x *AfkPassPlanView) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
+func (x *AfkPassPlanView) GetPeriodDays() uint32 {
+	if x != nil {
+		return x.PeriodDays
+	}
+	return 0
+}
+
+func (x *AfkPassPlanView) GetPriceCurrencyType() uint32 {
+	if x != nil {
+		return x.PriceCurrencyType
+	}
+	return 0
+}
+
+func (x *AfkPassPlanView) GetPrice() uint64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+func (x *AfkPassPlanView) GetBonusItemId() uint32 {
+	if x != nil {
+		return x.BonusItemId
+	}
+	return 0
+}
+
+func (x *AfkPassPlanView) GetBonusItemCount() uint32 {
+	if x != nil {
+		return x.BonusItemCount
+	}
+	return 0
+}
+
+func (x *AfkPassPlanView) GetBonusItemName() string {
+	if x != nil {
+		return x.BonusItemName
+	}
+	return ""
+}
+
+func (x *AfkPassPlanView) GetBonusItemIconKey() string {
+	if x != nil {
+		return x.BonusItemIconKey
+	}
+	return ""
+}
+
+func (x *AfkPassPlanView) GetBonusFrameKey() string {
+	if x != nil {
+		return x.BonusFrameKey
+	}
+	return ""
+}
+
+func (x *AfkPassPlanView) GetIconKey() string {
+	if x != nil {
+		return x.IconKey
+	}
+	return ""
+}
+
+func (x *AfkPassPlanView) GetDesc() string {
+	if x != nil {
+		return x.Desc
+	}
+	return ""
+}
+
 // 月卡此刻的状态与售价。所有时间都是服务器墙钟的 Unix 秒。
 type AfkPassInfo struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
@@ -139,13 +272,18 @@ type AfkPassInfo struct {
 	HostedRecap             *HostedRecapSummary    `protobuf:"bytes,10,opt,name=hosted_recap,json=hostedRecap,proto3" json:"hosted_recap,omitempty"`                                             // 最近一次待确认的离线托管收获简报(无记录时不填)
 	UnlockedLoadoutSlots    uint32                 `protobuf:"varint,11,opt,name=unlocked_loadout_slots,json=unlockedLoadoutSlots,proto3" json:"unlocked_loadout_slots,omitempty"`               // 当前已解锁的方案槽位数（免费 3；仙途轻享卡生效 6，纯便利零数值）
 	Stage2TradableEnabled   bool                   `protobuf:"varint,12,opt,name=stage2_tradable_enabled,json=stage2TradableEnabled,proto3" json:"stage2_tradable_enabled,omitempty"`            // true = 阶段二每周 150 池胜局可交易资格生效中（不增加总额度）
+	MarketListingLimit      uint32                 `protobuf:"varint,13,opt,name=market_listing_limit,json=marketListingLimit,proto3" json:"market_listing_limit,omitempty"`                     // 集市同时在售挂单上限（普通 10 / 轻享卡生效 20，纯便利零战力）
+	StallDurationHours      uint32                 `protobuf:"varint,14,opt,name=stall_duration_hours,json=stallDurationHours,proto3" json:"stall_duration_hours,omitempty"`                     // 离线摆摊单次营业时长小时数（普通 48 / 轻享卡生效 96）
+	WeeklyFreeTrialQuota    uint32                 `protobuf:"varint,15,opt,name=weekly_free_trial_quota,json=weeklyFreeTrialQuota,proto3" json:"weekly_free_trial_quota,omitempty"`             // 轻享卡每周额外衣柜随心试穿额度（未生效 0 / 生效 3，UTC+8 周一 05:00 重置）
+	WeeklyFreeTrialUsed     uint32                 `protobuf:"varint,16,opt,name=weekly_free_trial_used,json=weeklyFreeTrialUsed,proto3" json:"weekly_free_trial_used,omitempty"`                // 本周已消耗的轻享卡衣柜随心试穿次数
+	Plans                   []*AfkPassPlanView     `protobuf:"bytes,17,rep,name=plans,proto3" json:"plans,omitempty"`                                                                            // 可选套餐列表（按 plan_id 升序：月享卡 30 天 / 季享卡 90 天）
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
 
 func (x *AfkPassInfo) Reset() {
 	*x = AfkPassInfo{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[1]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -157,7 +295,7 @@ func (x *AfkPassInfo) String() string {
 func (*AfkPassInfo) ProtoMessage() {}
 
 func (x *AfkPassInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[1]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -170,7 +308,7 @@ func (x *AfkPassInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AfkPassInfo.ProtoReflect.Descriptor instead.
 func (*AfkPassInfo) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{1}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *AfkPassInfo) GetExpiresAt() uint64 {
@@ -257,6 +395,41 @@ func (x *AfkPassInfo) GetStage2TradableEnabled() bool {
 	return false
 }
 
+func (x *AfkPassInfo) GetMarketListingLimit() uint32 {
+	if x != nil {
+		return x.MarketListingLimit
+	}
+	return 0
+}
+
+func (x *AfkPassInfo) GetStallDurationHours() uint32 {
+	if x != nil {
+		return x.StallDurationHours
+	}
+	return 0
+}
+
+func (x *AfkPassInfo) GetWeeklyFreeTrialQuota() uint32 {
+	if x != nil {
+		return x.WeeklyFreeTrialQuota
+	}
+	return 0
+}
+
+func (x *AfkPassInfo) GetWeeklyFreeTrialUsed() uint32 {
+	if x != nil {
+		return x.WeeklyFreeTrialUsed
+	}
+	return 0
+}
+
+func (x *AfkPassInfo) GetPlans() []*AfkPassPlanView {
+	if x != nil {
+		return x.Plans
+	}
+	return nil
+}
+
 type GetAfkPassRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -265,7 +438,7 @@ type GetAfkPassRequest struct {
 
 func (x *GetAfkPassRequest) Reset() {
 	*x = GetAfkPassRequest{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[2]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +450,7 @@ func (x *GetAfkPassRequest) String() string {
 func (*GetAfkPassRequest) ProtoMessage() {}
 
 func (x *GetAfkPassRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[2]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +463,7 @@ func (x *GetAfkPassRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAfkPassRequest.ProtoReflect.Descriptor instead.
 func (*GetAfkPassRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{2}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{3}
 }
 
 type GetAfkPassResponse struct {
@@ -303,7 +476,7 @@ type GetAfkPassResponse struct {
 
 func (x *GetAfkPassResponse) Reset() {
 	*x = GetAfkPassResponse{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[3]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +488,7 @@ func (x *GetAfkPassResponse) String() string {
 func (*GetAfkPassResponse) ProtoMessage() {}
 
 func (x *GetAfkPassResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[3]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +501,7 @@ func (x *GetAfkPassResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAfkPassResponse.ProtoReflect.Descriptor instead.
 func (*GetAfkPassResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{3}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetAfkPassResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -358,13 +531,15 @@ type BuyAfkPassRequest struct {
 	ClientRequestId      uint64                 `protobuf:"varint,1,opt,name=client_request_id,json=clientRequestId,proto3" json:"client_request_id,omitempty"`
 	ExpectedCurrencyType uint32                 `protobuf:"varint,2,opt,name=expected_currency_type,json=expectedCurrencyType,proto3" json:"expected_currency_type,omitempty"`
 	ExpectedPrice        uint64                 `protobuf:"varint,3,opt,name=expected_price,json=expectedPrice,proto3" json:"expected_price,omitempty"`
+	PlanId               uint32                 `protobuf:"varint,4,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`                                       // 0 兼容默认套餐 1（30 天月享卡）；2 = 90 天季享卡
+	ExpectedPeriodDays   uint32                 `protobuf:"varint,5,opt,name=expected_period_days,json=expectedPeriodDays,proto3" json:"expected_period_days,omitempty"` // 0 兼容旧客户端跳过天数校验；非 0 时防热更改天数
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BuyAfkPassRequest) Reset() {
 	*x = BuyAfkPassRequest{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[4]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +551,7 @@ func (x *BuyAfkPassRequest) String() string {
 func (*BuyAfkPassRequest) ProtoMessage() {}
 
 func (x *BuyAfkPassRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[4]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +564,7 @@ func (x *BuyAfkPassRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyAfkPassRequest.ProtoReflect.Descriptor instead.
 func (*BuyAfkPassRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{4}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BuyAfkPassRequest) GetClientRequestId() uint64 {
@@ -413,18 +588,33 @@ func (x *BuyAfkPassRequest) GetExpectedPrice() uint64 {
 	return 0
 }
 
+func (x *BuyAfkPassRequest) GetPlanId() uint32 {
+	if x != nil {
+		return x.PlanId
+	}
+	return 0
+}
+
+func (x *BuyAfkPassRequest) GetExpectedPeriodDays() uint32 {
+	if x != nil {
+		return x.ExpectedPeriodDays
+	}
+	return 0
+}
+
 type BuyAfkPassResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	Info          *AfkPassInfo           `protobuf:"bytes,2,opt,name=info,proto3" json:"info,omitempty"`          // 成功(含重放)时是开通之后的状态
 	Replayed      bool                   `protobuf:"varint,3,opt,name=replayed,proto3" json:"replayed,omitempty"` // true = 这个键之前已经成功过,这一次没有再执行,info 是当前状态
+	Bag           *BagInfo               `protobuf:"bytes,4,opt,name=bag,proto3" json:"bag,omitempty"`            // 开卡一次性直赠绑定道具后的最新背包快照
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BuyAfkPassResponse) Reset() {
 	*x = BuyAfkPassResponse{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[5]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -436,7 +626,7 @@ func (x *BuyAfkPassResponse) String() string {
 func (*BuyAfkPassResponse) ProtoMessage() {}
 
 func (x *BuyAfkPassResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[5]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -449,7 +639,7 @@ func (x *BuyAfkPassResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BuyAfkPassResponse.ProtoReflect.Descriptor instead.
 func (*BuyAfkPassResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{5}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BuyAfkPassResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -473,6 +663,13 @@ func (x *BuyAfkPassResponse) GetReplayed() bool {
 	return false
 }
 
+func (x *BuyAfkPassResponse) GetBag() *BagInfo {
+	if x != nil {
+		return x.Bag
+	}
+	return nil
+}
+
 // GM(只在 dev / test 放行):把到期设为 现在 + remaining_seconds;0 = 清除。上限 366 天。
 // 「设定」而不是「增加」:联调要能精确造出「还剩 2 分钟」;重放结果不变,不带幂等键。
 type GmSetAfkPassRequest struct {
@@ -484,7 +681,7 @@ type GmSetAfkPassRequest struct {
 
 func (x *GmSetAfkPassRequest) Reset() {
 	*x = GmSetAfkPassRequest{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[6]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -496,7 +693,7 @@ func (x *GmSetAfkPassRequest) String() string {
 func (*GmSetAfkPassRequest) ProtoMessage() {}
 
 func (x *GmSetAfkPassRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[6]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -509,7 +706,7 @@ func (x *GmSetAfkPassRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GmSetAfkPassRequest.ProtoReflect.Descriptor instead.
 func (*GmSetAfkPassRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{6}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GmSetAfkPassRequest) GetRemainingSeconds() uint32 {
@@ -529,7 +726,7 @@ type GmSetAfkPassResponse struct {
 
 func (x *GmSetAfkPassResponse) Reset() {
 	*x = GmSetAfkPassResponse{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[7]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +738,7 @@ func (x *GmSetAfkPassResponse) String() string {
 func (*GmSetAfkPassResponse) ProtoMessage() {}
 
 func (x *GmSetAfkPassResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[7]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +751,7 @@ func (x *GmSetAfkPassResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GmSetAfkPassResponse.ProtoReflect.Descriptor instead.
 func (*GmSetAfkPassResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{7}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GmSetAfkPassResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -581,7 +778,7 @@ type SetAfkPassSettingsRequest struct {
 
 func (x *SetAfkPassSettingsRequest) Reset() {
 	*x = SetAfkPassSettingsRequest{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[8]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -593,7 +790,7 @@ func (x *SetAfkPassSettingsRequest) String() string {
 func (*SetAfkPassSettingsRequest) ProtoMessage() {}
 
 func (x *SetAfkPassSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[8]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -606,7 +803,7 @@ func (x *SetAfkPassSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAfkPassSettingsRequest.ProtoReflect.Descriptor instead.
 func (*SetAfkPassSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{8}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SetAfkPassSettingsRequest) GetAutoReturnCityOnTeamEnd() bool {
@@ -626,7 +823,7 @@ type SetAfkPassSettingsResponse struct {
 
 func (x *SetAfkPassSettingsResponse) Reset() {
 	*x = SetAfkPassSettingsResponse{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[9]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -638,7 +835,7 @@ func (x *SetAfkPassSettingsResponse) String() string {
 func (*SetAfkPassSettingsResponse) ProtoMessage() {}
 
 func (x *SetAfkPassSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[9]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -651,7 +848,7 @@ func (x *SetAfkPassSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetAfkPassSettingsResponse.ProtoReflect.Descriptor instead.
 func (*SetAfkPassSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{9}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SetAfkPassSettingsResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -678,7 +875,7 @@ type AckHostedRecapRequest struct {
 
 func (x *AckHostedRecapRequest) Reset() {
 	*x = AckHostedRecapRequest{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[10]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -690,7 +887,7 @@ func (x *AckHostedRecapRequest) String() string {
 func (*AckHostedRecapRequest) ProtoMessage() {}
 
 func (x *AckHostedRecapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[10]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -703,7 +900,7 @@ func (x *AckHostedRecapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckHostedRecapRequest.ProtoReflect.Descriptor instead.
 func (*AckHostedRecapRequest) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{10}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AckHostedRecapRequest) GetStartedAt() uint64 {
@@ -723,7 +920,7 @@ type AckHostedRecapResponse struct {
 
 func (x *AckHostedRecapResponse) Reset() {
 	*x = AckHostedRecapResponse{}
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[11]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -735,7 +932,7 @@ func (x *AckHostedRecapResponse) String() string {
 func (*AckHostedRecapResponse) ProtoMessage() {}
 
 func (x *AckHostedRecapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[11]
+	mi := &file_proto_scene_player_afk_pass_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -748,7 +945,7 @@ func (x *AckHostedRecapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckHostedRecapResponse.ProtoReflect.Descriptor instead.
 func (*AckHostedRecapResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{11}
+	return file_proto_scene_player_afk_pass_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AckHostedRecapResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -769,7 +966,7 @@ var File_proto_scene_player_afk_pass_proto protoreflect.FileDescriptor
 
 const file_proto_scene_player_afk_pass_proto_rawDesc = "" +
 	"\n" +
-	"!proto/scene/player_afk_pass.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\"\x92\x02\n" +
+	"!proto/scene/player_afk_pass.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1cproto/scene/player_bag.proto\"\x92\x02\n" +
 	"\x12HostedRecapSummary\x12\x1d\n" +
 	"\n" +
 	"started_at\x18\x01 \x01(\x04R\tstartedAt\x12\x19\n" +
@@ -782,7 +979,22 @@ const file_proto_scene_player_afk_pass_proto_rawDesc = "" +
 	"\n" +
 	"item_count\x18\a \x01(\rR\titemCount\x12\x1f\n" +
 	"\vpending_ack\x18\b \x01(\bR\n" +
-	"pendingAck\"\x8f\x04\n" +
+	"pendingAck\"\xaa\x03\n" +
+	"\x0fAfkPassPlanView\x12\x17\n" +
+	"\aplan_id\x18\x01 \x01(\rR\x06planId\x12\x1b\n" +
+	"\tplan_name\x18\x02 \x01(\tR\bplanName\x12\x1f\n" +
+	"\vperiod_days\x18\x03 \x01(\rR\n" +
+	"periodDays\x12.\n" +
+	"\x13price_currency_type\x18\x04 \x01(\rR\x11priceCurrencyType\x12\x14\n" +
+	"\x05price\x18\x05 \x01(\x04R\x05price\x12\"\n" +
+	"\rbonus_item_id\x18\x06 \x01(\rR\vbonusItemId\x12(\n" +
+	"\x10bonus_item_count\x18\a \x01(\rR\x0ebonusItemCount\x12&\n" +
+	"\x0fbonus_item_name\x18\b \x01(\tR\rbonusItemName\x12-\n" +
+	"\x13bonus_item_icon_key\x18\t \x01(\tR\x10bonusItemIconKey\x12&\n" +
+	"\x0fbonus_frame_key\x18\n" +
+	" \x01(\tR\rbonusFrameKey\x12\x19\n" +
+	"\bicon_key\x18\v \x01(\tR\aiconKey\x12\x12\n" +
+	"\x04desc\x18\f \x01(\tR\x04desc\"\x87\x06\n" +
 	"\vAfkPassInfo\x12\x1d\n" +
 	"\n" +
 	"expires_at\x18\x01 \x01(\x04R\texpiresAt\x12\x1d\n" +
@@ -799,19 +1011,27 @@ const file_proto_scene_player_afk_pass_proto_rawDesc = "" +
 	"\fhosted_recap\x18\n" +
 	" \x01(\v2\x13.HostedRecapSummaryR\vhostedRecap\x124\n" +
 	"\x16unlocked_loadout_slots\x18\v \x01(\rR\x14unlockedLoadoutSlots\x126\n" +
-	"\x17stage2_tradable_enabled\x18\f \x01(\bR\x15stage2TradableEnabled\"\x13\n" +
+	"\x17stage2_tradable_enabled\x18\f \x01(\bR\x15stage2TradableEnabled\x120\n" +
+	"\x14market_listing_limit\x18\r \x01(\rR\x12marketListingLimit\x120\n" +
+	"\x14stall_duration_hours\x18\x0e \x01(\rR\x12stallDurationHours\x125\n" +
+	"\x17weekly_free_trial_quota\x18\x0f \x01(\rR\x14weeklyFreeTrialQuota\x123\n" +
+	"\x16weekly_free_trial_used\x18\x10 \x01(\rR\x13weeklyFreeTrialUsed\x12&\n" +
+	"\x05plans\x18\x11 \x03(\v2\x10.AfkPassPlanViewR\x05plans\"\x13\n" +
 	"\x11GetAfkPassRequest\"l\n" +
 	"\x12GetAfkPassResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12 \n" +
-	"\x04info\x18\x02 \x01(\v2\f.AfkPassInfoR\x04info\"\x9c\x01\n" +
+	"\x04info\x18\x02 \x01(\v2\f.AfkPassInfoR\x04info\"\xe7\x01\n" +
 	"\x11BuyAfkPassRequest\x12*\n" +
 	"\x11client_request_id\x18\x01 \x01(\x04R\x0fclientRequestId\x124\n" +
 	"\x16expected_currency_type\x18\x02 \x01(\rR\x14expectedCurrencyType\x12%\n" +
-	"\x0eexpected_price\x18\x03 \x01(\x04R\rexpectedPrice\"\x88\x01\n" +
+	"\x0eexpected_price\x18\x03 \x01(\x04R\rexpectedPrice\x12\x17\n" +
+	"\aplan_id\x18\x04 \x01(\rR\x06planId\x120\n" +
+	"\x14expected_period_days\x18\x05 \x01(\rR\x12expectedPeriodDays\"\xa4\x01\n" +
 	"\x12BuyAfkPassResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12 \n" +
 	"\x04info\x18\x02 \x01(\v2\f.AfkPassInfoR\x04info\x12\x1a\n" +
-	"\breplayed\x18\x03 \x01(\bR\breplayed\"B\n" +
+	"\breplayed\x18\x03 \x01(\bR\breplayed\x12\x1a\n" +
+	"\x03bag\x18\x04 \x01(\v2\b.BagInfoR\x03bag\"B\n" +
 	"\x13GmSetAfkPassRequest\x12+\n" +
 	"\x11remaining_seconds\x18\x01 \x01(\rR\x10remainingSeconds\"n\n" +
 	"\x14GmSetAfkPassResponse\x124\n" +
@@ -850,49 +1070,53 @@ func file_proto_scene_player_afk_pass_proto_rawDescGZIP() []byte {
 	return file_proto_scene_player_afk_pass_proto_rawDescData
 }
 
-var file_proto_scene_player_afk_pass_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_proto_scene_player_afk_pass_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_proto_scene_player_afk_pass_proto_goTypes = []any{
 	(*HostedRecapSummary)(nil),         // 0: HostedRecapSummary
-	(*AfkPassInfo)(nil),                // 1: AfkPassInfo
-	(*GetAfkPassRequest)(nil),          // 2: GetAfkPassRequest
-	(*GetAfkPassResponse)(nil),         // 3: GetAfkPassResponse
-	(*BuyAfkPassRequest)(nil),          // 4: BuyAfkPassRequest
-	(*BuyAfkPassResponse)(nil),         // 5: BuyAfkPassResponse
-	(*GmSetAfkPassRequest)(nil),        // 6: GmSetAfkPassRequest
-	(*GmSetAfkPassResponse)(nil),       // 7: GmSetAfkPassResponse
-	(*SetAfkPassSettingsRequest)(nil),  // 8: SetAfkPassSettingsRequest
-	(*SetAfkPassSettingsResponse)(nil), // 9: SetAfkPassSettingsResponse
-	(*AckHostedRecapRequest)(nil),      // 10: AckHostedRecapRequest
-	(*AckHostedRecapResponse)(nil),     // 11: AckHostedRecapResponse
-	(*base.TipInfoMessage)(nil),        // 12: TipInfoMessage
+	(*AfkPassPlanView)(nil),            // 1: AfkPassPlanView
+	(*AfkPassInfo)(nil),                // 2: AfkPassInfo
+	(*GetAfkPassRequest)(nil),          // 3: GetAfkPassRequest
+	(*GetAfkPassResponse)(nil),         // 4: GetAfkPassResponse
+	(*BuyAfkPassRequest)(nil),          // 5: BuyAfkPassRequest
+	(*BuyAfkPassResponse)(nil),         // 6: BuyAfkPassResponse
+	(*GmSetAfkPassRequest)(nil),        // 7: GmSetAfkPassRequest
+	(*GmSetAfkPassResponse)(nil),       // 8: GmSetAfkPassResponse
+	(*SetAfkPassSettingsRequest)(nil),  // 9: SetAfkPassSettingsRequest
+	(*SetAfkPassSettingsResponse)(nil), // 10: SetAfkPassSettingsResponse
+	(*AckHostedRecapRequest)(nil),      // 11: AckHostedRecapRequest
+	(*AckHostedRecapResponse)(nil),     // 12: AckHostedRecapResponse
+	(*base.TipInfoMessage)(nil),        // 13: TipInfoMessage
+	(*BagInfo)(nil),                    // 14: BagInfo
 }
 var file_proto_scene_player_afk_pass_proto_depIdxs = []int32{
 	0,  // 0: AfkPassInfo.hosted_recap:type_name -> HostedRecapSummary
-	12, // 1: GetAfkPassResponse.error_message:type_name -> TipInfoMessage
-	1,  // 2: GetAfkPassResponse.info:type_name -> AfkPassInfo
-	12, // 3: BuyAfkPassResponse.error_message:type_name -> TipInfoMessage
-	1,  // 4: BuyAfkPassResponse.info:type_name -> AfkPassInfo
-	12, // 5: GmSetAfkPassResponse.error_message:type_name -> TipInfoMessage
-	1,  // 6: GmSetAfkPassResponse.info:type_name -> AfkPassInfo
-	12, // 7: SetAfkPassSettingsResponse.error_message:type_name -> TipInfoMessage
-	1,  // 8: SetAfkPassSettingsResponse.info:type_name -> AfkPassInfo
-	12, // 9: AckHostedRecapResponse.error_message:type_name -> TipInfoMessage
-	1,  // 10: AckHostedRecapResponse.info:type_name -> AfkPassInfo
-	2,  // 11: SceneAfkPassClientPlayer.GetAfkPass:input_type -> GetAfkPassRequest
-	4,  // 12: SceneAfkPassClientPlayer.BuyAfkPass:input_type -> BuyAfkPassRequest
-	6,  // 13: SceneAfkPassClientPlayer.GmSetAfkPass:input_type -> GmSetAfkPassRequest
-	8,  // 14: SceneAfkPassClientPlayer.SetAfkPassSettings:input_type -> SetAfkPassSettingsRequest
-	10, // 15: SceneAfkPassClientPlayer.AckHostedRecap:input_type -> AckHostedRecapRequest
-	3,  // 16: SceneAfkPassClientPlayer.GetAfkPass:output_type -> GetAfkPassResponse
-	5,  // 17: SceneAfkPassClientPlayer.BuyAfkPass:output_type -> BuyAfkPassResponse
-	7,  // 18: SceneAfkPassClientPlayer.GmSetAfkPass:output_type -> GmSetAfkPassResponse
-	9,  // 19: SceneAfkPassClientPlayer.SetAfkPassSettings:output_type -> SetAfkPassSettingsResponse
-	11, // 20: SceneAfkPassClientPlayer.AckHostedRecap:output_type -> AckHostedRecapResponse
-	16, // [16:21] is the sub-list for method output_type
-	11, // [11:16] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	1,  // 1: AfkPassInfo.plans:type_name -> AfkPassPlanView
+	13, // 2: GetAfkPassResponse.error_message:type_name -> TipInfoMessage
+	2,  // 3: GetAfkPassResponse.info:type_name -> AfkPassInfo
+	13, // 4: BuyAfkPassResponse.error_message:type_name -> TipInfoMessage
+	2,  // 5: BuyAfkPassResponse.info:type_name -> AfkPassInfo
+	14, // 6: BuyAfkPassResponse.bag:type_name -> BagInfo
+	13, // 7: GmSetAfkPassResponse.error_message:type_name -> TipInfoMessage
+	2,  // 8: GmSetAfkPassResponse.info:type_name -> AfkPassInfo
+	13, // 9: SetAfkPassSettingsResponse.error_message:type_name -> TipInfoMessage
+	2,  // 10: SetAfkPassSettingsResponse.info:type_name -> AfkPassInfo
+	13, // 11: AckHostedRecapResponse.error_message:type_name -> TipInfoMessage
+	2,  // 12: AckHostedRecapResponse.info:type_name -> AfkPassInfo
+	3,  // 13: SceneAfkPassClientPlayer.GetAfkPass:input_type -> GetAfkPassRequest
+	5,  // 14: SceneAfkPassClientPlayer.BuyAfkPass:input_type -> BuyAfkPassRequest
+	7,  // 15: SceneAfkPassClientPlayer.GmSetAfkPass:input_type -> GmSetAfkPassRequest
+	9,  // 16: SceneAfkPassClientPlayer.SetAfkPassSettings:input_type -> SetAfkPassSettingsRequest
+	11, // 17: SceneAfkPassClientPlayer.AckHostedRecap:input_type -> AckHostedRecapRequest
+	4,  // 18: SceneAfkPassClientPlayer.GetAfkPass:output_type -> GetAfkPassResponse
+	6,  // 19: SceneAfkPassClientPlayer.BuyAfkPass:output_type -> BuyAfkPassResponse
+	8,  // 20: SceneAfkPassClientPlayer.GmSetAfkPass:output_type -> GmSetAfkPassResponse
+	10, // 21: SceneAfkPassClientPlayer.SetAfkPassSettings:output_type -> SetAfkPassSettingsResponse
+	12, // 22: SceneAfkPassClientPlayer.AckHostedRecap:output_type -> AckHostedRecapResponse
+	18, // [18:23] is the sub-list for method output_type
+	13, // [13:18] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_proto_scene_player_afk_pass_proto_init() }
@@ -900,13 +1124,14 @@ func file_proto_scene_player_afk_pass_proto_init() {
 	if File_proto_scene_player_afk_pass_proto != nil {
 		return
 	}
+	file_proto_scene_player_bag_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_afk_pass_proto_rawDesc), len(file_proto_scene_player_afk_pass_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

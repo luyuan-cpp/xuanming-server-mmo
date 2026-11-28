@@ -45,7 +45,7 @@ public final class TravelPassSeasonTableOuterClass extends com.google.protobuf.G
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\034travelpassseason_table.proto\"\354\002\n\025Trave" +
+      "\n\034travelpassseason_table.proto\"\225\003\n\025Trave" +
       "lPassSeasonTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030" +
       "\002 \001(\r\022\014\n\004name\030\003 \001(\t\022\023\n\013description\030\004 \001(\t" +
       "\022\020\n\010icon_key\030\005 \001(\t\022\030\n\020banner_asset_key\030\006" +
@@ -54,11 +54,12 @@ public final class TravelPassSeasonTableOuterClass extends com.google.protobuf.G
       "ints\030\n \001(\r\022\036\n\026hard_or_pvp_win_points\030\013 \001" +
       "(\r\022\"\n\032pvp_qualified_other_points\030\014 \001(\r\022\035" +
       "\n\025premium_currency_type\030\r \001(\r\022\025\n\rpremium" +
-      "_price\030\016 \001(\004\022\027\n\017config_revision\030\017 \001(\r\"A\n" +
-      "\031TravelPassSeasonTableData\022$\n\004data\030\001 \003(\013" +
-      "2\026.TravelPassSeasonTableBG\n\016com.game.tab" +
-      "leB\037TravelPassSeasonTableOuterClassP\001Z\022g" +
-      "enerated/pb/tableb\006proto3"
+      "_price\030\016 \001(\004\022\027\n\017config_revision\030\017 \001(\r\022\022\n" +
+      "\nsort_order\030\020 \001(\r\022\023\n\013is_archived\030\021 \001(\r\"A" +
+      "\n\031TravelPassSeasonTableData\022$\n\004data\030\001 \003(" +
+      "\0132\026.TravelPassSeasonTableBG\n\016com.game.ta" +
+      "bleB\037TravelPassSeasonTableOuterClassP\001Z\022" +
+      "generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -69,7 +70,7 @@ public final class TravelPassSeasonTableOuterClass extends com.google.protobuf.G
     internal_static_TravelPassSeasonTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_TravelPassSeasonTable_descriptor,
-        new java.lang.String[] { "Id", "Enabled", "Name", "Description", "IconKey", "BannerAssetKey", "StartsAtMs", "EndsAtMs", "MaxPoints", "PveWinPoints", "HardOrPvpWinPoints", "PvpQualifiedOtherPoints", "PremiumCurrencyType", "PremiumPrice", "ConfigRevision", });
+        new java.lang.String[] { "Id", "Enabled", "Name", "Description", "IconKey", "BannerAssetKey", "StartsAtMs", "EndsAtMs", "MaxPoints", "PveWinPoints", "HardOrPvpWinPoints", "PvpQualifiedOtherPoints", "PremiumCurrencyType", "PremiumPrice", "ConfigRevision", "SortOrder", "IsArchived", });
     internal_static_TravelPassSeasonTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_TravelPassSeasonTableData_fieldAccessorTable = new

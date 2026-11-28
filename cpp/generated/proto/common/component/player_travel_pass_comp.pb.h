@@ -531,9 +531,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTravelPassComp final : public
   // accessors -------------------------------------------------------
   enum : int {
     kSeasonsFieldNumber = 1,
+    kBonusCosmeticKeysFieldNumber = 6,
     kEquippedFrameKeyFieldNumber = 3,
     kEquippedTitleKeyFieldNumber = 4,
     kPassRevisionFieldNumber = 2,
+    kActivePassIdFieldNumber = 5,
   };
   // repeated .TravelPassSeasonProgress seasons = 1;
   [[nodiscard]] int seasons_size()
@@ -554,6 +556,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTravelPassComp final : public
   private:
   const ::google::protobuf::RepeatedPtrField<::TravelPassSeasonProgress>& _internal_seasons() const;
   ::google::protobuf::RepeatedPtrField<::TravelPassSeasonProgress>* PROTOBUF_NONNULL _internal_mutable_seasons();
+
+  public:
+  // repeated string bonus_cosmetic_keys = 6;
+  [[nodiscard]] int bonus_cosmetic_keys_size()
+      const;
+  private:
+  int _internal_bonus_cosmetic_keys_size() const;
+
+  public:
+  void clear_bonus_cosmetic_keys() ;
+  [[nodiscard]] const ::std::string& bonus_cosmetic_keys(int index) const;
+  ::std::string* PROTOBUF_NONNULL mutable_bonus_cosmetic_keys(int index);
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_bonus_cosmetic_keys(int index, Arg_&& value, Args_... args);
+  ::std::string* PROTOBUF_NONNULL add_bonus_cosmetic_keys();
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void add_bonus_cosmetic_keys(Arg_&& value, Args_... args);
+  [[nodiscard]] const
+      ::google::protobuf::RepeatedPtrField<::std::string>&
+      bonus_cosmetic_keys() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::std::string>*
+      PROTOBUF_NONNULL
+      mutable_bonus_cosmetic_keys();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::std::string>& _internal_bonus_cosmetic_keys() const;
+  ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL _internal_mutable_bonus_cosmetic_keys();
 
   public:
   // string equipped_frame_key = 3;
@@ -596,12 +625,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTravelPassComp final : public
   void _internal_set_pass_revision(::uint64_t value);
 
   public:
+  // uint32 active_pass_id = 5;
+  void clear_active_pass_id() ;
+  [[nodiscard]] ::uint32_t active_pass_id() const;
+  void set_active_pass_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_pass_id() const;
+  void _internal_set_active_pass_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:PlayerTravelPassComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          1, 65,
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          1, 84,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -630,9 +669,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerTravelPassComp final : public
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::TravelPassSeasonProgress > seasons_;
+    ::google::protobuf::RepeatedPtrField<::std::string> bonus_cosmetic_keys_;
     ::google::protobuf::internal::ArenaStringPtr equipped_frame_key_;
     ::google::protobuf::internal::ArenaStringPtr equipped_title_key_;
     ::uint64_t pass_revision_;
+    ::uint32_t active_pass_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -958,7 +999,7 @@ PlayerTravelPassComp::_internal_mutable_seasons() {
 inline void PlayerTravelPassComp::clear_pass_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pass_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t PlayerTravelPassComp::pass_revision() const {
   // @@protoc_insertion_point(field_get:PlayerTravelPassComp.pass_revision)
@@ -966,7 +1007,7 @@ inline ::uint64_t PlayerTravelPassComp::pass_revision() const {
 }
 inline void PlayerTravelPassComp::set_pass_revision(::uint64_t value) {
   _internal_set_pass_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PlayerTravelPassComp.pass_revision)
 }
 inline ::uint64_t PlayerTravelPassComp::_internal_pass_revision() const {
@@ -982,7 +1023,7 @@ inline void PlayerTravelPassComp::_internal_set_pass_revision(::uint64_t value) 
 inline void PlayerTravelPassComp::clear_equipped_frame_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_frame_key_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& PlayerTravelPassComp::equipped_frame_key() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -992,13 +1033,13 @@ inline const ::std::string& PlayerTravelPassComp::equipped_frame_key() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerTravelPassComp::set_equipped_frame_key(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.equipped_frame_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerTravelPassComp.equipped_frame_key)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerTravelPassComp::mutable_equipped_frame_key()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_equipped_frame_key();
   // @@protoc_insertion_point(field_mutable:PlayerTravelPassComp.equipped_frame_key)
   return _s;
@@ -1018,10 +1059,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerTravelPassComp::_internal_mutable_e
 inline ::std::string* PROTOBUF_NULLABLE PlayerTravelPassComp::release_equipped_frame_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerTravelPassComp.equipped_frame_key)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.equipped_frame_key_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.equipped_frame_key_.Set("", GetArena());
@@ -1031,9 +1072,9 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerTravelPassComp::release_equipped_f
 inline void PlayerTravelPassComp::set_allocated_equipped_frame_key(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.equipped_frame_key_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.equipped_frame_key_.IsDefault()) {
@@ -1046,7 +1087,7 @@ inline void PlayerTravelPassComp::set_allocated_equipped_frame_key(::std::string
 inline void PlayerTravelPassComp::clear_equipped_title_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_title_key_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline const ::std::string& PlayerTravelPassComp::equipped_title_key() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1056,13 +1097,13 @@ inline const ::std::string& PlayerTravelPassComp::equipped_title_key() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void PlayerTravelPassComp::set_equipped_title_key(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   _impl_.equipped_title_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:PlayerTravelPassComp.equipped_title_key)
 }
 inline ::std::string* PROTOBUF_NONNULL PlayerTravelPassComp::mutable_equipped_title_key()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::std::string* _s = _internal_mutable_equipped_title_key();
   // @@protoc_insertion_point(field_mutable:PlayerTravelPassComp.equipped_title_key)
   return _s;
@@ -1082,10 +1123,10 @@ inline ::std::string* PROTOBUF_NONNULL PlayerTravelPassComp::_internal_mutable_e
 inline ::std::string* PROTOBUF_NULLABLE PlayerTravelPassComp::release_equipped_title_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PlayerTravelPassComp.equipped_title_key)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   auto* released = _impl_.equipped_title_key_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.equipped_title_key_.Set("", GetArena());
@@ -1095,15 +1136,111 @@ inline ::std::string* PROTOBUF_NULLABLE PlayerTravelPassComp::release_equipped_t
 inline void PlayerTravelPassComp::set_allocated_equipped_title_key(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   _impl_.equipped_title_key_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.equipped_title_key_.IsDefault()) {
     _impl_.equipped_title_key_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:PlayerTravelPassComp.equipped_title_key)
+}
+
+// uint32 active_pass_id = 5;
+inline void PlayerTravelPassComp::clear_active_pass_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pass_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t PlayerTravelPassComp::active_pass_id() const {
+  // @@protoc_insertion_point(field_get:PlayerTravelPassComp.active_pass_id)
+  return _internal_active_pass_id();
+}
+inline void PlayerTravelPassComp::set_active_pass_id(::uint32_t value) {
+  _internal_set_active_pass_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:PlayerTravelPassComp.active_pass_id)
+}
+inline ::uint32_t PlayerTravelPassComp::_internal_active_pass_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_pass_id_;
+}
+inline void PlayerTravelPassComp::_internal_set_active_pass_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pass_id_ = value;
+}
+
+// repeated string bonus_cosmetic_keys = 6;
+inline int PlayerTravelPassComp::_internal_bonus_cosmetic_keys_size() const {
+  return _internal_bonus_cosmetic_keys().size();
+}
+inline int PlayerTravelPassComp::bonus_cosmetic_keys_size() const {
+  return _internal_bonus_cosmetic_keys_size();
+}
+inline void PlayerTravelPassComp::clear_bonus_cosmetic_keys() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_cosmetic_keys_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerTravelPassComp::add_bonus_cosmetic_keys()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::std::string* _s =
+      _internal_mutable_bonus_cosmetic_keys()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add_mutable:PlayerTravelPassComp.bonus_cosmetic_keys)
+  return _s;
+}
+inline const ::std::string& PlayerTravelPassComp::bonus_cosmetic_keys(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PlayerTravelPassComp.bonus_cosmetic_keys)
+  return _internal_bonus_cosmetic_keys().Get(index);
+}
+inline ::std::string* PROTOBUF_NONNULL PlayerTravelPassComp::mutable_bonus_cosmetic_keys(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:PlayerTravelPassComp.bonus_cosmetic_keys)
+  return _internal_mutable_bonus_cosmetic_keys()->Mutable(index);
+}
+template <typename Arg_, typename... Args_>
+inline void PlayerTravelPassComp::set_bonus_cosmetic_keys(int index, Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::AssignToString(
+      *_internal_mutable_bonus_cosmetic_keys()->Mutable(index),
+      ::std::forward<Arg_>(value), args... );
+  // @@protoc_insertion_point(field_set:PlayerTravelPassComp.bonus_cosmetic_keys)
+}
+template <typename Arg_, typename... Args_>
+inline void PlayerTravelPassComp::add_bonus_cosmetic_keys(Arg_&& value, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::google::protobuf::internal::AddToRepeatedPtrField(
+      ::google::protobuf::MessageLite::internal_visibility(), GetArena(),
+      *_internal_mutable_bonus_cosmetic_keys(), ::std::forward<Arg_>(value),
+      args... );
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:PlayerTravelPassComp.bonus_cosmetic_keys)
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>& PlayerTravelPassComp::bonus_cosmetic_keys()
+    const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:PlayerTravelPassComp.bonus_cosmetic_keys)
+  return _internal_bonus_cosmetic_keys();
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+PlayerTravelPassComp::mutable_bonus_cosmetic_keys() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:PlayerTravelPassComp.bonus_cosmetic_keys)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_bonus_cosmetic_keys();
+}
+inline const ::google::protobuf::RepeatedPtrField<::std::string>&
+PlayerTravelPassComp::_internal_bonus_cosmetic_keys() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bonus_cosmetic_keys_;
+}
+inline ::google::protobuf::RepeatedPtrField<::std::string>* PROTOBUF_NONNULL
+PlayerTravelPassComp::_internal_mutable_bonus_cosmetic_keys() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.bonus_cosmetic_keys_;
 }
 
 #ifdef __GNUC__

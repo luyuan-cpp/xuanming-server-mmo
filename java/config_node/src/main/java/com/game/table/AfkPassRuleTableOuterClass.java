@@ -45,15 +45,17 @@ public final class AfkPassRuleTableOuterClass extends com.google.protobuf.Genera
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\027afkpassrule_table.proto\"\246\001\n\020AfkPassRul" +
+      "\n\027afkpassrule_table.proto\"\225\002\n\020AfkPassRul" +
       "eTable\022\n\n\002id\030\001 \001(\r\022\023\n\013period_days\030\002 \001(\r\022" +
       "\033\n\023price_currency_type\030\003 \001(\r\022\r\n\005price\030\004 " +
       "\001(\004\022\032\n\022max_remaining_days\030\005 \001(\r\022\033\n\023remin" +
-      "d_before_hours\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\"7\n\024Af" +
-      "kPassRuleTableData\022\037\n\004data\030\001 \003(\0132\021.AfkPa" +
-      "ssRuleTableBB\n\016com.game.tableB\032AfkPassRu" +
-      "leTableOuterClassP\001Z\022generated/pb/tableb" +
-      "\006proto3"
+      "d_before_hours\030\006 \001(\r\022\014\n\004desc\030\007 \001(\t\022\025\n\rbo" +
+      "nus_item_id\030\010 \001(\r\022\030\n\020bonus_item_count\030\t " +
+      "\001(\r\022\027\n\017bonus_frame_key\030\n \001(\t\022\021\n\tplan_nam" +
+      "e\030\013 \001(\t\022\020\n\010icon_key\030\014 \001(\t\"7\n\024AfkPassRule" +
+      "TableData\022\037\n\004data\030\001 \003(\0132\021.AfkPassRuleTab" +
+      "leBB\n\016com.game.tableB\032AfkPassRuleTableOu" +
+      "terClassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -64,7 +66,7 @@ public final class AfkPassRuleTableOuterClass extends com.google.protobuf.Genera
     internal_static_AfkPassRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_AfkPassRuleTable_descriptor,
-        new java.lang.String[] { "Id", "PeriodDays", "PriceCurrencyType", "Price", "MaxRemainingDays", "RemindBeforeHours", "Desc", });
+        new java.lang.String[] { "Id", "PeriodDays", "PriceCurrencyType", "Price", "MaxRemainingDays", "RemindBeforeHours", "Desc", "BonusItemId", "BonusItemCount", "BonusFrameKey", "PlanName", "IconKey", });
     internal_static_AfkPassRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_AfkPassRuleTableData_fieldAccessorTable = new

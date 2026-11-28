@@ -35,6 +35,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::BattleEconomyLedger
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::RewardedAdLedger
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::ClientRequestLedgerComp
@@ -42,78 +44,40 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
 };
 }  // namespace
 #endif
-class RewardedAdLedger::_Internal {
- public:
-  using HasBits = decltype(::std::declval<RewardedAdLedger>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_._has_bits_);
-};
-
-constexpr RewardedAdLedger::ParseTableT_ RewardedAdLedger::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+constexpr RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::ParseTableT_ RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
   return ParseTableT_{
     {
-      PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_._has_bits_),
+      PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      2, 8,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967292,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      2,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
       nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
+      ::_pbi::TcParser::DiscardEverythingFallback,  // fallback
       #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::RewardedAdLedger>(),  // to_prefetch
+      ::_pbi::TcParser::GetTable<::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint64 day_starts_at_ms = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.day_starts_at_ms_), 0>(),
+      // uint32 value = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.value_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.value_)}},
+      // uint32 key = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.key_), 0>(),
        {8, 0, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.day_starts_at_ms_)}},
-      // uint32 claimed_today = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger, _impl_.claimed_today_), 3>(),
-       {16, 3, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.claimed_today_)}},
-      // uint64 last_claim_at_ms = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.last_claim_at_ms_), 1>(),
-       {24, 1, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.last_claim_at_ms_)}},
-      // uint64 total_claimed_lifetime = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.total_claimed_lifetime_), 2>(),
-       {32, 2, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.total_claimed_lifetime_)}},
-      // uint64 active_session_id = 5;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.active_session_id_), 5>(),
-       {40, 5, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_id_)}},
-      // uint64 active_session_issued_ms = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.active_session_issued_ms_), 6>(),
-       {48, 6, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_issued_ms_)}},
-      // uint32 active_session_slot_id = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger, _impl_.active_session_slot_id_), 4>(),
-       {56, 4, 0,
-        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_slot_id_)}},
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.key_)}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint64 day_starts_at_ms = 1;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.day_starts_at_ms_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 claimed_today = 2;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.claimed_today_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // uint64 last_claim_at_ms = 3;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.last_claim_at_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 total_claimed_lifetime = 4;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.total_claimed_lifetime_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 active_session_id = 5;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint64 active_session_issued_ms = 6;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_issued_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
-      // uint32 active_session_slot_id = 7;
-      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_slot_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 key = 1;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.key_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 value = 2;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.value_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -121,38 +85,24 @@ constexpr RewardedAdLedger::ParseTableT_ RewardedAdLedger::InternalGenerateParse
   };
 }
 
-
-inline constexpr RewardedAdLedger::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        day_starts_at_ms_{::uint64_t{0u}},
-        last_claim_at_ms_{::uint64_t{0u}},
-        total_claimed_lifetime_{::uint64_t{0u}},
-        claimed_today_{0u},
-        active_session_slot_id_{0u},
-        active_session_id_{::uint64_t{0u}},
-        active_session_issued_ms_{::uint64_t{0u}} {}
-
 template <typename>
-constexpr RewardedAdLedger::RewardedAdLedger(::_pbi::ConstantInitialized,
+constexpr RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse(::_pbi::ConstantInitialized,
                        const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
+    : RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::MapEntry(
 #if defined(PROTOBUF_CUSTOM_VTABLE)
           class_data
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+      ) {
 }
-inline void* PROTOBUF_NONNULL RewardedAdLedger::PlacementNew_(
+inline void* PROTOBUF_NONNULL RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::PlacementNew_(
     const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) RewardedAdLedger(arena);
+  return ::new (mem) RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse(arena);
 }
-constexpr auto RewardedAdLedger::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RewardedAdLedger), alignof(RewardedAdLedger));
+constexpr auto RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse), alignof(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse));
 }
-constexpr auto RewardedAdLedger::InternalGenerateClassData_(
+constexpr auto RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::InternalGenerateClassData_(
     const MessageLite& prototype,
     const ::google::protobuf::internal::TcParseTableBase* tc_table) {
   return ::google::protobuf::internal::ClassDataFull{
@@ -164,14 +114,15 @@ constexpr auto RewardedAdLedger::InternalGenerateClassData_(
           tc_table,
 #endif
           nullptr,  // IsInitialized
-          &RewardedAdLedger::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<RewardedAdLedger>(),
+          &RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse>(),
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-          &RewardedAdLedger::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<RewardedAdLedger>(), &RewardedAdLedger::ByteSizeLong,
-              &RewardedAdLedger::_InternalSerialize,
+          &RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::SharedDtor,
+          static_cast<void (::google::protobuf::MessageLite::*)()>(&RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::ClearImpl),
+              ::google::protobuf::Message::ByteSizeLongImpl, ::google::protobuf::Message::_InternalSerializeImpl
+              ,
 #endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_._cached_size_),
+          PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_._cached_size_),
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
@@ -183,45 +134,45 @@ constexpr auto RewardedAdLedger::InternalGenerateClassData_(
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   };
 }
-struct RewardedAdLedgerGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr RewardedAdLedgerGlobalsTypeInternal()
+struct RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUseGlobalsTypeInternal()
       :
 #ifndef PROTOBUF_MESSAGE_GLOBALS
         _default(::_pbi::ConstantInitialized{},
-                 RewardedAdLedger_class_data_.base())
+                 RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_.base())
 #else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(RewardedAdLedger::InternalGenerateClassData_(
-            _default, &RewardedAdLedger_globals_._table.header)),
+        MessageGlobalsBase(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::InternalGenerateClassData_(
+            _default, &RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_._table.header)),
         _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardedAdLedger>(
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse>(
             GetClassData()))
 #endif  // PROTOBUF_MESSAGE_GLOBALS
   {
   }
-  ~RewardedAdLedgerGlobalsTypeInternal() {}
+  ~RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUseGlobalsTypeInternal() {}
   union {
-    alignas(::_pbi::kMaxMessageAlignment) RewardedAdLedger _default;
+    alignas(::_pbi::kMaxMessageAlignment) RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse _default;
   };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardedAdLedger>(
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse>(
       ::std::declval<const ::_pbi::ClassData*>())) _table;
 #endif
 };
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(RewardedAdLedgerGlobalsTypeInternal, _default) ==
+static_assert(PROTOBUF_FIELD_OFFSET(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUseGlobalsTypeInternal, _default) ==
               ::_pbi::MessageGlobalsBase::OffsetToDefault());
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardedAdLedgerGlobalsTypeInternal RewardedAdLedger_globals_
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUseGlobalsTypeInternal RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_
         PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
 #if defined(PROTOBUF_CUSTOM_VTABLE)
 namespace {
-const ::_pbi::ClassData* RewardedAdLedger_get_class_data() {
+const ::_pbi::ClassData* RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_get_class_data() {
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-  return RewardedAdLedger_globals_.GetClassData();
+  return RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_.GetClassData();
 #else
-  return RewardedAdLedger_class_data_.base();
+  return RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -460,11 +411,11 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_._has_bits_),
       0, // no _extensions_
-      44, 248,  // max_field_number, fast_idx_mask
+      56, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
       0,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      42,  // num_field_entries
+      54,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -600,8 +551,9 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
        {504, 30, 0,
         PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.equip_loadout_unlocked_count_)}},
     }}, {{
-      33, 0, 1,
-      61824, 32,
+      33, 0, 2,
+      384, 32,
+      65280, 46,
       65535, 65535
     }}, {{
       // uint64 key = 1;
@@ -688,6 +640,30 @@ constexpr ClientRequestRecord::ParseTableT_ ClientRequestRecord::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_), _Internal::kHasBitsOffset + 40, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 skill_loadout_rent_spent_diamond = 44;
       {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_), _Internal::kHasBitsOffset + 41, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 appearance_bundle_unlocked_count = 45;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.appearance_bundle_unlocked_count_), _Internal::kHasBitsOffset + 43, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 appearance_bundle_spent_diamond = 46;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.appearance_bundle_spent_diamond_), _Internal::kHasBitsOffset + 42, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 city_celebration_id = 47;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.city_celebration_id_), _Internal::kHasBitsOffset + 45, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 city_celebration_bind_gold = 48;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.city_celebration_bind_gold_), _Internal::kHasBitsOffset + 44, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 cosmetic_gift_order_id = 49;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.cosmetic_gift_order_id_), _Internal::kHasBitsOffset + 46, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 cosmetic_gift_spent_diamond = 50;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.cosmetic_gift_spent_diamond_), _Internal::kHasBitsOffset + 47, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 bag_expand_new_capacity = 51;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.bag_expand_new_capacity_), _Internal::kHasBitsOffset + 49, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 bag_expand_spent_diamond = 52;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.bag_expand_spent_diamond_), _Internal::kHasBitsOffset + 48, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 pet_squad_unlocked_slots = 53;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.pet_squad_unlocked_slots_), _Internal::kHasBitsOffset + 50, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 pet_squad_spent_diamond = 54;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.pet_squad_spent_diamond_), _Internal::kHasBitsOffset + 51, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 build_bookmark_new_capacity = 55;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.build_bookmark_new_capacity_), _Internal::kHasBitsOffset + 53, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 build_bookmark_spent_diamond = 56;
+      {PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.build_bookmark_spent_diamond_), _Internal::kHasBitsOffset + 52, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -743,7 +719,19 @@ inline constexpr ClientRequestRecord::Impl_::Impl_(
         equipment_polish_attempts_used_{0u},
         skill_loadout_rented_slots_{0u},
         skill_loadout_rent_expires_at_sec_{::uint64_t{0u}},
-        skill_loadout_rent_spent_diamond_{::uint64_t{0u}} {}
+        skill_loadout_rent_spent_diamond_{::uint64_t{0u}},
+        appearance_bundle_spent_diamond_{::uint64_t{0u}},
+        appearance_bundle_unlocked_count_{0u},
+        city_celebration_bind_gold_{0u},
+        city_celebration_id_{::uint64_t{0u}},
+        cosmetic_gift_order_id_{::uint64_t{0u}},
+        cosmetic_gift_spent_diamond_{::uint64_t{0u}},
+        bag_expand_spent_diamond_{::uint64_t{0u}},
+        bag_expand_new_capacity_{0u},
+        pet_squad_unlocked_slots_{0u},
+        pet_squad_spent_diamond_{::uint64_t{0u}},
+        build_bookmark_spent_diamond_{::uint64_t{0u}},
+        build_bookmark_new_capacity_{0u} {}
 
 template <typename>
 constexpr ClientRequestRecord::ClientRequestRecord(::_pbi::ConstantInitialized,
@@ -1009,6 +997,220 @@ const ::_pbi::ClassData* BattleEconomyLedger_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class RewardedAdLedger::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<RewardedAdLedger>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_._has_bits_);
+};
+
+constexpr RewardedAdLedger::ParseTableT_ RewardedAdLedger::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_._has_bits_),
+      0, // no _extensions_
+      10, 120,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294966272,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      10,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::RewardedAdLedger>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 day_starts_at_ms = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.day_starts_at_ms_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.day_starts_at_ms_)}},
+      // uint32 claimed_today = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger, _impl_.claimed_today_), 3>(),
+       {16, 3, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.claimed_today_)}},
+      // uint64 last_claim_at_ms = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.last_claim_at_ms_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.last_claim_at_ms_)}},
+      // uint64 total_claimed_lifetime = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.total_claimed_lifetime_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.total_claimed_lifetime_)}},
+      // uint64 active_session_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.active_session_id_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_id_)}},
+      // uint64 active_session_issued_ms = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.active_session_issued_ms_), 6>(),
+       {48, 6, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_issued_ms_)}},
+      // uint32 active_session_slot_id = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger, _impl_.active_session_slot_id_), 4>(),
+       {56, 4, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_slot_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 merchant_reroll_round_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(RewardedAdLedger, _impl_.merchant_reroll_round_id_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.merchant_reroll_round_id_)}},
+      // uint32 merchant_reroll_seq = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdLedger, _impl_.merchant_reroll_seq_), 8>(),
+       {80, 8, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.merchant_reroll_seq_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 day_starts_at_ms = 1;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.day_starts_at_ms_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 claimed_today = 2;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.claimed_today_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 last_claim_at_ms = 3;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.last_claim_at_ms_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 total_claimed_lifetime = 4;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.total_claimed_lifetime_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 active_session_id = 5;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 active_session_issued_ms = 6;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_issued_ms_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 active_session_slot_id = 7;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_slot_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // map<uint32, uint32> slot_claimed_this_week = 8;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.slot_claimed_this_week_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      // uint64 merchant_reroll_round_id = 9;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.merchant_reroll_round_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 merchant_reroll_seq = 10;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.merchant_reroll_seq_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    {{
+        {::_pbi::TcParser::GetMapAuxInfo(
+            0, 0, 13, 13, 0)},
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr RewardedAdLedger::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        day_starts_at_ms_{::uint64_t{0u}},
+        last_claim_at_ms_{::uint64_t{0u}},
+        total_claimed_lifetime_{::uint64_t{0u}},
+        claimed_today_{0u},
+        active_session_slot_id_{0u},
+        active_session_id_{::uint64_t{0u}},
+        active_session_issued_ms_{::uint64_t{0u}},
+        merchant_reroll_round_id_{::uint64_t{0u}},
+        merchant_reroll_seq_{0u},
+        slot_claimed_this_week_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::RewardedAdLedger,
+            PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.slot_claimed_this_week_)>()
+         }
+     {}
+
+template <typename>
+constexpr RewardedAdLedger::RewardedAdLedger(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL RewardedAdLedger::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) RewardedAdLedger(arena);
+}
+constexpr auto RewardedAdLedger::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(RewardedAdLedger), alignof(RewardedAdLedger));
+}
+constexpr auto RewardedAdLedger::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &RewardedAdLedger::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<RewardedAdLedger>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &RewardedAdLedger::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<RewardedAdLedger>(), &RewardedAdLedger::ByteSizeLong,
+              &RewardedAdLedger::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct RewardedAdLedgerGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr RewardedAdLedgerGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 RewardedAdLedger_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(RewardedAdLedger::InternalGenerateClassData_(
+            _default, &RewardedAdLedger_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<RewardedAdLedger>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~RewardedAdLedgerGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) RewardedAdLedger _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<RewardedAdLedger>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(RewardedAdLedgerGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST RewardedAdLedgerGlobalsTypeInternal RewardedAdLedger_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* RewardedAdLedger_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return RewardedAdLedger_globals_.GetClassData();
+#else
+  return RewardedAdLedger_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class ClientRequestLedgerComp::_Internal {
  public:
   using HasBits = decltype(::std::declval<ClientRequestLedgerComp>()._impl_._has_bits_);
@@ -1161,7 +1363,7 @@ constexpr auto ClientRequestLedgerComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
@@ -1221,7 +1423,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_._has_bits_),
-        45, // hasbit index offset
+        57, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.kind_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.fingerprint_),
@@ -1264,6 +1466,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rented_slots_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rent_expires_at_sec_),
         PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.appearance_bundle_unlocked_count_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.appearance_bundle_spent_diamond_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.city_celebration_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.city_celebration_bind_gold_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.cosmetic_gift_order_id_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.cosmetic_gift_spent_diamond_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.bag_expand_new_capacity_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.bag_expand_spent_diamond_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.pet_squad_unlocked_slots_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.pet_squad_spent_diamond_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.build_bookmark_new_capacity_),
+        PROTOBUF_FIELD_OFFSET(::ClientRequestRecord, _impl_.build_bookmark_spent_diamond_),
         1,
         3,
         0,
@@ -1306,6 +1520,18 @@ const ::uint32_t
         39,
         40,
         41,
+        43,
+        42,
+        45,
+        44,
+        46,
+        47,
+        49,
+        48,
+        50,
+        51,
+        53,
+        52,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::EquipmentMaterialRewardLedger, _impl_._has_bits_),
         15, // hasbit index offset
@@ -1347,8 +1573,15 @@ const ::uint32_t
         3,
         4,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.key_),
+        PROTOBUF_FIELD_OFFSET(::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse, _impl_.value_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_._has_bits_),
-        10, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.day_starts_at_ms_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.claimed_today_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.last_claim_at_ms_),
@@ -1356,6 +1589,9 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.active_session_id_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.active_session_issued_ms_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.active_session_slot_id_),
+        PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.slot_claimed_this_week_),
+        PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.merchant_reroll_round_id_),
+        PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.merchant_reroll_seq_),
         0,
         3,
         1,
@@ -1363,6 +1599,9 @@ const ::uint32_t
         5,
         6,
         4,
+        9,
+        7,
+        8,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClientRequestLedgerComp, _impl_._has_bits_),
         9, // hasbit index offset
@@ -1383,23 +1622,25 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClientRequestRecord)},
-        {87, sizeof(::EquipmentMaterialRewardLedger)},
-        {114, sizeof(::BattleEconomyLedger)},
-        {127, sizeof(::RewardedAdLedger)},
-        {144, sizeof(::ClientRequestLedgerComp)},
+        {111, sizeof(::EquipmentMaterialRewardLedger)},
+        {138, sizeof(::BattleEconomyLedger)},
+        {151, sizeof(::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse)},
+        {158, sizeof(::RewardedAdLedger)},
+        {181, sizeof(::ClientRequestLedgerComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::ClientRequestRecord_globals_,
         &::EquipmentMaterialRewardLedger_globals_,
         &::BattleEconomyLedger_globals_,
+        &::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_,
         &::RewardedAdLedger_globals_,
         &::ClientRequestLedgerComp_globals_,
 };
 const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n7proto/common/component/client_request_"
-    "ledger_comp.proto\"\324\n\n\023ClientRequestRecor"
+    "ledger_comp.proto\"\376\r\n\023ClientRequestRecor"
     "d\022\013\n\003key\030\001 \001(\004\022\014\n\004kind\030\002 \001(\r\022\023\n\013fingerpr"
     "int\030\003 \001(\014\022\013\n\003seq\030\004 \001(\004\022\027\n\017enhance_succes"
     "s\030\005 \001(\010\022\025\n\renhance_level\030\006 \001(\r\022\031\n\021create"
@@ -1433,45 +1674,61 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5freque
     "spent\030\' \001(\004\022\"\n\032skill_loadout_rented_slot"
     "s\030* \001(\r\022)\n!skill_loadout_rent_expires_at"
     "_sec\030+ \001(\004\022(\n skill_loadout_rent_spent_d"
-    "iamond\030, \001(\004J\004\010(\020)J\004\010)\020*\"\335\002\n\035EquipmentMa"
-    "terialRewardLedger\022\030\n\020day_starts_at_ms\030\001"
-    " \001(\004\022\024\n\014earned_today\030\002 \001(\r\022\027\n\017available_"
-    "units\030\003 \001(\004\022\020\n\010revision\030\004 \001(\004\022\027\n\017lifetim"
-    "e_earned\030\005 \001(\r\022\035\n\025tradable_earned_total\030"
-    "\006 \001(\r\022 \n\030available_tradable_units\030\007 \001(\004\022"
-    "\031\n\021week_starts_at_ms\030\010 \001(\004\022\030\n\020earned_thi"
-    "s_week\030\t \001(\r\022\026\n\016migrated_to_v2\030\n \001(\010\022!\n\031"
-    "stage1_tradable_confirmed\030\013 \001(\r\022\027\n\017stage"
-    "2_pool_cap\030\014 \001(\r\"\263\001\n\023BattleEconomyLedger"
-    "\022\031\n\021week_starts_at_ms\030\001 \001(\004\022\037\n\027battle_si"
-    "lver_this_week\030\002 \001(\004\022\034\n\024battle_exp_this_"
-    "week\030\003 \001(\004\022 \n\030silver_rollover_soft_cap\030\004"
-    " \001(\004\022 \n\030silver_rollover_hard_cap\030\005 \001(\004\"\332"
-    "\001\n\020RewardedAdLedger\022\030\n\020day_starts_at_ms\030"
-    "\001 \001(\004\022\025\n\rclaimed_today\030\002 \001(\r\022\030\n\020last_cla"
-    "im_at_ms\030\003 \001(\004\022\036\n\026total_claimed_lifetime"
-    "\030\004 \001(\004\022\031\n\021active_session_id\030\005 \001(\004\022 \n\030act"
-    "ive_session_issued_ms\030\006 \001(\004\022\036\n\026active_se"
-    "ssion_slot_id\030\007 \001(\r\"\371\001\n\027ClientRequestLed"
-    "gerComp\022%\n\007records\030\001 \003(\0132\024.ClientRequest"
-    "Record\022\020\n\010next_seq\030\002 \001(\004\022\026\n\016forge_revisi"
-    "on\030\003 \001(\004\0227\n\017material_reward\030\004 \001(\0132\036.Equi"
-    "pmentMaterialRewardLedger\022,\n\016battle_econ"
-    "omy\030\005 \001(\0132\024.BattleEconomyLedger\022&\n\013rewar"
-    "ded_ad\030\006 \001(\0132\021.RewardedAdLedgerB\022Z\020commo"
-    "n/componentb\006proto3"
+    "iamond\030, \001(\004\022(\n appearance_bundle_unlock"
+    "ed_count\030- \001(\r\022\'\n\037appearance_bundle_spen"
+    "t_diamond\030. \001(\004\022\033\n\023city_celebration_id\030/"
+    " \001(\004\022\"\n\032city_celebration_bind_gold\0300 \001(\r"
+    "\022\036\n\026cosmetic_gift_order_id\0301 \001(\004\022#\n\033cosm"
+    "etic_gift_spent_diamond\0302 \001(\004\022\037\n\027bag_exp"
+    "and_new_capacity\0303 \001(\r\022 \n\030bag_expand_spe"
+    "nt_diamond\0304 \001(\004\022 \n\030pet_squad_unlocked_s"
+    "lots\0305 \001(\r\022\037\n\027pet_squad_spent_diamond\0306 "
+    "\001(\004\022#\n\033build_bookmark_new_capacity\0307 \001(\r"
+    "\022$\n\034build_bookmark_spent_diamond\0308 \001(\004J\004"
+    "\010(\020)J\004\010)\020*\"\335\002\n\035EquipmentMaterialRewardLe"
+    "dger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\024\n\014earned"
+    "_today\030\002 \001(\r\022\027\n\017available_units\030\003 \001(\004\022\020\n"
+    "\010revision\030\004 \001(\004\022\027\n\017lifetime_earned\030\005 \001(\r"
+    "\022\035\n\025tradable_earned_total\030\006 \001(\r\022 \n\030avail"
+    "able_tradable_units\030\007 \001(\004\022\031\n\021week_starts"
+    "_at_ms\030\010 \001(\004\022\030\n\020earned_this_week\030\t \001(\r\022\026"
+    "\n\016migrated_to_v2\030\n \001(\010\022!\n\031stage1_tradabl"
+    "e_confirmed\030\013 \001(\r\022\027\n\017stage2_pool_cap\030\014 \001"
+    "(\r\"\263\001\n\023BattleEconomyLedger\022\031\n\021week_start"
+    "s_at_ms\030\001 \001(\004\022\037\n\027battle_silver_this_week"
+    "\030\002 \001(\004\022\034\n\024battle_exp_this_week\030\003 \001(\004\022 \n\030"
+    "silver_rollover_soft_cap\030\004 \001(\004\022 \n\030silver"
+    "_rollover_hard_cap\030\005 \001(\004\"\241\003\n\020RewardedAdL"
+    "edger\022\030\n\020day_starts_at_ms\030\001 \001(\004\022\025\n\rclaim"
+    "ed_today\030\002 \001(\r\022\030\n\020last_claim_at_ms\030\003 \001(\004"
+    "\022\036\n\026total_claimed_lifetime\030\004 \001(\004\022\031\n\021acti"
+    "ve_session_id\030\005 \001(\004\022 \n\030active_session_is"
+    "sued_ms\030\006 \001(\004\022\036\n\026active_session_slot_id\030"
+    "\007 \001(\r\022J\n\026slot_claimed_this_week\030\010 \003(\0132*."
+    "RewardedAdLedger.SlotClaimedThisWeekEntr"
+    "y\022 \n\030merchant_reroll_round_id\030\t \001(\004\022\033\n\023m"
+    "erchant_reroll_seq\030\n \001(\r\032:\n\030SlotClaimedT"
+    "hisWeekEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r"
+    ":\0028\001\"\371\001\n\027ClientRequestLedgerComp\022%\n\007reco"
+    "rds\030\001 \003(\0132\024.ClientRequestRecord\022\020\n\010next_"
+    "seq\030\002 \001(\004\022\026\n\016forge_revision\030\003 \001(\004\0227\n\017mat"
+    "erial_reward\030\004 \001(\0132\036.EquipmentMaterialRe"
+    "wardLedger\022,\n\016battle_economy\030\005 \001(\0132\024.Bat"
+    "tleEconomyLedger\022&\n\013rewarded_ad\030\006 \001(\0132\021."
+    "RewardedAdLedgerB\022Z\020common/componentb\006pr"
+    "oto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto = {
     false,
     false,
-    2459,
+    3084,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto,
     "proto/common/component/client_request_ledger_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto_once,
     nullptr,
     0,
-    5,
+    6,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fclient_5frequest_5fledger_5fcomp_2eproto::offsets,
@@ -1515,9 +1772,9 @@ ClientRequestRecord::ClientRequestRecord(
                offsetof(Impl_, key_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, key_),
-           offsetof(Impl_, skill_loadout_rent_spent_diamond_) -
+           offsetof(Impl_, build_bookmark_new_capacity_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::skill_loadout_rent_spent_diamond_));
+               sizeof(Impl_::build_bookmark_new_capacity_));
 
   // @@protoc_insertion_point(copy_constructor:ClientRequestRecord)
 }
@@ -1532,9 +1789,9 @@ inline void ClientRequestRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, key_),
            0,
-           offsetof(Impl_, skill_loadout_rent_spent_diamond_) -
+           offsetof(Impl_, build_bookmark_new_capacity_) -
                offsetof(Impl_, key_) +
-               sizeof(Impl_::skill_loadout_rent_spent_diamond_));
+               sizeof(Impl_::build_bookmark_new_capacity_));
 }
 ClientRequestRecord::~ClientRequestRecord() {
   // @@protoc_insertion_point(destructor:ClientRequestRecord)
@@ -1614,10 +1871,15 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
         reinterpret_cast<char*>(&_impl_.skill_loadout_rented_slots_) -
         reinterpret_cast<char*>(&_impl_.equip_loadout_used_item_id_)) + sizeof(_impl_.skill_loadout_rented_slots_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.skill_loadout_rent_expires_at_sec_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.skill_loadout_rent_spent_diamond_) -
-        reinterpret_cast<char*>(&_impl_.skill_loadout_rent_expires_at_sec_)) + sizeof(_impl_.skill_loadout_rent_spent_diamond_));
+        reinterpret_cast<char*>(&_impl_.cosmetic_gift_spent_diamond_) -
+        reinterpret_cast<char*>(&_impl_.skill_loadout_rent_expires_at_sec_)) + sizeof(_impl_.cosmetic_gift_spent_diamond_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+    ::memset(&_impl_.bag_expand_spent_diamond_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.build_bookmark_new_capacity_) -
+        reinterpret_cast<char*>(&_impl_.bag_expand_spent_diamond_)) + sizeof(_impl_.build_bookmark_new_capacity_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -2022,6 +2284,114 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
     }
   }
 
+  // uint32 appearance_bundle_unlocked_count = 45;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_appearance_bundle_unlocked_count() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          45, this_._internal_appearance_bundle_unlocked_count(), target);
+    }
+  }
+
+  // uint64 appearance_bundle_spent_diamond = 46;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_appearance_bundle_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          46, this_._internal_appearance_bundle_spent_diamond(), target);
+    }
+  }
+
+  // uint64 city_celebration_id = 47;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_city_celebration_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          47, this_._internal_city_celebration_id(), target);
+    }
+  }
+
+  // uint32 city_celebration_bind_gold = 48;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_city_celebration_bind_gold() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          48, this_._internal_city_celebration_bind_gold(), target);
+    }
+  }
+
+  // uint64 cosmetic_gift_order_id = 49;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_cosmetic_gift_order_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          49, this_._internal_cosmetic_gift_order_id(), target);
+    }
+  }
+
+  // uint64 cosmetic_gift_spent_diamond = 50;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_cosmetic_gift_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          50, this_._internal_cosmetic_gift_spent_diamond(), target);
+    }
+  }
+
+  // uint32 bag_expand_new_capacity = 51;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_bag_expand_new_capacity() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          51, this_._internal_bag_expand_new_capacity(), target);
+    }
+  }
+
+  // uint64 bag_expand_spent_diamond = 52;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_bag_expand_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          52, this_._internal_bag_expand_spent_diamond(), target);
+    }
+  }
+
+  // uint32 pet_squad_unlocked_slots = 53;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_pet_squad_unlocked_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          53, this_._internal_pet_squad_unlocked_slots(), target);
+    }
+  }
+
+  // uint64 pet_squad_spent_diamond = 54;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_pet_squad_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          54, this_._internal_pet_squad_spent_diamond(), target);
+    }
+  }
+
+  // uint32 build_bookmark_new_capacity = 55;
+  if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+    if (this_._internal_build_bookmark_new_capacity() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          55, this_._internal_build_bookmark_new_capacity(), target);
+    }
+  }
+
+  // uint64 build_bookmark_spent_diamond = 56;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_build_bookmark_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          56, this_._internal_build_bookmark_spent_diamond(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2336,7 +2706,7 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 skill_loadout_rent_expires_at_sec = 43;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_skill_loadout_rent_expires_at_sec() != 0) {
@@ -2349,6 +2719,92 @@ PROTOBUF_NOINLINE void ClientRequestRecord::Clear() {
       if (this_._internal_skill_loadout_rent_spent_diamond() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
                                         this_._internal_skill_loadout_rent_spent_diamond());
+      }
+    }
+    // uint64 appearance_bundle_spent_diamond = 46;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_appearance_bundle_spent_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_appearance_bundle_spent_diamond());
+      }
+    }
+    // uint32 appearance_bundle_unlocked_count = 45;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_appearance_bundle_unlocked_count() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_appearance_bundle_unlocked_count());
+      }
+    }
+    // uint32 city_celebration_bind_gold = 48;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_city_celebration_bind_gold() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_city_celebration_bind_gold());
+      }
+    }
+    // uint64 city_celebration_id = 47;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_city_celebration_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_city_celebration_id());
+      }
+    }
+    // uint64 cosmetic_gift_order_id = 49;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_cosmetic_gift_order_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_cosmetic_gift_order_id());
+      }
+    }
+    // uint64 cosmetic_gift_spent_diamond = 50;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_cosmetic_gift_spent_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_cosmetic_gift_spent_diamond());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+    // uint64 bag_expand_spent_diamond = 52;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_bag_expand_spent_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_bag_expand_spent_diamond());
+      }
+    }
+    // uint32 bag_expand_new_capacity = 51;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_bag_expand_new_capacity() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_bag_expand_new_capacity());
+      }
+    }
+    // uint32 pet_squad_unlocked_slots = 53;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_pet_squad_unlocked_slots() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_pet_squad_unlocked_slots());
+      }
+    }
+    // uint64 pet_squad_spent_diamond = 54;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_pet_squad_spent_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_pet_squad_spent_diamond());
+      }
+    }
+    // uint64 build_bookmark_spent_diamond = 56;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_build_bookmark_spent_diamond() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_build_bookmark_spent_diamond());
+      }
+    }
+    // uint32 build_bookmark_new_capacity = 55;
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (this_._internal_build_bookmark_new_capacity() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_build_bookmark_new_capacity());
       }
     }
   }
@@ -2584,7 +3040,7 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_skill_loadout_rent_expires_at_sec() != 0) {
         _this->_impl_.skill_loadout_rent_expires_at_sec_ = from._impl_.skill_loadout_rent_expires_at_sec_;
@@ -2593,6 +3049,68 @@ void ClientRequestRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000200U)) {
       if (from._internal_skill_loadout_rent_spent_diamond() != 0) {
         _this->_impl_.skill_loadout_rent_spent_diamond_ = from._impl_.skill_loadout_rent_spent_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_appearance_bundle_spent_diamond() != 0) {
+        _this->_impl_.appearance_bundle_spent_diamond_ = from._impl_.appearance_bundle_spent_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_appearance_bundle_unlocked_count() != 0) {
+        _this->_impl_.appearance_bundle_unlocked_count_ = from._impl_.appearance_bundle_unlocked_count_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_city_celebration_bind_gold() != 0) {
+        _this->_impl_.city_celebration_bind_gold_ = from._impl_.city_celebration_bind_gold_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_city_celebration_id() != 0) {
+        _this->_impl_.city_celebration_id_ = from._impl_.city_celebration_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_cosmetic_gift_order_id() != 0) {
+        _this->_impl_.cosmetic_gift_order_id_ = from._impl_.cosmetic_gift_order_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_cosmetic_gift_spent_diamond() != 0) {
+        _this->_impl_.cosmetic_gift_spent_diamond_ = from._impl_.cosmetic_gift_spent_diamond_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x003f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_bag_expand_spent_diamond() != 0) {
+        _this->_impl_.bag_expand_spent_diamond_ = from._impl_.bag_expand_spent_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_bag_expand_new_capacity() != 0) {
+        _this->_impl_.bag_expand_new_capacity_ = from._impl_.bag_expand_new_capacity_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_pet_squad_unlocked_slots() != 0) {
+        _this->_impl_.pet_squad_unlocked_slots_ = from._impl_.pet_squad_unlocked_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_pet_squad_spent_diamond() != 0) {
+        _this->_impl_.pet_squad_spent_diamond_ = from._impl_.pet_squad_spent_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_build_bookmark_spent_diamond() != 0) {
+        _this->_impl_.build_bookmark_spent_diamond_ = from._impl_.build_bookmark_spent_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00200000U)) {
+      if (from._internal_build_bookmark_new_capacity() != 0) {
+        _this->_impl_.build_bookmark_new_capacity_ = from._impl_.build_bookmark_new_capacity_;
       }
     }
   }
@@ -2618,8 +3136,8 @@ void ClientRequestRecord::InternalSwap(ClientRequestRecord* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[1], other->_impl_._has_bits_[1]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.fingerprint_, &other->_impl_.fingerprint_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.skill_loadout_rent_spent_diamond_)
-      + sizeof(ClientRequestRecord::_impl_.skill_loadout_rent_spent_diamond_)
+      PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.build_bookmark_new_capacity_)
+      + sizeof(ClientRequestRecord::_impl_.build_bookmark_new_capacity_)
       - PROTOBUF_FIELD_OFFSET(ClientRequestRecord, _impl_.key_)>(
           reinterpret_cast<char*>(&_impl_.key_),
           reinterpret_cast<char*>(&other->_impl_.key_));
@@ -3367,6 +3885,44 @@ void BattleEconomyLedger::InternalSwap(BattleEconomyLedger* PROTOBUF_RESTRICT PR
 }
 // ===================================================================
 
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse() : SuperType(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_get_class_data()) {}
+RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+    : SuperType(arena, RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_get_class_data()) {}
+#else   // PROTOBUF_CUSTOM_VTABLE
+RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse() : SuperType() {}
+RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena) : SuperType(arena) {}
+#endif  // PROTOBUF_CUSTOM_VTABLE
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_ =
+        RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::InternalGenerateClassData_(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_._default);
+
+// including ~ all the vtables and everything they use become part
+// of the same ~ SCC.
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_.tc_table);
+  return RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_));
+  return RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::ParseTableT_
+    RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::_table_ =
+        RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse::InternalGenerateParseTable_(RewardedAdLedger_SlotClaimedThisWeekEntry_DoNotUse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+// ===================================================================
+
 RewardedAdLedger::RewardedAdLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, RewardedAdLedger_get_class_data()) {
@@ -3376,30 +3932,62 @@ RewardedAdLedger::RewardedAdLedger(::google::protobuf::Arena* PROTOBUF_NULLABLE 
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:RewardedAdLedger)
 }
+PROTOBUF_NDEBUG_INLINE RewardedAdLedger::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::RewardedAdLedger& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        slot_claimed_this_week_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::RewardedAdLedger,
+              PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.slot_claimed_this_week_)>()
+          , from.slot_claimed_this_week_
+        }
+     {}
+
 RewardedAdLedger::RewardedAdLedger(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const RewardedAdLedger& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const RewardedAdLedger& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, RewardedAdLedger_get_class_data()),
+    : ::google::protobuf::Message(arena, RewardedAdLedger_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  RewardedAdLedger* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, day_starts_at_ms_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, day_starts_at_ms_),
+           offsetof(Impl_, merchant_reroll_seq_) -
+               offsetof(Impl_, day_starts_at_ms_) +
+               sizeof(Impl_::merchant_reroll_seq_));
+
+  // @@protoc_insertion_point(copy_constructor:RewardedAdLedger)
 }
 PROTOBUF_NDEBUG_INLINE RewardedAdLedger::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        slot_claimed_this_week_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::RewardedAdLedger,
+            PROTOBUF_FIELD_OFFSET(::RewardedAdLedger, _impl_.slot_claimed_this_week_)>()
+         }
+     {}
 
 inline void RewardedAdLedger::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, day_starts_at_ms_),
            0,
-           offsetof(Impl_, active_session_issued_ms_) -
+           offsetof(Impl_, merchant_reroll_seq_) -
                offsetof(Impl_, day_starts_at_ms_) +
-               sizeof(Impl_::active_session_issued_ms_));
+               sizeof(Impl_::merchant_reroll_seq_));
 }
 RewardedAdLedger::~RewardedAdLedger() {
   // @@protoc_insertion_point(destructor:RewardedAdLedger)
@@ -3449,10 +4037,16 @@ PROTOBUF_NOINLINE void RewardedAdLedger::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.day_starts_at_ms_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.active_session_issued_ms_) -
-        reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.active_session_issued_ms_));
+        reinterpret_cast<char*>(&_impl_.merchant_reroll_round_id_) -
+        reinterpret_cast<char*>(&_impl_.day_starts_at_ms_)) + sizeof(_impl_.merchant_reroll_round_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    _impl_.merchant_reroll_seq_ = 0u;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      _impl_.slot_claimed_this_week_.Clear();
+    }
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3540,6 +4134,47 @@ PROTOBUF_NOINLINE void RewardedAdLedger::Clear() {
     }
   }
 
+  // map<uint32, uint32> slot_claimed_this_week = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (!this_._internal_slot_claimed_this_week().empty()) {
+      using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
+      using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                     _pbi::WireFormatLite::TYPE_UINT32,
+                                     _pbi::WireFormatLite::TYPE_UINT32>;
+      const auto& field = this_._internal_slot_claimed_this_week();
+
+      if (stream->IsSerializationDeterministic() && field.size() > 1) {
+        for (const auto& entry : ::google::protobuf::internal::MapSorterFlat<MapType>(field)) {
+          target = WireHelper::InternalSerialize(
+              8, entry.first, entry.second, target, stream);
+        }
+      } else {
+        for (const auto& entry : field) {
+          target = WireHelper::InternalSerialize(
+              8, entry.first, entry.second, target, stream);
+        }
+      }
+    }
+  }
+
+  // uint64 merchant_reroll_round_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_merchant_reroll_round_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_merchant_reroll_round_id(), target);
+    }
+  }
+
+  // uint32 merchant_reroll_seq = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_merchant_reroll_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_merchant_reroll_seq(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3565,7 +4200,7 @@ PROTOBUF_NOINLINE void RewardedAdLedger::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // uint64 day_starts_at_ms = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_day_starts_at_ms() != 0) {
@@ -3615,6 +4250,32 @@ PROTOBUF_NOINLINE void RewardedAdLedger::Clear() {
             this_._internal_active_session_issued_ms());
       }
     }
+    // uint64 merchant_reroll_round_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_merchant_reroll_round_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_merchant_reroll_round_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    // uint32 merchant_reroll_seq = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_merchant_reroll_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_merchant_reroll_seq());
+      }
+    }
+    // map<uint32, uint32> slot_claimed_this_week = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_slot_claimed_this_week_size());
+      for (const auto& entry : this_._internal_slot_claimed_this_week()) {
+        total_size += _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
+                                       _pbi::WireFormatLite::TYPE_UINT32,
+                                       _pbi::WireFormatLite::TYPE_UINT32>::ByteSizeLong(entry.first, entry.second);
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -3633,7 +4294,7 @@ void RewardedAdLedger::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_day_starts_at_ms() != 0) {
         _this->_impl_.day_starts_at_ms_ = from._impl_.day_starts_at_ms_;
@@ -3669,6 +4330,21 @@ void RewardedAdLedger::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.active_session_issued_ms_ = from._impl_.active_session_issued_ms_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_merchant_reroll_round_id() != 0) {
+        _this->_impl_.merchant_reroll_round_id_ = from._impl_.merchant_reroll_round_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_merchant_reroll_seq() != 0) {
+        _this->_impl_.merchant_reroll_seq_ = from._impl_.merchant_reroll_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      _this->_impl_.slot_claimed_this_week_.MergeFrom(from._impl_.slot_claimed_this_week_);
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -3688,11 +4364,12 @@ void RewardedAdLedger::InternalSwap(RewardedAdLedger* PROTOBUF_RESTRICT PROTOBUF
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.active_session_issued_ms_)
-      + sizeof(RewardedAdLedger::_impl_.active_session_issued_ms_)
+      PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.merchant_reroll_seq_)
+      + sizeof(RewardedAdLedger::_impl_.merchant_reroll_seq_)
       - PROTOBUF_FIELD_OFFSET(RewardedAdLedger, _impl_.day_starts_at_ms_)>(
           reinterpret_cast<char*>(&_impl_.day_starts_at_ms_),
           reinterpret_cast<char*>(&other->_impl_.day_starts_at_ms_));
+  _impl_.slot_claimed_this_week_.InternalSwap(&other->_impl_.slot_claimed_this_week_);
 }
 
 ::google::protobuf::Metadata RewardedAdLedger::GetMetadata() const {

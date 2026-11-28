@@ -19,7 +19,7 @@ message TravelPassSeasonProgress {
 
 // 玩家游历手记持久组件（挂载于 player_database.travel_pass = 35, OptionPersistGroup = 7 WALLET）。
 message PlayerTravelPassComp {
-  // 条目间无序，按 pass_id 查找（最多 32 期；已解锁典藏或有未领档位的期次永久保留）。
+  // 条目间无序，按 pass_id 查找（最多 64 期；已解锁典藏或有未领档位的期次永久保留）。
   repeated TravelPassSeasonProgress seasons = 1;
   // 每次积点、解锁典藏、领奖或换装递增 1。
   uint64 pass_revision = 2;
@@ -27,4 +27,8 @@ message PlayerTravelPassComp {
   string equipped_frame_key = 3;
   // 当前展示佩戴的零战力纪念称谓键（空串表示不展示）。
   string equipped_title_key = 4;
+  // 当前选定的在研手记期次 ID（0 = 自动选最新未满开启期次）。
+  uint32 active_pass_id = 5;
+  // 外部礼遇（如仙途轻享卡/季享卡一次性直赠）解锁的零战力纪念头像框/称谓键，与各期次合并展示和佩戴校验。
+  repeated string bonus_cosmetic_keys = 6;
 }

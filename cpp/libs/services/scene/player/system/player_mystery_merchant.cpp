@@ -1,8 +1,10 @@
 #include "player_mystery_merchant.h"
 
+#include <algorithm>
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <hiredis/hiredis.h>
 #include <muduo/base/Logging.h>
@@ -38,6 +40,7 @@
 #include "table/proto/tip/mystery_merchant_error_tip.pb.h"
 
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/client_request_ledger_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_mystery_merchant_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h" // PlayerSessionSnapshotComp(公告只发给有会话的玩家)
@@ -195,6 +198,80 @@ bool ResolveGoods(const ::MysteryMerchantShelfEntry &entry, ResolvedGoods &out, 
 	out.description = itemRow->description();
 	out.iconKey = itemRow->icon_key();
 	return true;
+}
+
+uint64_t SplitMix64Step(uint64_t &state)
+{
+	state += 0x9E3779B97F4A7C15ULL;
+	uint64_t z = state;
+	z = (z ^ (z >> 30u)) * 0xBF58476D1CE4E5B9ULL;
+	z = (z ^ (z >> 27u)) * 0x94D049BB133111EBULL;
+	return z ^ (z >> 31u);
+}
+
+// B4 槽位 4 个人换货有效货架：若玩家已在本轮通过激励视频触发个人换货，则按 (player_id, round_id, reroll_seq)
+// 确定性重抽同规模唯一货架并复用标准折扣池 {60, 50, 40}，严守全部原币种与限购规则；否则返回全服货架。
+std::vector<::MysteryMerchantShelfEntry> EffectiveShelfForPlayer(entt::entity player, const ::MysteryMerchantState &state)
+{
+	std::vector<::MysteryMerchantShelfEntry> out;
+	const auto *ledger = tlsEcs.actorRegistry.valid(player)
+							 ? tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player)
+							 : nullptr;
+	const bool personalRefreshed = ledger != nullptr &&
+								   ledger->rewarded_ad().merchant_reroll_round_id() == state.round_id() &&
+								   ledger->rewarded_ad().merchant_reroll_seq() > 0u;
+	if (!personalRefreshed)
+	{
+		out.reserve(static_cast<size_t>(state.shelf_size()));
+		for (const auto &e : state.shelf())
+		{
+			out.push_back(e);
+		}
+		return out;
+	}
+	std::vector<uint32_t> candidates;
+	for (const auto &row : MysteryMerchantGoodsTableManager::Instance().FindAll().data())
+	{
+		if (row.weight() == 0u)
+		{
+			continue;
+		}
+		::MysteryMerchantShelfEntry probe;
+		probe.set_goods_id(row.id());
+		probe.set_discount_percent(merchantrules::kMaxDiscountPercent);
+		ResolvedGoods resolved;
+		const char *reason = "";
+		if (ResolveGoods(probe, resolved, reason))
+		{
+			candidates.push_back(row.id());
+		}
+	}
+	if (candidates.empty())
+	{
+		for (const auto &e : state.shelf())
+		{
+			out.push_back(e);
+		}
+		return out;
+	}
+	std::sort(candidates.begin(), candidates.end());
+	const size_t wantCount = std::min<size_t>(candidates.size(), std::max<size_t>(1u, static_cast<size_t>(state.shelf_size())));
+	const auto *guid = tlsEcs.actorRegistry.try_get<PlayerGuidComp>(player);
+	const uint64_t playerId = guid != nullptr ? guid->value : 0ULL;
+	uint64_t rng = playerId ^ (state.round_id() * 0x9E3779B97F4A7C15ULL) ^
+				   (static_cast<uint64_t>(ledger->rewarded_ad().merchant_reroll_seq()) * 0xBF58476D1CE4E5B9ULL);
+	static constexpr uint32_t kDiscounts[3] = {60u, 50u, 40u};
+	out.reserve(wantCount);
+	for (size_t i = 0; i < wantCount; ++i)
+	{
+		const size_t pickIdx = i + static_cast<size_t>(SplitMix64Step(rng) % (candidates.size() - i));
+		std::swap(candidates[i], candidates[pickIdx]);
+		::MysteryMerchantShelfEntry entry;
+		entry.set_goods_id(candidates[i]);
+		entry.set_discount_percent(kDiscounts[SplitMix64Step(rng) % 3u]);
+		out.push_back(std::move(entry));
+	}
+	return out;
 }
 
 // 填「所有人看到的都一样」的那部分:在不在、在哪条线、站在哪、什么时候走。
@@ -481,7 +558,8 @@ void PlayerMysteryMerchantSystem::FillInfo(entt::entity player, uint64_t nowMs, 
 
 	// try_get:只读路径,绝不在这里造组件。组件缺失(不该发生)时已购数按 0 显示,真正的拦截在 Buy。
 	const auto *record = tlsEcs.actorRegistry.try_get<PlayerMysteryMerchantComp>(player);
-	for (const auto &entry : cache.state.shelf())
+	const auto shelf = EffectiveShelfForPlayer(player, cache.state);
+	for (const auto &entry : shelf)
 	{
 		ResolvedGoods goods;
 		const char *reason = "";
@@ -603,7 +681,16 @@ uint32_t PlayerMysteryMerchantSystem::Buy(entt::entity player, const ::BuyMyster
 		return kMysteryMerchantTooFar;
 	}
 
-	const auto *entry = merchantrules::FindShelfEntry(state, request.goods_id());
+	const auto effectiveShelf = EffectiveShelfForPlayer(player, state);
+	const ::MysteryMerchantShelfEntry *entry = nullptr;
+	for (const auto &candidate : effectiveShelf)
+	{
+		if (candidate.goods_id() == request.goods_id())
+		{
+			entry = &candidate;
+			break;
+		}
+	}
 	if (entry == nullptr)
 	{
 		return kMysteryMerchantShelfChanged; // 这件不在本轮货架上
@@ -741,4 +828,48 @@ void PlayerMysteryMerchantSystem::ResetForTest()
 	cache.hasState = false;
 	cache.state.Clear();
 	cache.announcedVersion = 0;
+}
+
+uint32_t PlayerMysteryMerchantSystem::ValidatePersonalShelfRefresh(entt::entity player, uint32_t expectedRoundIdLow32,
+																   uint64_t nowMs, uint64_t &outRoundId)
+{
+	outRoundId = 0u;
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		return kEntityIsNull;
+	}
+	const auto &cache = Cache();
+	if (!cache.hasState || !merchantrules::IsPresent(cache.state, nowMs))
+	{
+		return kMysteryMerchantNotPresent;
+	}
+	const auto &state = cache.state;
+	if (expectedRoundIdLow32 != 0u && static_cast<uint32_t>(state.round_id()) != expectedRoundIdLow32)
+	{
+		return kMysteryMerchantShelfChanged;
+	}
+	const uint64_t playerSceneId = CurrentSceneId(player);
+	if (playerSceneId == 0u || playerSceneId != state.scene_id())
+	{
+		return kMysteryMerchantNotHere;
+	}
+	const auto *transform = tlsEcs.actorRegistry.try_get<Transform>(player);
+	if (transform != nullptr &&
+		!merchantrules::WithinInteractRange(transform->location().x(), transform->location().y(),
+											state.position().x(), state.position().y(), InteractRange()))
+	{
+		return kMysteryMerchantTooFar;
+	}
+	const auto *ledger = tlsEcs.actorRegistry.try_get<ClientRequestLedgerComp>(player);
+	if (ledger == nullptr)
+	{
+		return kServiceUnavailable;
+	}
+	if (ledger->rewarded_ad().merchant_reroll_round_id() == state.round_id() &&
+		ledger->rewarded_ad().merchant_reroll_seq() > 0u)
+	{
+		return kMysteryMerchantLimitReached;
+	}
+	outRoundId = state.round_id();
+	return kSuccess;
 }

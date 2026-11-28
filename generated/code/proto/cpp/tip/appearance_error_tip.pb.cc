@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_appearance_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\032appearance_error_tip.proto*\327\002\n\020appeara"
+    "\n\032appearance_error_tip.proto*\373\007\n\020appeara"
     "nce_error\022\027\n\023kAppearance_errorOK\020\000\022\030\n\022kA"
     "ppearanceInvalid\020\350\201\002\022\037\n\031kAppearanceAlrea"
     "dyCurrent\020\351\201\002\022\027\n\021kAppearanceNoCard\020\352\201\002\022!"
@@ -44,14 +44,31 @@ const char descriptor_table_protodef_appearance_5ferror_5ftip_2eproto[] ABSL_ATT
     "Frozen\020\355\201\002\022\034\n\026kAppearanceUnavailable\020\356\201\002"
     "\022\"\n\034kAppearanceNotCardUnlockable\020\357\201\002\022\035\n\027"
     "kAppearanceAlreadyOwned\020\360\201\002\022\031\n\023kAppearan"
-    "ceNotOwned\020\361\201\002B$\n\016com.game.tableZ\022genera"
-    "ted/pb/tableb\006proto3"
+    "ceNotOwned\020\361\201\002\022(\n\"kAppearanceSeriesBundl"
+    "eUnavailable\020\362\201\002\022\'\n!kAppearanceSeriesAlr"
+    "eadyCompleted\020\363\201\002\022)\n#kAppearanceSeriesBu"
+    "ndlePriceChanged\020\364\201\002\022.\n(kAppearanceSerie"
+    "sBundleCurrencyNotEnough\020\365\201\002\022!\n\033kCityCel"
+    "ebrationNotSafeCity\020\366\201\002\022!\n\033kCityCelebrat"
+    "ionChannelFull\020\367\201\002\022\034\n\026kCityCelebrationNo"
+    "Item\020\370\201\002\022\036\n\030kCityCelebrationNotFound\020\371\201\002"
+    "\022$\n\036kCityCelebrationAlreadyClaimed\020\372\201\002\022!"
+    "\n\033kCityCelebrationLevelTooLow\020\373\201\002\022&\n kCi"
+    "tyCelebrationWeeklyCapReached\020\374\201\002\022!\n\033kCo"
+    "smeticGiftNotFriend7Days\020\375\201\002\022%\n\037kCosmeti"
+    "cGiftTargetAlreadyOwned\020\376\201\002\022%\n\037kCosmetic"
+    "GiftWeeklyLimitReached\020\377\201\002\022 \n\032kCosmeticG"
+    "iftInvalidTarget\020\200\202\002\022$\n\036kCosmeticGiftCur"
+    "rencyNotEnough\020\201\202\002\022\037\n\031kCosmeticGiftPrice"
+    "Changed\020\202\202\002\022%\n\037kCosmeticGiftServiceUnava"
+    "ilable\020\203\202\002B$\n\016com.game.tableZ\022generated/"
+    "pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_appearance_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_appearance_5ferror_5ftip_2eproto = {
     false,
     false,
-    420,
+    1096,
     descriptor_table_protodef_appearance_5ferror_5ftip_2eproto,
     "appearance_error_tip.proto",
     &descriptor_table_appearance_5ferror_5ftip_2eproto_once,
@@ -70,7 +87,7 @@ appearance_error_descriptor() {
   return file_level_enum_descriptors_appearance_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t appearance_error_internal_data_[] = {
-    65536u, 655360u, 33006u, 33003u, 33008u, 33001u, 33005u, 33007u, 33009u, 33000u, 33002u, 33004u, };
+    65536u, 1835008u, 33015u, 33007u, 33023u, 33003u, 33011u, 33019u, 33026u, 33001u, 33005u, 33009u, 33013u, 33017u, 33021u, 33025u, 33027u, 33000u, 33002u, 33004u, 33006u, 33008u, 33010u, 33012u, 33014u, 33016u, 33018u, 33020u, 33022u, 33024u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

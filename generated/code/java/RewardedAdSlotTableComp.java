@@ -83,4 +83,10 @@ public final class RewardedAdSlotTableComp {
         }
     }
 
+    public record Reward_kind(int value) {
+        public static Reward_kind from(RewardedAdSlotTable row) {
+            return new Reward_kind(row.getRewardKind());
+        }
+    }
+
 }

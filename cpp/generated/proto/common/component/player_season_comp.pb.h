@@ -279,6 +279,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
     kBestRoundsPresetFieldNumber = 21,
     kWeeklyBestFloorPresetFieldNumber = 22,
     kWeeklyBestRoundsPresetFieldNumber = 23,
+    kAdRerollUsedRunIdFieldNumber = 25,
     kRouteChoiceMaskFieldNumber = 24,
   };
   // repeated uint32 active_sigil_ids = 6;
@@ -531,6 +532,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
   void _internal_set_weekly_best_rounds_preset(::uint32_t value);
 
   public:
+  // uint64 ad_reroll_used_run_id = 25;
+  void clear_ad_reroll_used_run_id() ;
+  [[nodiscard]] ::uint64_t ad_reroll_used_run_id() const;
+  void set_ad_reroll_used_run_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ad_reroll_used_run_id() const;
+  void _internal_set_ad_reroll_used_run_id(::uint64_t value);
+
+  public:
   // uint32 route_choice_mask = 24;
   void clear_route_choice_mask() ;
   [[nodiscard]] ::uint32_t route_choice_mask() const;
@@ -545,7 +556,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 24,
+      ::google::protobuf::internal::TcParseTable<5, 25,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -599,6 +610,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED WuxingTowerCompState final : public
     ::uint32_t best_rounds_preset_;
     ::uint32_t weekly_best_floor_preset_;
     ::uint32_t weekly_best_rounds_preset_;
+    ::uint64_t ad_reroll_used_run_id_;
     ::uint32_t route_choice_mask_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -768,6 +780,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmark final : pu
     kSeasonSealIdFieldNumber = 8,
     kActivePetTableIdFieldNumber = 9,
     kSavedAtMsFieldNumber = 13,
+    kPinReplayFieldNumber = 14,
   };
   // repeated uint32 skill_table_ids = 11;
   [[nodiscard]] int skill_table_ids_size()
@@ -934,11 +947,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmark final : pu
   void _internal_set_saved_at_ms(::uint64_t value);
 
   public:
+  // bool pin_replay = 14;
+  void clear_pin_replay() ;
+  [[nodiscard]] bool pin_replay() const;
+  void set_pin_replay(bool value);
+
+  private:
+  bool _internal_pin_replay() const;
+  void _internal_set_pin_replay(bool value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SavedBattleBuildBookmark)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 13,
+      ::google::protobuf::internal::TcParseTable<4, 14,
                           0, 79,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -982,6 +1005,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavedBattleBuildBookmark final : pu
     ::uint32_t season_seal_id_;
     ::uint32_t active_pet_table_id_;
     ::uint64_t saved_at_ms_;
+    bool pin_replay_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1465,6 +1489,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
     kWuxingTowerFieldNumber = 3,
     kEquippedFormationIdFieldNumber = 2,
     kRetroHonorTargetSeasonIdFieldNumber = 6,
+    kExtraSavedBuildSlotsFieldNumber = 8,
     kRetroHonorProgressFieldNumber = 7,
   };
   // repeated .PlayerSeasonSealRecord records = 1;
@@ -1565,6 +1590,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
   void _internal_set_retro_honor_target_season_id(::uint32_t value);
 
   public:
+  // uint32 extra_saved_build_slots = 8;
+  void clear_extra_saved_build_slots() ;
+  [[nodiscard]] ::uint32_t extra_saved_build_slots() const;
+  void set_extra_saved_build_slots(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_extra_saved_build_slots() const;
+  void _internal_set_extra_saved_build_slots(::uint32_t value);
+
+  public:
   // map<uint32, uint32> retro_honor_progress = 7;
   [[nodiscard]] int retro_honor_progress_size()
       const;
@@ -1585,7 +1620,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<3, 8,
                           4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1621,6 +1656,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerSeasonComp final : public ::g
     ::WuxingTowerCompState* PROTOBUF_NULLABLE wuxing_tower_;
     ::uint32_t equipped_formation_id_;
     ::uint32_t retro_honor_target_season_id_;
+    ::uint32_t extra_saved_build_slots_;
     ::google::protobuf::internal::MapField<PlayerSeasonComp_RetroHonorProgressEntry_DoNotUse, ::uint32_t, ::uint32_t> retro_honor_progress_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2426,7 +2462,7 @@ inline void WuxingTowerCompState::_internal_set_weekly_best_rounds_preset(::uint
 inline void WuxingTowerCompState::clear_route_choice_mask() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.route_choice_mask_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint32_t WuxingTowerCompState::route_choice_mask() const {
   // @@protoc_insertion_point(field_get:WuxingTowerCompState.route_choice_mask)
@@ -2434,7 +2470,7 @@ inline ::uint32_t WuxingTowerCompState::route_choice_mask() const {
 }
 inline void WuxingTowerCompState::set_route_choice_mask(::uint32_t value) {
   _internal_set_route_choice_mask(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:WuxingTowerCompState.route_choice_mask)
 }
 inline ::uint32_t WuxingTowerCompState::_internal_route_choice_mask() const {
@@ -2444,6 +2480,30 @@ inline ::uint32_t WuxingTowerCompState::_internal_route_choice_mask() const {
 inline void WuxingTowerCompState::_internal_set_route_choice_mask(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.route_choice_mask_ = value;
+}
+
+// uint64 ad_reroll_used_run_id = 25;
+inline void WuxingTowerCompState::clear_ad_reroll_used_run_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ad_reroll_used_run_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint64_t WuxingTowerCompState::ad_reroll_used_run_id() const {
+  // @@protoc_insertion_point(field_get:WuxingTowerCompState.ad_reroll_used_run_id)
+  return _internal_ad_reroll_used_run_id();
+}
+inline void WuxingTowerCompState::set_ad_reroll_used_run_id(::uint64_t value) {
+  _internal_set_ad_reroll_used_run_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:WuxingTowerCompState.ad_reroll_used_run_id)
+}
+inline ::uint64_t WuxingTowerCompState::_internal_ad_reroll_used_run_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ad_reroll_used_run_id_;
+}
+inline void WuxingTowerCompState::_internal_set_ad_reroll_used_run_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ad_reroll_used_run_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -2936,6 +2996,30 @@ inline void SavedBattleBuildBookmark::_internal_set_saved_at_ms(::uint64_t value
   _impl_.saved_at_ms_ = value;
 }
 
+// bool pin_replay = 14;
+inline void SavedBattleBuildBookmark::clear_pin_replay() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pin_replay_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool SavedBattleBuildBookmark::pin_replay() const {
+  // @@protoc_insertion_point(field_get:SavedBattleBuildBookmark.pin_replay)
+  return _internal_pin_replay();
+}
+inline void SavedBattleBuildBookmark::set_pin_replay(bool value) {
+  _internal_set_pin_replay(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:SavedBattleBuildBookmark.pin_replay)
+}
+inline bool SavedBattleBuildBookmark::_internal_pin_replay() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pin_replay_;
+}
+inline void SavedBattleBuildBookmark::_internal_set_pin_replay(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pin_replay_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -3259,7 +3343,7 @@ inline int PlayerSeasonComp::retro_honor_progress_size() const {
 inline void PlayerSeasonComp::clear_retro_honor_progress() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retro_honor_progress_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerSeasonComp::_internal_retro_honor_progress() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3275,9 +3359,33 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerS
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerSeasonComp::mutable_retro_honor_progress()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_mutable_map:PlayerSeasonComp.retro_honor_progress)
   return _internal_mutable_retro_honor_progress();
+}
+
+// uint32 extra_saved_build_slots = 8;
+inline void PlayerSeasonComp::clear_extra_saved_build_slots() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.extra_saved_build_slots_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t PlayerSeasonComp::extra_saved_build_slots() const {
+  // @@protoc_insertion_point(field_get:PlayerSeasonComp.extra_saved_build_slots)
+  return _internal_extra_saved_build_slots();
+}
+inline void PlayerSeasonComp::set_extra_saved_build_slots(::uint32_t value) {
+  _internal_set_extra_saved_build_slots(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:PlayerSeasonComp.extra_saved_build_slots)
+}
+inline ::uint32_t PlayerSeasonComp::_internal_extra_saved_build_slots() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.extra_saved_build_slots_;
+}
+inline void PlayerSeasonComp::_internal_set_extra_saved_build_slots(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.extra_saved_build_slots_ = value;
 }
 
 #ifdef __GNUC__

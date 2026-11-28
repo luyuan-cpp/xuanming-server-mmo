@@ -225,6 +225,22 @@ extern const ::google::protobuf::internal::ClassDataFull DonateToGuildResponse_c
 #else
 extern const DonateToGuildResponseGlobalsTypeInternal DonateToGuildResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class EquipGuildEmblemRequest;
+struct EquipGuildEmblemRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EquipGuildEmblemRequestGlobalsTypeInternal EquipGuildEmblemRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EquipGuildEmblemRequest_class_data_;
+#else
+extern const EquipGuildEmblemRequestGlobalsTypeInternal EquipGuildEmblemRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class EquipGuildEmblemResponse;
+struct EquipGuildEmblemResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern EquipGuildEmblemResponseGlobalsTypeInternal EquipGuildEmblemResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull EquipGuildEmblemResponse_class_data_;
+#else
+extern const EquipGuildEmblemResponseGlobalsTypeInternal EquipGuildEmblemResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class FieldWarTargetBrief;
 struct FieldWarTargetBriefGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -937,6 +953,22 @@ extern const ::google::protobuf::internal::ClassDataFull TransferGuildLeaderResp
 #else
 extern const TransferGuildLeaderResponseGlobalsTypeInternal TransferGuildLeaderResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class UnlockGuildEmblemRequest;
+struct UnlockGuildEmblemRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UnlockGuildEmblemRequestGlobalsTypeInternal UnlockGuildEmblemRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UnlockGuildEmblemRequest_class_data_;
+#else
+extern const UnlockGuildEmblemRequestGlobalsTypeInternal UnlockGuildEmblemRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class UnlockGuildEmblemResponse;
+struct UnlockGuildEmblemResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UnlockGuildEmblemResponseGlobalsTypeInternal UnlockGuildEmblemResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UnlockGuildEmblemResponse_class_data_;
+#else
+extern const UnlockGuildEmblemResponseGlobalsTypeInternal UnlockGuildEmblemResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class UpdateGuildScoreRequest;
 struct UpdateGuildScoreRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1026,6 +1058,7 @@ enum GuildChangeKind : int {
   GUILD_CHANGE_KIND_DELIVERY_DONE = 13,
   GUILD_CHANGE_KIND_RENAMED = 14,
   GUILD_CHANGE_KIND_WAR_UPDATED = 15,
+  GUILD_CHANGE_KIND_EMBLEM_CHANGED = 16,
   GuildChangeKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   GuildChangeKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -1036,11 +1069,11 @@ extern const uint32_t GuildChangeKind_internal_data_[];
 inline constexpr GuildChangeKind GuildChangeKind_MIN =
     static_cast<GuildChangeKind>(0);
 inline constexpr GuildChangeKind GuildChangeKind_MAX =
-    static_cast<GuildChangeKind>(15);
+    static_cast<GuildChangeKind>(16);
 [[nodiscard]] inline bool GuildChangeKind_IsValid(int value) {
-  return 0 <= value && value <= 15;
+  return 0 <= value && value <= 16;
 }
-inline constexpr int GuildChangeKind_ARRAYSIZE = 15 + 1;
+inline constexpr int GuildChangeKind_ARRAYSIZE = 16 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 GuildChangeKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GuildChangeKind) {
@@ -1055,7 +1088,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& GuildChangeKind_Name(GuildChangeKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<GuildChangeKind_descriptor, 0, 15>(
+  return ::google::protobuf::internal::NameOfDenseEnum<GuildChangeKind_descriptor, 0, 16>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool GuildChangeKind_Parse(
@@ -1928,6 +1961,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateGuildScoreRequest final : pub
     ::uint64_t guild_id_;
     ::int64_t score_;
     ::uint32_t zone_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockGuildEmblemRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.UnlockGuildEmblemRequest) */ {
+ public:
+  inline UnlockGuildEmblemRequest() : UnlockGuildEmblemRequest(nullptr) {}
+  ~UnlockGuildEmblemRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UnlockGuildEmblemRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UnlockGuildEmblemRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UnlockGuildEmblemRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UnlockGuildEmblemRequest(const UnlockGuildEmblemRequest& from) : UnlockGuildEmblemRequest(nullptr, from) {}
+  inline UnlockGuildEmblemRequest(UnlockGuildEmblemRequest&& from) noexcept : UnlockGuildEmblemRequest(nullptr, ::std::move(from)) {}
+  inline UnlockGuildEmblemRequest& operator=(const UnlockGuildEmblemRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UnlockGuildEmblemRequest& operator=(UnlockGuildEmblemRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UnlockGuildEmblemRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnlockGuildEmblemRequest>(&UnlockGuildEmblemRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 111;
+  friend void swap(UnlockGuildEmblemRequest& a, UnlockGuildEmblemRequest& b) { a.Swap(&b); }
+  inline void Swap(UnlockGuildEmblemRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UnlockGuildEmblemRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UnlockGuildEmblemRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UnlockGuildEmblemRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UnlockGuildEmblemRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UnlockGuildEmblemRequest& from) { UnlockGuildEmblemRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UnlockGuildEmblemRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.UnlockGuildEmblemRequest"; }
+
+  explicit UnlockGuildEmblemRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UnlockGuildEmblemRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnlockGuildEmblemRequest& from);
+  UnlockGuildEmblemRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UnlockGuildEmblemRequest&& from) noexcept
+      : UnlockGuildEmblemRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kClientRequestIdFieldNumber = 1,
+    kExpectedPriceDiamondFieldNumber = 3,
+    kEmblemIdFieldNumber = 2,
+  };
+  // uint64 client_request_id = 1;
+  void clear_client_request_id() ;
+  [[nodiscard]] ::uint64_t client_request_id() const;
+  void set_client_request_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_client_request_id() const;
+  void _internal_set_client_request_id(::uint64_t value);
+
+  public:
+  // uint64 expected_price_diamond = 3;
+  void clear_expected_price_diamond() ;
+  [[nodiscard]] ::uint64_t expected_price_diamond() const;
+  void set_expected_price_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_expected_price_diamond() const;
+  void _internal_set_expected_price_diamond(::uint64_t value);
+
+  public:
+  // uint32 emblem_id = 2;
+  void clear_emblem_id() ;
+  [[nodiscard]] ::uint32_t emblem_id() const;
+  void set_emblem_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_emblem_id() const;
+  void _internal_set_emblem_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.UnlockGuildEmblemRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UnlockGuildEmblemRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t client_request_id_;
+    ::uint64_t expected_price_diamond_;
+    ::uint32_t emblem_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -16075,6 +16333,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FieldWarTargetBrief final : public 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipGuildEmblemRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.EquipGuildEmblemRequest) */ {
+ public:
+  inline EquipGuildEmblemRequest() : EquipGuildEmblemRequest(nullptr) {}
+  ~EquipGuildEmblemRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EquipGuildEmblemRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EquipGuildEmblemRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EquipGuildEmblemRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EquipGuildEmblemRequest(const EquipGuildEmblemRequest& from) : EquipGuildEmblemRequest(nullptr, from) {}
+  inline EquipGuildEmblemRequest(EquipGuildEmblemRequest&& from) noexcept : EquipGuildEmblemRequest(nullptr, ::std::move(from)) {}
+  inline EquipGuildEmblemRequest& operator=(const EquipGuildEmblemRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EquipGuildEmblemRequest& operator=(EquipGuildEmblemRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EquipGuildEmblemRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipGuildEmblemRequest>(&EquipGuildEmblemRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 113;
+  friend void swap(EquipGuildEmblemRequest& a, EquipGuildEmblemRequest& b) { a.Swap(&b); }
+  inline void Swap(EquipGuildEmblemRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EquipGuildEmblemRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EquipGuildEmblemRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EquipGuildEmblemRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EquipGuildEmblemRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EquipGuildEmblemRequest& from) { EquipGuildEmblemRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EquipGuildEmblemRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.EquipGuildEmblemRequest"; }
+
+  explicit EquipGuildEmblemRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EquipGuildEmblemRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipGuildEmblemRequest& from);
+  EquipGuildEmblemRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EquipGuildEmblemRequest&& from) noexcept
+      : EquipGuildEmblemRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kEmblemIdFieldNumber = 1,
+  };
+  // uint32 emblem_id = 1;
+  void clear_emblem_id() ;
+  [[nodiscard]] ::uint32_t emblem_id() const;
+  void set_emblem_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_emblem_id() const;
+  void _internal_set_emblem_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.EquipGuildEmblemRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EquipGuildEmblemRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t emblem_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DonateToGuildRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.DonateToGuildRequest) */ {
  public:
@@ -21242,6 +21701,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
     kOfficerCountFieldNumber = 12,
     kPendingApplicationCountFieldNumber = 15,
     kRenamedMsFieldNumber = 16,
+    kUnlockedEmblemBitsFieldNumber = 18,
+    kEmblemSkinIdFieldNumber = 17,
   };
   // repeated .guildpb.GuildMember members = 8;
   [[nodiscard]] int members_size()
@@ -21429,11 +21890,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
   void _internal_set_renamed_ms(::uint64_t value);
 
   public:
+  // uint64 unlocked_emblem_bits = 18;
+  void clear_unlocked_emblem_bits() ;
+  [[nodiscard]] ::uint64_t unlocked_emblem_bits() const;
+  void set_unlocked_emblem_bits(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_unlocked_emblem_bits() const;
+  void _internal_set_unlocked_emblem_bits(::uint64_t value);
+
+  public:
+  // uint32 emblem_skin_id = 17;
+  void clear_emblem_skin_id() ;
+  [[nodiscard]] ::uint32_t emblem_skin_id() const;
+  void set_emblem_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_emblem_skin_id() const;
+  void _internal_set_emblem_skin_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:guildpb.GuildInfo)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
+      ::google::protobuf::internal::TcParseTable<5, 18,
                           1, 69,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -21478,6 +21959,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
     ::uint32_t officer_count_;
     ::uint32_t pending_application_count_;
     ::uint64_t renamed_ms_;
+    ::uint64_t unlocked_emblem_bits_;
+    ::uint32_t emblem_skin_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -25304,6 +25787,303 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeGuildResponse final : public
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockGuildEmblemResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.UnlockGuildEmblemResponse) */ {
+ public:
+  inline UnlockGuildEmblemResponse() : UnlockGuildEmblemResponse(nullptr) {}
+  ~UnlockGuildEmblemResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UnlockGuildEmblemResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UnlockGuildEmblemResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UnlockGuildEmblemResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UnlockGuildEmblemResponse(const UnlockGuildEmblemResponse& from) : UnlockGuildEmblemResponse(nullptr, from) {}
+  inline UnlockGuildEmblemResponse(UnlockGuildEmblemResponse&& from) noexcept : UnlockGuildEmblemResponse(nullptr, ::std::move(from)) {}
+  inline UnlockGuildEmblemResponse& operator=(const UnlockGuildEmblemResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UnlockGuildEmblemResponse& operator=(UnlockGuildEmblemResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UnlockGuildEmblemResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnlockGuildEmblemResponse>(&UnlockGuildEmblemResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 112;
+  friend void swap(UnlockGuildEmblemResponse& a, UnlockGuildEmblemResponse& b) { a.Swap(&b); }
+  inline void Swap(UnlockGuildEmblemResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UnlockGuildEmblemResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UnlockGuildEmblemResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UnlockGuildEmblemResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UnlockGuildEmblemResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UnlockGuildEmblemResponse& from) { UnlockGuildEmblemResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UnlockGuildEmblemResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.UnlockGuildEmblemResponse"; }
+
+  explicit UnlockGuildEmblemResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UnlockGuildEmblemResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnlockGuildEmblemResponse& from);
+  UnlockGuildEmblemResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UnlockGuildEmblemResponse&& from) noexcept
+      : UnlockGuildEmblemResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kGuildFieldNumber = 8,
+    kOpIdFieldNumber = 3,
+    kReplayedFieldNumber = 2,
+    kStatusFieldNumber = 4,
+    kReasonTipIdFieldNumber = 5,
+    kEmblemIdFieldNumber = 6,
+    kCostDiamondFieldNumber = 7,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .guildpb.GuildInfo guild = 8;
+  [[nodiscard]] bool has_guild()
+      const;
+  void clear_guild() ;
+  [[nodiscard]] const ::guildpb::GuildInfo& guild() const;
+  [[nodiscard]] ::guildpb::GuildInfo* PROTOBUF_NULLABLE release_guild();
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL mutable_guild();
+  void set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildInfo* PROTOBUF_NULLABLE unsafe_arena_release_guild();
+
+  private:
+  const ::guildpb::GuildInfo& _internal_guild() const;
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL _internal_mutable_guild();
+
+  public:
+  // uint64 op_id = 3;
+  void clear_op_id() ;
+  [[nodiscard]] ::uint64_t op_id() const;
+  void set_op_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_op_id() const;
+  void _internal_set_op_id(::uint64_t value);
+
+  public:
+  // bool replayed = 2;
+  void clear_replayed() ;
+  [[nodiscard]] bool replayed() const;
+  void set_replayed(bool value);
+
+  private:
+  bool _internal_replayed() const;
+  void _internal_set_replayed(bool value);
+
+  public:
+  // .guildpb.GuildAssetOrderStatus status = 4;
+  void clear_status() ;
+  [[nodiscard]] ::guildpb::GuildAssetOrderStatus status() const;
+  void set_status(::guildpb::GuildAssetOrderStatus value);
+
+  private:
+  ::guildpb::GuildAssetOrderStatus _internal_status() const;
+  void _internal_set_status(::guildpb::GuildAssetOrderStatus value);
+
+  public:
+  // uint32 reason_tip_id = 5;
+  void clear_reason_tip_id() ;
+  [[nodiscard]] ::uint32_t reason_tip_id() const;
+  void set_reason_tip_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reason_tip_id() const;
+  void _internal_set_reason_tip_id(::uint32_t value);
+
+  public:
+  // uint32 emblem_id = 6;
+  void clear_emblem_id() ;
+  [[nodiscard]] ::uint32_t emblem_id() const;
+  void set_emblem_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_emblem_id() const;
+  void _internal_set_emblem_id(::uint32_t value);
+
+  public:
+  // uint64 cost_diamond = 7;
+  void clear_cost_diamond() ;
+  [[nodiscard]] ::uint64_t cost_diamond() const;
+  void set_cost_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cost_diamond() const;
+  void _internal_set_cost_diamond(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.UnlockGuildEmblemResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UnlockGuildEmblemResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE guild_;
+    ::uint64_t op_id_;
+    bool replayed_;
+    int status_;
+    ::uint32_t reason_tip_id_;
+    ::uint32_t emblem_id_;
+    ::uint64_t cost_diamond_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransferGuildLeaderResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.TransferGuildLeaderResponse) */ {
  public:
@@ -28621,6 +29401,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildActivitiesResponse final : 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipGuildEmblemResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.EquipGuildEmblemResponse) */ {
+ public:
+  inline EquipGuildEmblemResponse() : EquipGuildEmblemResponse(nullptr) {}
+  ~EquipGuildEmblemResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(EquipGuildEmblemResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(EquipGuildEmblemResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr EquipGuildEmblemResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline EquipGuildEmblemResponse(const EquipGuildEmblemResponse& from) : EquipGuildEmblemResponse(nullptr, from) {}
+  inline EquipGuildEmblemResponse(EquipGuildEmblemResponse&& from) noexcept : EquipGuildEmblemResponse(nullptr, ::std::move(from)) {}
+  inline EquipGuildEmblemResponse& operator=(const EquipGuildEmblemResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline EquipGuildEmblemResponse& operator=(EquipGuildEmblemResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const EquipGuildEmblemResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipGuildEmblemResponse>(&EquipGuildEmblemResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 114;
+  friend void swap(EquipGuildEmblemResponse& a, EquipGuildEmblemResponse& b) { a.Swap(&b); }
+  inline void Swap(EquipGuildEmblemResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(EquipGuildEmblemResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] EquipGuildEmblemResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<EquipGuildEmblemResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const EquipGuildEmblemResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const EquipGuildEmblemResponse& from) { EquipGuildEmblemResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(EquipGuildEmblemResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.EquipGuildEmblemResponse"; }
+
+  explicit EquipGuildEmblemResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  EquipGuildEmblemResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const EquipGuildEmblemResponse& from);
+  EquipGuildEmblemResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, EquipGuildEmblemResponse&& from) noexcept
+      : EquipGuildEmblemResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kGuildFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .guildpb.GuildInfo guild = 2;
+  [[nodiscard]] bool has_guild()
+      const;
+  void clear_guild() ;
+  [[nodiscard]] const ::guildpb::GuildInfo& guild() const;
+  [[nodiscard]] ::guildpb::GuildInfo* PROTOBUF_NULLABLE release_guild();
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL mutable_guild();
+  void set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildInfo* PROTOBUF_NULLABLE unsafe_arena_release_guild();
+
+  private:
+  const ::guildpb::GuildInfo& _internal_guild() const;
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL _internal_mutable_guild();
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.EquipGuildEmblemResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const EquipGuildEmblemResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE guild_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DonateToGuildResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.DonateToGuildResponse) */ {
  public:
@@ -30335,6 +31340,54 @@ inline ::uint64_t GuildInfo::_internal_renamed_ms() const {
 inline void GuildInfo::_internal_set_renamed_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.renamed_ms_ = value;
+}
+
+// uint32 emblem_skin_id = 17;
+inline void GuildInfo::clear_emblem_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+}
+inline ::uint32_t GuildInfo::emblem_skin_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildInfo.emblem_skin_id)
+  return _internal_emblem_skin_id();
+}
+inline void GuildInfo::set_emblem_skin_id(::uint32_t value) {
+  _internal_set_emblem_skin_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildInfo.emblem_skin_id)
+}
+inline ::uint32_t GuildInfo::_internal_emblem_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.emblem_skin_id_;
+}
+inline void GuildInfo::_internal_set_emblem_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_skin_id_ = value;
+}
+
+// uint64 unlocked_emblem_bits = 18;
+inline void GuildInfo::clear_unlocked_emblem_bits() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_emblem_bits_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+}
+inline ::uint64_t GuildInfo::unlocked_emblem_bits() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildInfo.unlocked_emblem_bits)
+  return _internal_unlocked_emblem_bits();
+}
+inline void GuildInfo::set_unlocked_emblem_bits(::uint64_t value) {
+  _internal_set_unlocked_emblem_bits(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildInfo.unlocked_emblem_bits)
+}
+inline ::uint64_t GuildInfo::_internal_unlocked_emblem_bits() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_emblem_bits_;
+}
+inline void GuildInfo::_internal_set_unlocked_emblem_bits(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_emblem_bits_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -50785,6 +51838,644 @@ inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildJianghuGrudgeRecordV
 GetGuildJianghuGrudgeWallResponse::_internal_mutable_recent_records() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.recent_records_;
+}
+
+// -------------------------------------------------------------------
+
+// UnlockGuildEmblemRequest
+
+// uint64 client_request_id = 1;
+inline void UnlockGuildEmblemRequest::clear_client_request_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t UnlockGuildEmblemRequest::client_request_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemRequest.client_request_id)
+  return _internal_client_request_id();
+}
+inline void UnlockGuildEmblemRequest::set_client_request_id(::uint64_t value) {
+  _internal_set_client_request_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemRequest.client_request_id)
+}
+inline ::uint64_t UnlockGuildEmblemRequest::_internal_client_request_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.client_request_id_;
+}
+inline void UnlockGuildEmblemRequest::_internal_set_client_request_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.client_request_id_ = value;
+}
+
+// uint32 emblem_id = 2;
+inline void UnlockGuildEmblemRequest::clear_emblem_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t UnlockGuildEmblemRequest::emblem_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemRequest.emblem_id)
+  return _internal_emblem_id();
+}
+inline void UnlockGuildEmblemRequest::set_emblem_id(::uint32_t value) {
+  _internal_set_emblem_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemRequest.emblem_id)
+}
+inline ::uint32_t UnlockGuildEmblemRequest::_internal_emblem_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.emblem_id_;
+}
+inline void UnlockGuildEmblemRequest::_internal_set_emblem_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_id_ = value;
+}
+
+// uint64 expected_price_diamond = 3;
+inline void UnlockGuildEmblemRequest::clear_expected_price_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_price_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t UnlockGuildEmblemRequest::expected_price_diamond() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemRequest.expected_price_diamond)
+  return _internal_expected_price_diamond();
+}
+inline void UnlockGuildEmblemRequest::set_expected_price_diamond(::uint64_t value) {
+  _internal_set_expected_price_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemRequest.expected_price_diamond)
+}
+inline ::uint64_t UnlockGuildEmblemRequest::_internal_expected_price_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_price_diamond_;
+}
+inline void UnlockGuildEmblemRequest::_internal_set_expected_price_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_price_diamond_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// UnlockGuildEmblemResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool UnlockGuildEmblemResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& UnlockGuildEmblemResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& UnlockGuildEmblemResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.error_message)
+  return _internal_error_message();
+}
+inline void UnlockGuildEmblemResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.UnlockGuildEmblemResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE UnlockGuildEmblemResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE UnlockGuildEmblemResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.UnlockGuildEmblemResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL UnlockGuildEmblemResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL UnlockGuildEmblemResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.UnlockGuildEmblemResponse.error_message)
+  return _msg;
+}
+inline void UnlockGuildEmblemResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.UnlockGuildEmblemResponse.error_message)
+}
+
+// bool replayed = 2;
+inline void UnlockGuildEmblemResponse::clear_replayed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline bool UnlockGuildEmblemResponse::replayed() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.replayed)
+  return _internal_replayed();
+}
+inline void UnlockGuildEmblemResponse::set_replayed(bool value) {
+  _internal_set_replayed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemResponse.replayed)
+}
+inline bool UnlockGuildEmblemResponse::_internal_replayed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.replayed_;
+}
+inline void UnlockGuildEmblemResponse::_internal_set_replayed(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.replayed_ = value;
+}
+
+// uint64 op_id = 3;
+inline void UnlockGuildEmblemResponse::clear_op_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.op_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t UnlockGuildEmblemResponse::op_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.op_id)
+  return _internal_op_id();
+}
+inline void UnlockGuildEmblemResponse::set_op_id(::uint64_t value) {
+  _internal_set_op_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemResponse.op_id)
+}
+inline ::uint64_t UnlockGuildEmblemResponse::_internal_op_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.op_id_;
+}
+inline void UnlockGuildEmblemResponse::_internal_set_op_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.op_id_ = value;
+}
+
+// .guildpb.GuildAssetOrderStatus status = 4;
+inline void UnlockGuildEmblemResponse::clear_status() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::guildpb::GuildAssetOrderStatus UnlockGuildEmblemResponse::status() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.status)
+  return _internal_status();
+}
+inline void UnlockGuildEmblemResponse::set_status(::guildpb::GuildAssetOrderStatus value) {
+  _internal_set_status(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemResponse.status)
+}
+inline ::guildpb::GuildAssetOrderStatus UnlockGuildEmblemResponse::_internal_status() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::guildpb::GuildAssetOrderStatus>(_impl_.status_);
+}
+inline void UnlockGuildEmblemResponse::_internal_set_status(::guildpb::GuildAssetOrderStatus value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = value;
+}
+
+// uint32 reason_tip_id = 5;
+inline void UnlockGuildEmblemResponse::clear_reason_tip_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t UnlockGuildEmblemResponse::reason_tip_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.reason_tip_id)
+  return _internal_reason_tip_id();
+}
+inline void UnlockGuildEmblemResponse::set_reason_tip_id(::uint32_t value) {
+  _internal_set_reason_tip_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemResponse.reason_tip_id)
+}
+inline ::uint32_t UnlockGuildEmblemResponse::_internal_reason_tip_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_tip_id_;
+}
+inline void UnlockGuildEmblemResponse::_internal_set_reason_tip_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_id_ = value;
+}
+
+// uint32 emblem_id = 6;
+inline void UnlockGuildEmblemResponse::clear_emblem_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t UnlockGuildEmblemResponse::emblem_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.emblem_id)
+  return _internal_emblem_id();
+}
+inline void UnlockGuildEmblemResponse::set_emblem_id(::uint32_t value) {
+  _internal_set_emblem_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemResponse.emblem_id)
+}
+inline ::uint32_t UnlockGuildEmblemResponse::_internal_emblem_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.emblem_id_;
+}
+inline void UnlockGuildEmblemResponse::_internal_set_emblem_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_id_ = value;
+}
+
+// uint64 cost_diamond = 7;
+inline void UnlockGuildEmblemResponse::clear_cost_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t UnlockGuildEmblemResponse::cost_diamond() const {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.cost_diamond)
+  return _internal_cost_diamond();
+}
+inline void UnlockGuildEmblemResponse::set_cost_diamond(::uint64_t value) {
+  _internal_set_cost_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:guildpb.UnlockGuildEmblemResponse.cost_diamond)
+}
+inline ::uint64_t UnlockGuildEmblemResponse::_internal_cost_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cost_diamond_;
+}
+inline void UnlockGuildEmblemResponse::_internal_set_cost_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_diamond_ = value;
+}
+
+// .guildpb.GuildInfo guild = 8;
+inline bool UnlockGuildEmblemResponse::has_guild() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.guild_ != nullptr);
+  return value;
+}
+inline void UnlockGuildEmblemResponse::clear_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ != nullptr) _impl_.guild_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildInfo& UnlockGuildEmblemResponse::_internal_guild() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildInfo* p = _impl_.guild_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildInfo>(&::guildpb::GuildInfo_globals_);
+}
+inline const ::guildpb::GuildInfo& UnlockGuildEmblemResponse::guild() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.UnlockGuildEmblemResponse.guild)
+  return _internal_guild();
+}
+inline void UnlockGuildEmblemResponse::unsafe_arena_set_allocated_guild(
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.UnlockGuildEmblemResponse.guild)
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE UnlockGuildEmblemResponse::release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* released = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE UnlockGuildEmblemResponse::unsafe_arena_release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.UnlockGuildEmblemResponse.guild)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* temp = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL UnlockGuildEmblemResponse::_internal_mutable_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildInfo>(GetArena());
+    _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(p);
+  }
+  return _impl_.guild_;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL UnlockGuildEmblemResponse::mutable_guild()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* _msg = _internal_mutable_guild();
+  // @@protoc_insertion_point(field_mutable:guildpb.UnlockGuildEmblemResponse.guild)
+  return _msg;
+}
+inline void UnlockGuildEmblemResponse::set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.UnlockGuildEmblemResponse.guild)
+}
+
+// -------------------------------------------------------------------
+
+// EquipGuildEmblemRequest
+
+// uint32 emblem_id = 1;
+inline void EquipGuildEmblemRequest::clear_emblem_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t EquipGuildEmblemRequest::emblem_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.EquipGuildEmblemRequest.emblem_id)
+  return _internal_emblem_id();
+}
+inline void EquipGuildEmblemRequest::set_emblem_id(::uint32_t value) {
+  _internal_set_emblem_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.EquipGuildEmblemRequest.emblem_id)
+}
+inline ::uint32_t EquipGuildEmblemRequest::_internal_emblem_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.emblem_id_;
+}
+inline void EquipGuildEmblemRequest::_internal_set_emblem_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.emblem_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// EquipGuildEmblemResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool EquipGuildEmblemResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& EquipGuildEmblemResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& EquipGuildEmblemResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.EquipGuildEmblemResponse.error_message)
+  return _internal_error_message();
+}
+inline void EquipGuildEmblemResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.EquipGuildEmblemResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE EquipGuildEmblemResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE EquipGuildEmblemResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.EquipGuildEmblemResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL EquipGuildEmblemResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL EquipGuildEmblemResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.EquipGuildEmblemResponse.error_message)
+  return _msg;
+}
+inline void EquipGuildEmblemResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.EquipGuildEmblemResponse.error_message)
+}
+
+// .guildpb.GuildInfo guild = 2;
+inline bool EquipGuildEmblemResponse::has_guild() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.guild_ != nullptr);
+  return value;
+}
+inline void EquipGuildEmblemResponse::clear_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ != nullptr) _impl_.guild_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildInfo& EquipGuildEmblemResponse::_internal_guild() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildInfo* p = _impl_.guild_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildInfo>(&::guildpb::GuildInfo_globals_);
+}
+inline const ::guildpb::GuildInfo& EquipGuildEmblemResponse::guild() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.EquipGuildEmblemResponse.guild)
+  return _internal_guild();
+}
+inline void EquipGuildEmblemResponse::unsafe_arena_set_allocated_guild(
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.EquipGuildEmblemResponse.guild)
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE EquipGuildEmblemResponse::release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* released = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE EquipGuildEmblemResponse::unsafe_arena_release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.EquipGuildEmblemResponse.guild)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* temp = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL EquipGuildEmblemResponse::_internal_mutable_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildInfo>(GetArena());
+    _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(p);
+  }
+  return _impl_.guild_;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL EquipGuildEmblemResponse::mutable_guild()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* _msg = _internal_mutable_guild();
+  // @@protoc_insertion_point(field_mutable:guildpb.EquipGuildEmblemResponse.guild)
+  return _msg;
+}
+inline void EquipGuildEmblemResponse::set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.EquipGuildEmblemResponse.guild)
 }
 
 #ifdef __GNUC__

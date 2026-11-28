@@ -142,6 +142,7 @@ type WuxingTowerCompState struct {
 	WeeklyBestFloorPreset  uint32                 `protobuf:"varint,22,opt,name=weekly_best_floor_preset,json=weeklyBestFloorPreset,proto3" json:"weekly_best_floor_preset,omitempty"`    // 本周公平试炼最高通关关数
 	WeeklyBestRoundsPreset uint32                 `protobuf:"varint,23,opt,name=weekly_best_rounds_preset,json=weeklyBestRoundsPreset,proto3" json:"weekly_best_rounds_preset,omitempty"` // 本周公平试炼全通最少总回合数
 	RouteChoiceMask        uint32                 `protobuf:"varint,24,opt,name=route_choice_mask,json=routeChoiceMask,proto3" json:"route_choice_mask,omitempty"`                        // 本轮分岔轨迹位图（bit0=第2关右路奇遇, bit1=第4关右路休整）
+	AdRerollUsedRunId      uint64                 `protobuf:"varint,25,opt,name=ad_reroll_used_run_id,json=adRerollUsedRunId,proto3" json:"ad_reroll_used_run_id,omitempty"`              // M-7：已使用激励视频奇策重随的 run_id（每局硬锁最多 1 次）
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -344,6 +345,13 @@ func (x *WuxingTowerCompState) GetRouteChoiceMask() uint32 {
 	return 0
 }
 
+func (x *WuxingTowerCompState) GetAdRerollUsedRunId() uint64 {
+	if x != nil {
+		return x.AdRerollUsedRunId
+	}
+	return 0
+}
+
 // 战报一键收藏的公开脱敏配装条（最多保存 12 条，仅存公开构筑摘要，不含私密属性概率）。
 type SavedBattleBuildBookmark struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -360,6 +368,7 @@ type SavedBattleBuildBookmark struct {
 	SkillTableIds    []uint32               `protobuf:"varint,11,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
 	WuxingSigilIds   []uint32               `protobuf:"varint,12,rep,packed,name=wuxing_sigil_ids,json=wuxingSigilIds,proto3" json:"wuxing_sigil_ids,omitempty"`
 	SavedAtMs        uint64                 `protobuf:"varint,13,opt,name=saved_at_ms,json=savedAtMs,proto3" json:"saved_at_ms,omitempty"`
+	PinReplay        bool                   `protobuf:"varint,14,opt,name=pin_replay,json=pinReplay,proto3" json:"pin_replay,omitempty"` // true = 锁定关联 source_battle_id 精彩录像防 30 天淘汰（删除收藏或删角释放引用）
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -485,6 +494,13 @@ func (x *SavedBattleBuildBookmark) GetSavedAtMs() uint64 {
 	return 0
 }
 
+func (x *SavedBattleBuildBookmark) GetPinReplay() bool {
+	if x != nil {
+		return x.PinReplay
+	}
+	return false
+}
+
 // 玩家赛季进度持久化组件（player_database 字段 30，GROWTH 分组）。
 // records 下标不承载任何业务顺序语义（AGENTS.md §11.6），按 season_id 定位。
 type PlayerSeasonComp struct {
@@ -492,10 +508,11 @@ type PlayerSeasonComp struct {
 	Records                  []*PlayerSeasonSealRecord   `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
 	EquippedFormationId      uint32                      `protobuf:"varint,2,opt,name=equipped_formation_id,json=equippedFormationId,proto3" json:"equipped_formation_id,omitempty"`                                                                         // 五行阵法（0=无/默认，1..5 免费切换）
 	WuxingTower              *WuxingTowerCompState       `protobuf:"bytes,3,opt,name=wuxing_tower,json=wuxingTower,proto3" json:"wuxing_tower,omitempty"`                                                                                                    // 五行幻境周常爬塔状态
-	SavedBuilds              []*SavedBattleBuildBookmark `protobuf:"bytes,4,rep,name=saved_builds,json=savedBuilds,proto3" json:"saved_builds,omitempty"`                                                                                                    // 战报配装收藏夹（上限 12 条）
+	SavedBuilds              []*SavedBattleBuildBookmark `protobuf:"bytes,4,rep,name=saved_builds,json=savedBuilds,proto3" json:"saved_builds,omitempty"`                                                                                                    // 战报配装收藏夹（默认 12 条，可扩容至 48 条）
 	UnlockedHonorWords       []uint64                    `protobuf:"varint,5,rep,packed,name=unlocked_honor_words,json=unlockedHonorWords,proto3" json:"unlocked_honor_words,omitempty"`                                                                     // 永久零数值纪念徽章动态位图（word=(season_id-1)/64, bit=(season_id-1)%64，永不收回）
 	RetroHonorTargetSeasonId uint32                      `protobuf:"varint,6,opt,name=retro_honor_target_season_id,json=retroHonorTargetSeasonId,proto3" json:"retro_honor_target_season_id,omitempty"`                                                      // 玩家手动指定的往季徽章追忆目标赛季 ID（0=自动顺延首个未解锁往季）
 	RetroHonorProgress       map[uint32]uint32           `protobuf:"bytes,7,rep,name=retro_honor_progress,json=retroHonorProgress,proto3" json:"retro_honor_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // 未解锁往季的免费追忆溢出点数（满 12 点解锁后删除）
+	ExtraSavedBuildSlots     uint32                      `protobuf:"varint,8,opt,name=extra_saved_build_slots,json=extraSavedBuildSlots,proto3" json:"extra_saved_build_slots,omitempty"`                                                                    // 付费扩容的额外战报配装收藏位（0/12/24/36，总容量 = 12 + extra，封顶 48）
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -579,6 +596,13 @@ func (x *PlayerSeasonComp) GetRetroHonorProgress() map[uint32]uint32 {
 	return nil
 }
 
+func (x *PlayerSeasonComp) GetExtraSavedBuildSlots() uint32 {
+	if x != nil {
+		return x.ExtraSavedBuildSlots
+	}
+	return 0
+}
+
 var File_proto_common_component_player_season_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
@@ -591,7 +615,7 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	"\rbattle_points\x18\x04 \x01(\rR\fbattlePoints\x12%\n" +
 	"\x0ecatchup_points\x18\x05 \x01(\rR\rcatchupPoints\x12\x1a\n" +
 	"\brevision\x18\x06 \x01(\x04R\brevision\x12\x1b\n" +
-	"\tlast_term\x18\a \x01(\rR\blastTerm\"\x80\b\n" +
+	"\tlast_term\x18\a \x01(\rR\blastTerm\"\xb2\b\n" +
 	"\x14WuxingTowerCompState\x12\x19\n" +
 	"\bweek_key\x18\x01 \x01(\rR\aweekKey\x12\x1d\n" +
 	"\n" +
@@ -619,7 +643,8 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	"\x12best_rounds_preset\x18\x15 \x01(\rR\x10bestRoundsPreset\x127\n" +
 	"\x18weekly_best_floor_preset\x18\x16 \x01(\rR\x15weeklyBestFloorPreset\x129\n" +
 	"\x19weekly_best_rounds_preset\x18\x17 \x01(\rR\x16weeklyBestRoundsPreset\x12*\n" +
-	"\x11route_choice_mask\x18\x18 \x01(\rR\x0frouteChoiceMask\"\x80\x04\n" +
+	"\x11route_choice_mask\x18\x18 \x01(\rR\x0frouteChoiceMask\x120\n" +
+	"\x15ad_reroll_used_run_id\x18\x19 \x01(\x04R\x11adRerollUsedRunId\"\x9f\x04\n" +
 	"\x18SavedBattleBuildBookmark\x12\x1f\n" +
 	"\vbookmark_id\x18\x01 \x01(\x04R\n" +
 	"bookmarkId\x12\x14\n" +
@@ -635,7 +660,9 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	" \x01(\tR\ractivePetName\x12&\n" +
 	"\x0fskill_table_ids\x18\v \x03(\rR\rskillTableIds\x12(\n" +
 	"\x10wuxing_sigil_ids\x18\f \x03(\rR\x0ewuxingSigilIds\x12\x1e\n" +
-	"\vsaved_at_ms\x18\r \x01(\x04R\tsavedAtMs\"\x87\x04\n" +
+	"\vsaved_at_ms\x18\r \x01(\x04R\tsavedAtMs\x12\x1d\n" +
+	"\n" +
+	"pin_replay\x18\x0e \x01(\bR\tpinReplay\"\xbe\x04\n" +
 	"\x10PlayerSeasonComp\x121\n" +
 	"\arecords\x18\x01 \x03(\v2\x17.PlayerSeasonSealRecordR\arecords\x122\n" +
 	"\x15equipped_formation_id\x18\x02 \x01(\rR\x13equippedFormationId\x128\n" +
@@ -643,7 +670,8 @@ const file_proto_common_component_player_season_comp_proto_rawDesc = "" +
 	"\fsaved_builds\x18\x04 \x03(\v2\x19.SavedBattleBuildBookmarkR\vsavedBuilds\x120\n" +
 	"\x14unlocked_honor_words\x18\x05 \x03(\x04R\x12unlockedHonorWords\x12>\n" +
 	"\x1cretro_honor_target_season_id\x18\x06 \x01(\rR\x18retroHonorTargetSeasonId\x12[\n" +
-	"\x14retro_honor_progress\x18\a \x03(\v2).PlayerSeasonComp.RetroHonorProgressEntryR\x12retroHonorProgress\x1aE\n" +
+	"\x14retro_honor_progress\x18\a \x03(\v2).PlayerSeasonComp.RetroHonorProgressEntryR\x12retroHonorProgress\x125\n" +
+	"\x17extra_saved_build_slots\x18\b \x01(\rR\x14extraSavedBuildSlots\x1aE\n" +
 	"\x17RetroHonorProgressEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01B\x18Z\x16proto/common/componentb\x06proto3"

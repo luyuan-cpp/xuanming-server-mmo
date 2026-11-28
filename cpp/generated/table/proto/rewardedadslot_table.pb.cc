@@ -48,11 +48,11 @@ constexpr RewardedAdSlotTable::ParseTableT_ RewardedAdSlotTable::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_._has_bits_),
       0, // no _extensions_
-      11, 120,  // max_field_number, fast_idx_mask
+      12, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294965248,  // skipmap
+      4294963200,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      11,  // num_field_entries
+      12,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -107,7 +107,10 @@ constexpr RewardedAdSlotTable::ParseTableT_ RewardedAdSlotTable::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdSlotTable, _impl_.platform_mask_), 10>(),
        {88, 10, 0,
         PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.platform_mask_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 reward_kind = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(RewardedAdSlotTable, _impl_.reward_kind_), 11>(),
+       {96, 11, 0,
+        PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.reward_kind_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -136,6 +139,8 @@ constexpr RewardedAdSlotTable::ParseTableT_ RewardedAdSlotTable::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.require_ssv_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 platform_mask = 11;
       {PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.platform_mask_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 reward_kind = 12;
+      {PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.reward_kind_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -158,7 +163,8 @@ inline constexpr RewardedAdSlotTable::Impl_::Impl_(
         currency_type_{0u},
         reward_amount_{::uint64_t{0u}},
         require_ssv_{0u},
-        platform_mask_{0u} {}
+        platform_mask_{0u},
+        reward_kind_{0u} {}
 
 template <typename>
 constexpr RewardedAdSlotTable::RewardedAdSlotTable(::_pbi::ConstantInitialized,
@@ -412,7 +418,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_._has_bits_),
-        14, // hasbit index offset
+        15, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.enabled_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.min_level_),
@@ -424,6 +430,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.reward_amount_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.require_ssv_),
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.platform_mask_),
+        PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTable, _impl_.reward_kind_),
         0,
         1,
         2,
@@ -435,6 +442,7 @@ const ::uint32_t
         8,
         9,
         10,
+        11,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::RewardedAdSlotTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -445,7 +453,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::RewardedAdSlotTable)},
-        {25, sizeof(::RewardedAdSlotTableData)},
+        {27, sizeof(::RewardedAdSlotTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -454,23 +462,24 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_rewardedadslot_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\032rewardedadslot_table.proto\"\372\001\n\023Rewarde"
+    "\n\032rewardedadslot_table.proto\"\217\002\n\023Rewarde"
     "dAdSlotTable\022\n\n\002id\030\001 \001(\r\022\017\n\007enabled\030\002 \001("
     "\r\022\021\n\tmin_level\030\003 \001(\r\022\023\n\013daily_limit\030\004 \001("
     "\r\022\024\n\014cooldown_sec\030\005 \001(\r\022\025\n\rmin_watch_sec"
     "\030\006 \001(\r\022\027\n\017session_ttl_sec\030\007 \001(\r\022\025\n\rcurre"
     "ncy_type\030\010 \001(\r\022\025\n\rreward_amount\030\t \001(\004\022\023\n"
     "\013require_ssv\030\n \001(\r\022\025\n\rplatform_mask\030\013 \001("
-    "\r\"=\n\027RewardedAdSlotTableData\022\"\n\004data\030\001 \003"
-    "(\0132\024.RewardedAdSlotTableBE\n\016com.game.tab"
-    "leB\035RewardedAdSlotTableOuterClassP\001Z\022gen"
-    "erated/pb/tableb\006proto3"
+    "\r\022\023\n\013reward_kind\030\014 \001(\r\"=\n\027RewardedAdSlot"
+    "TableData\022\"\n\004data\030\001 \003(\0132\024.RewardedAdSlot"
+    "TableBE\n\016com.game.tableB\035RewardedAdSlotT"
+    "ableOuterClassP\001Z\022generated/pb/tableb\006pr"
+    "oto3"
 };
 static ::absl::once_flag descriptor_table_rewardedadslot_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_rewardedadslot_5ftable_2eproto = {
     false,
     false,
-    423,
+    444,
     descriptor_table_protodef_rewardedadslot_5ftable_2eproto,
     "rewardedadslot_table.proto",
     &descriptor_table_rewardedadslot_5ftable_2eproto_once,
@@ -515,9 +524,9 @@ inline void RewardedAdSlotTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, platform_mask_) -
+           offsetof(Impl_, reward_kind_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::platform_mask_));
+               sizeof(Impl_::reward_kind_));
 }
 RewardedAdSlotTable::~RewardedAdSlotTable() {
   // @@protoc_insertion_point(destructor:RewardedAdSlotTable)
@@ -572,10 +581,10 @@ PROTOBUF_NOINLINE void RewardedAdSlotTable::Clear() {
         reinterpret_cast<char*>(&_impl_.currency_type_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.currency_type_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     ::memset(&_impl_.reward_amount_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.platform_mask_) -
-        reinterpret_cast<char*>(&_impl_.reward_amount_)) + sizeof(_impl_.platform_mask_));
+        reinterpret_cast<char*>(&_impl_.reward_kind_) -
+        reinterpret_cast<char*>(&_impl_.reward_amount_)) + sizeof(_impl_.reward_kind_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -699,6 +708,15 @@ PROTOBUF_NOINLINE void RewardedAdSlotTable::Clear() {
     }
   }
 
+  // uint32 reward_kind = 12;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_reward_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          12, this_._internal_reward_kind(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -782,7 +800,7 @@ PROTOBUF_NOINLINE void RewardedAdSlotTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     // uint64 reward_amount = 9;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_reward_amount() != 0) {
@@ -802,6 +820,13 @@ PROTOBUF_NOINLINE void RewardedAdSlotTable::Clear() {
       if (this_._internal_platform_mask() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_platform_mask());
+      }
+    }
+    // uint32 reward_kind = 12;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_reward_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_reward_kind());
       }
     }
   }
@@ -864,7 +889,7 @@ void RewardedAdSlotTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000700U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_reward_amount() != 0) {
         _this->_impl_.reward_amount_ = from._impl_.reward_amount_;
@@ -878,6 +903,11 @@ void RewardedAdSlotTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000400U)) {
       if (from._internal_platform_mask() != 0) {
         _this->_impl_.platform_mask_ = from._impl_.platform_mask_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_reward_kind() != 0) {
+        _this->_impl_.reward_kind_ = from._impl_.reward_kind_;
       }
     }
   }
@@ -899,8 +929,8 @@ void RewardedAdSlotTable::InternalSwap(RewardedAdSlotTable* PROTOBUF_RESTRICT PR
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.platform_mask_)
-      + sizeof(RewardedAdSlotTable::_impl_.platform_mask_)
+      PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.reward_kind_)
+      + sizeof(RewardedAdSlotTable::_impl_.reward_kind_)
       - PROTOBUF_FIELD_OFFSET(RewardedAdSlotTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

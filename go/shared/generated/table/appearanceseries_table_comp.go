@@ -49,6 +49,14 @@ type AppearanceSeriesEpilogue_bodyComp struct {
     Value string
 }
 
+type AppearanceSeriesBundle_discount_bpsComp struct {
+    Value uint32
+}
+
+type AppearanceSeriesUnit_price_diamondComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -88,5 +96,13 @@ func MakeAppearanceSeriesEpilogue_titleComp(row *pb.AppearanceSeriesTable) Appea
 
 func MakeAppearanceSeriesEpilogue_bodyComp(row *pb.AppearanceSeriesTable) AppearanceSeriesEpilogue_bodyComp {
     return AppearanceSeriesEpilogue_bodyComp{Value: row.EpilogueBody}
+}
+
+func MakeAppearanceSeriesBundle_discount_bpsComp(row *pb.AppearanceSeriesTable) AppearanceSeriesBundle_discount_bpsComp {
+    return AppearanceSeriesBundle_discount_bpsComp{Value: row.BundleDiscountBps}
+}
+
+func MakeAppearanceSeriesUnit_price_diamondComp(row *pb.AppearanceSeriesTable) AppearanceSeriesUnit_price_diamondComp {
+    return AppearanceSeriesUnit_price_diamondComp{Value: row.UnitPriceDiamond}
 }
 

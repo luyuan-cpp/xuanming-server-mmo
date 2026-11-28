@@ -41,6 +41,9 @@ public:
     static void EquipTravelPassCosmetic(entt::entity player,
         const ::EquipTravelPassCosmeticRequest* request,
         ::EquipTravelPassCosmeticResponse* response);
+    static void SelectActiveTravelPass(entt::entity player,
+        const ::SelectActiveTravelPassRequest* request,
+        ::SelectActiveTravelPassResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -128,6 +131,15 @@ public:
             EquipTravelPassCosmetic(player,
                 static_cast<const ::EquipTravelPassCosmeticRequest*>(request),
                 static_cast<::EquipTravelPassCosmeticResponse*>(response));
+			}
+            break;
+        case 9:
+			{
+            static_assert(std::is_same_v<decltype(std::declval<::SelectActiveTravelPassResponse&>().mutable_error_message()), ::TipInfoMessage*>,
+                "玩家 RPC 非 Empty 应答必须提供 TipInfoMessage error_message");
+            SelectActiveTravelPass(player,
+                static_cast<const ::SelectActiveTravelPassRequest*>(request),
+                static_cast<::SelectActiveTravelPassResponse*>(response));
 			}
             break;
         default:

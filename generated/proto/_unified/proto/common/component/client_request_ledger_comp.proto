@@ -68,6 +68,18 @@ message ClientRequestRecord {
   uint32 skill_loadout_rented_slots = 42;       // 7 套流派方案槽位租用：首次操作后的租用额外套数（1..5）。
   uint64 skill_loadout_rent_expires_at_sec = 43;// 7 套流派方案槽位租用：首次操作后的统一到期 Unix 秒。
   uint64 skill_loadout_rent_spent_diamond = 44; // 7 套流派方案槽位租用：首次实际扣除的真实灵石数。
+  uint32 appearance_bundle_unlocked_count = 45; // 衣柜系列补齐包：首次实际解锁的缺失角色数。
+  uint64 appearance_bundle_spent_diamond = 46;  // 衣柜系列补齐包：首次实际扣除的真实灵石数。
+  uint64 city_celebration_id = 47;              // 全城同乐施放：首次生成的场景同乐演出 ID。
+  uint32 city_celebration_bind_gold = 48;       // 全城同乐领礼：首次实际入账的绑定银两数。
+  uint64 cosmetic_gift_order_id = 49;           // 好友外观/手记赠礼：首次生成的全局赠礼单号。
+  uint64 cosmetic_gift_spent_diamond = 50;      // 好友外观/手记赠礼：首次扣除的真实充值灵石数。
+  uint32 bag_expand_new_capacity = 51;          // 仓库扩容：首次扩容后的最新仓库格数（220..300）。
+  uint64 bag_expand_spent_diamond = 52;         // 仓库扩容：首次扣除的真实充值灵石数。
+  uint32 pet_squad_unlocked_slots = 53;         // 灵宠编队预设扩容：首次解锁后的永久槽位数（3..5）。
+  uint64 pet_squad_spent_diamond = 54;          // 灵宠编队预设扩容：首次扣除的真实充值灵石数。
+  uint32 build_bookmark_new_capacity = 55;      // 战报配装收藏夹扩容：首次扩容后的最新容量（24..48）。
+  uint64 build_bookmark_spent_diamond = 56;     // 战报配装收藏夹扩容：首次扣除的真实充值灵石数。
 }
 
 // 与战斗结算、物品和请求回执同属完整玩家存档。未领取余额不随周期重置。
@@ -111,6 +123,9 @@ message RewardedAdLedger {
   uint64 active_session_id = 5;        // 当前待核销的短效会话号（0 = 无）
   uint64 active_session_issued_ms = 6; // 会话签发时刻（UTC 毫秒）
   uint32 active_session_slot_id = 7;   // 会话对应广告位 ID
+  map<uint32, uint32> slot_claimed_this_week = 8; // 各槽位本周已领取次数（slot_id -> count，每周一 05:00 重置）
+  uint64 merchant_reroll_round_id = 9;            // 槽位 4 已执行个人换货的神秘商人 round_id（每轮限 1 次）
+  uint32 merchant_reroll_seq = 10;                // 槽位 4 个人换货确定性盐值序号（>=1 生效）
 }
 
 message ClientRequestLedgerComp {

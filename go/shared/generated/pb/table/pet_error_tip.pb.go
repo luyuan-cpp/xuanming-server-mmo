@@ -49,6 +49,9 @@ const (
 	PetError_kPetTierLevelNotEnough    PetError = 26021
 	PetError_kPetTierMaterialNotEnough PetError = 26022
 	PetError_kPetEntryPresetInvalid    PetError = 26023
+	PetError_kPetSquadSlotLocked       PetError = 26024
+	PetError_kPetSquadMaxSlotsReached  PetError = 26025
+	PetError_kPetSquadPriceChanged     PetError = 26026
 )
 
 // Enum value maps for PetError.
@@ -79,6 +82,9 @@ var (
 		26021: "kPetTierLevelNotEnough",
 		26022: "kPetTierMaterialNotEnough",
 		26023: "kPetEntryPresetInvalid",
+		26024: "kPetSquadSlotLocked",
+		26025: "kPetSquadMaxSlotsReached",
+		26026: "kPetSquadPriceChanged",
 	}
 	PetError_value = map[string]int32{
 		"kPet_errorOK":              0,
@@ -106,6 +112,9 @@ var (
 		"kPetTierLevelNotEnough":    26021,
 		"kPetTierMaterialNotEnough": 26022,
 		"kPetEntryPresetInvalid":    26023,
+		"kPetSquadSlotLocked":       26024,
+		"kPetSquadMaxSlotsReached":  26025,
+		"kPetSquadPriceChanged":     26026,
 	}
 )
 
@@ -140,7 +149,7 @@ var File_pet_error_tip_proto protoreflect.FileDescriptor
 
 const file_pet_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x13pet_error_tip.proto*\x92\x05\n" +
+	"\x13pet_error_tip.proto*\xea\x05\n" +
 	"\tpet_error\x12\x10\n" +
 	"\fkPet_errorOK\x10\x00\x12\x12\n" +
 	"\fkPetNotFound\x10\x90\xcb\x01\x12\x19\n" +
@@ -166,7 +175,10 @@ const file_pet_error_tip_proto_rawDesc = "" +
 	"\x0fkPetTierChanged\x10\xa4\xcb\x01\x12\x1c\n" +
 	"\x16kPetTierLevelNotEnough\x10\xa5\xcb\x01\x12\x1f\n" +
 	"\x19kPetTierMaterialNotEnough\x10\xa6\xcb\x01\x12\x1c\n" +
-	"\x16kPetEntryPresetInvalid\x10\xa7\xcb\x01B$\n" +
+	"\x16kPetEntryPresetInvalid\x10\xa7\xcb\x01\x12\x19\n" +
+	"\x13kPetSquadSlotLocked\x10\xa8\xcb\x01\x12\x1e\n" +
+	"\x18kPetSquadMaxSlotsReached\x10\xa9\xcb\x01\x12\x1b\n" +
+	"\x15kPetSquadPriceChanged\x10\xaa\xcb\x01B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

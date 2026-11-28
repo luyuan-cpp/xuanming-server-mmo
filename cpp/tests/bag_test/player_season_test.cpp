@@ -23,9 +23,12 @@
 #include "proto/common/component/equipment_effects.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
+#include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/player_season_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/match/match_service.pb.h"
+#include "proto/scene/player_bag.pb.h"
+#include "proto/scene/player_pet.pb.h"
 #include "proto/scene/player_season.pb.h"
 #include "proto/scene/player_skill.pb.h"
 #include "services/battle/constants/wuxing_expansion_rules.h"
@@ -34,8 +37,12 @@
 #include "services/scene/player/comp/player_ownership_comp.h"
 #include "services/scene/player/system/player_attribute.h"
 #include "services/scene/player/system/player_equipment_v1.h"
+#include "services/scene/player/system/player_feature_snapshot.h"
+#include "services/scene/player/system/player_pet.h"
 #include "services/scene/player/system/player_season.h"
 #include "services/scene/player/system/player_skill.h"
+#include "table/proto/tip/bag_error_tip.pb.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
 #include "table/code/attributeallocratio_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
@@ -1155,4 +1162,105 @@ TEST_F(PlayerSeasonSystemTest, WuxingRealmV2SixNodeBranchingEventsFairPresetCros
     ASSERT_EQ(stRerun.state().weekly_leaderboard_preset(0).sigil_ids_size(), 1);
     EXPECT_EQ(stRerun.state().weekly_leaderboard_preset(0).sigil_ids(0), savedBestBoon)
         << "低层重开局绝不允许覆盖本周最高层数的上榜奇策构筑";
+}
+
+TEST_F(PlayerSeasonSystemTest, BatchB3_WarehousePetSquadAndBookmarkExpansions) {
+    constexpr uint64_t kNowMs = 1800000100000ULL;
+    auto& petComp = tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    auto* p1 = petComp.add_pets();
+    p1->set_pet_id(9001u);
+    p1->set_pet_table_id(1u);
+    p1->set_level(10u);
+    auto* p2 = petComp.add_pets();
+    p2->set_pet_id(9002u);
+    p2->set_pet_table_id(1u);
+    p2->set_level(10u);
+
+    ASSERT_EQ(CurrencySystem::AddCurrency(player, kCurrencyBindDiamond, 999u, TX_GM_GRANT), kSuccess);
+    ASSERT_EQ(CurrencySystem::AddCurrency(player, kCurrencyDiamond, 100u, TX_GM_GRANT), kSuccess); // 500 + 100 = 600
+
+    // 1. 仓库扩容（+20 格，60 真实灵石，绝不扣绑石，同键幂等，最多扩 5 次至 300 格）
+    ExpandBagCapacityRequest bagReq;
+    bagReq.set_client_request_id(83001u);
+    bagReq.set_bag_type(kWarehouse);
+    bagReq.set_expected_capacity(200u);
+    bagReq.set_expected_price_diamond(60u);
+    ExpandBagCapacityResponse bagResp;
+    PlayerBagSystem::ExpandCapacity(player, bagReq, bagResp);
+    ASSERT_EQ(bagResp.error_message().id(), 0u);
+    EXPECT_FALSE(bagResp.replayed());
+    EXPECT_EQ(bagResp.new_capacity(), 220u);
+    EXPECT_EQ(bagResp.spent_diamond(), 60u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 540u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyBindDiamond), 999u);
+
+    // 同键重放幂等不双扣
+    ExpandBagCapacityResponse bagReplay;
+    PlayerBagSystem::ExpandCapacity(player, bagReq, bagReplay);
+    ASSERT_EQ(bagReplay.error_message().id(), 0u);
+    EXPECT_TRUE(bagReplay.replayed());
+    EXPECT_EQ(bagReplay.new_capacity(), 220u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 540u);
+
+    // 2. 灵宠编队快捷预设：默认 2 套免费，第 3 套未解锁拒，解锁后保存并测试放生/交易自动过滤死引用
+    SavePetSquadPresetRequest saveLocked;
+    saveLocked.set_slot_id(3u);
+    saveLocked.set_tag(2u);
+    saveLocked.add_pet_ids(9001u);
+    SavePetSquadPresetResponse saveLockedResp;
+    PetSystem::SaveSquadPreset(player, saveLocked, saveLockedResp);
+    EXPECT_EQ(saveLockedResp.error_message().id(), kPetSquadSlotLocked);
+
+    UnlockPetSquadPresetSlotRequest unlockPet;
+    unlockPet.set_client_request_id(83002u);
+    unlockPet.set_expected_unlocked_slots(2u);
+    unlockPet.set_expected_price_diamond(60u);
+    UnlockPetSquadPresetSlotResponse unlockPetResp;
+    PetSystem::UnlockSquadPresetSlot(player, unlockPet, unlockPetResp);
+    ASSERT_EQ(unlockPetResp.error_message().id(), 0u);
+    EXPECT_EQ(unlockPetResp.unlocked_slots(), 3u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 480u);
+
+    SavePetSquadPresetRequest saveOk;
+    saveOk.set_slot_id(3u);
+    saveOk.set_tag(2u);
+    saveOk.add_pet_ids(9001u);
+    saveOk.add_pet_ids(9002u);
+    SavePetSquadPresetResponse saveOkResp;
+    PetSystem::SaveSquadPreset(player, saveOk, saveOkResp);
+    ASSERT_EQ(saveOkResp.error_message().id(), 0u);
+    ASSERT_EQ(saveOkResp.pets().squad_presets_size(), 1);
+    EXPECT_EQ(saveOkResp.pets().squad_presets(0).pet_ids_size(), 2);
+
+    // 模拟宠物 9002 被移出后，BuildList 自动过滤失效引用
+    petComp.mutable_pets()->DeleteSubrange(1, 1);
+    PetListInfo listAfter;
+    ASSERT_EQ(PetSystem::BuildList(player, listAfter), kSuccess);
+    ASSERT_EQ(listAfter.squad_presets_size(), 1);
+    ASSERT_EQ(listAfter.squad_presets(0).pet_ids_size(), 1);
+    EXPECT_EQ(listAfter.squad_presets(0).pet_ids(0), 9001u);
+
+    // 3. 战报配装收藏夹扩容（12 -> 24 @ 60 真实灵石，支持 pin_replay 与第 13 条收藏）
+    ExpandSavedBuildSlotsRequest bmExpand;
+    bmExpand.set_client_request_id(83003u);
+    bmExpand.set_expected_capacity(12u);
+    bmExpand.set_expected_price_diamond(60u);
+    ExpandSavedBuildSlotsResponse bmExpandResp;
+    PlayerSeasonSystem::ExpandSavedBuildSlots(player, kNowMs, bmExpand, bmExpandResp);
+    ASSERT_EQ(bmExpandResp.error_message().id(), 0u);
+    EXPECT_EQ(bmExpandResp.new_capacity(), 24u);
+    EXPECT_EQ(bmExpandResp.state().saved_build_capacity(), 24u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyDiamond), 420u);
+
+    for (int i = 0; i < 13; ++i) {
+        SaveBattleBuildBookmarkRequest bmReq;
+        bmReq.mutable_bookmark()->set_title("配装" + std::to_string(i + 1));
+        bmReq.mutable_bookmark()->set_source_battle_id(70001u + static_cast<uint64_t>(i));
+        bmReq.mutable_bookmark()->set_formation_id(1u);
+        bmReq.mutable_bookmark()->set_pin_replay(true);
+        SaveBattleBuildBookmarkResponse bmResp;
+        PlayerSeasonSystem::SaveBattleBuildBookmark(player, kNowMs, bmReq, bmResp);
+        ASSERT_EQ(bmResp.error_message().id(), 0u) << "第 " << (i + 1) << " 条应成功写入扩容后的 24 格收藏夹";
+        EXPECT_TRUE(bmResp.saved().pin_replay());
+    }
 }

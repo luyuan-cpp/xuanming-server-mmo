@@ -951,3 +951,49 @@ func (guildServiceRpc) decodeGetGuildJianghuGrudgeWall(reply *base.MessageConten
 	}
 	return resp, nil
 }
+
+// UnlockGuildEmblem 异步调用 GuildService.UnlockGuildEmblem(REQUEST),done 的契约见 GuildService。
+func (r guildServiceRpc) UnlockGuildEmblem(c *pkg.GameClient, req *guild.UnlockGuildEmblemRequest, timeout time.Duration, done func(*guild.UnlockGuildEmblemResponse, error)) {
+	c.Call(game.GuildServiceUnlockGuildEmblemMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUnlockGuildEmblem(reply, err))
+	})
+}
+
+// UnlockGuildEmblemSync 同步调用 GuildService.UnlockGuildEmblem(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r guildServiceRpc) UnlockGuildEmblemSync(ctx context.Context, c *pkg.GameClient, req *guild.UnlockGuildEmblemRequest, timeout time.Duration) (*guild.UnlockGuildEmblemResponse, error) {
+	return r.decodeUnlockGuildEmblem(c.CallSync(ctx, game.GuildServiceUnlockGuildEmblemMessageId, req, timeout))
+}
+
+func (guildServiceRpc) decodeUnlockGuildEmblem(reply *base.MessageContent, err error) (*guild.UnlockGuildEmblemResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &guild.UnlockGuildEmblemResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode GuildService.UnlockGuildEmblem reply: %w", err)
+	}
+	return resp, nil
+}
+
+// EquipGuildEmblem 异步调用 GuildService.EquipGuildEmblem(REQUEST),done 的契约见 GuildService。
+func (r guildServiceRpc) EquipGuildEmblem(c *pkg.GameClient, req *guild.EquipGuildEmblemRequest, timeout time.Duration, done func(*guild.EquipGuildEmblemResponse, error)) {
+	c.Call(game.GuildServiceEquipGuildEmblemMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeEquipGuildEmblem(reply, err))
+	})
+}
+
+// EquipGuildEmblemSync 同步调用 GuildService.EquipGuildEmblem(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r guildServiceRpc) EquipGuildEmblemSync(ctx context.Context, c *pkg.GameClient, req *guild.EquipGuildEmblemRequest, timeout time.Duration) (*guild.EquipGuildEmblemResponse, error) {
+	return r.decodeEquipGuildEmblem(c.CallSync(ctx, game.GuildServiceEquipGuildEmblemMessageId, req, timeout))
+}
+
+func (guildServiceRpc) decodeEquipGuildEmblem(reply *base.MessageContent, err error) (*guild.EquipGuildEmblemResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &guild.EquipGuildEmblemResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode GuildService.EquipGuildEmblem reply: %w", err)
+	}
+	return resp, nil
+}

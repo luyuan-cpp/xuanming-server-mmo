@@ -63,6 +63,8 @@ const (
 	GuildService_IssueGuildWarFeud_FullMethodName         = "/guildpb.GuildService/IssueGuildWarFeud"
 	GuildService_RespondGuildWarFeud_FullMethodName       = "/guildpb.GuildService/RespondGuildWarFeud"
 	GuildService_GetGuildJianghuGrudgeWall_FullMethodName = "/guildpb.GuildService/GetGuildJianghuGrudgeWall"
+	GuildService_UnlockGuildEmblem_FullMethodName         = "/guildpb.GuildService/UnlockGuildEmblem"
+	GuildService_EquipGuildEmblem_FullMethodName          = "/guildpb.GuildService/EquipGuildEmblem"
 )
 
 // GuildServiceClient is the client API for GuildService service.
@@ -135,6 +137,9 @@ type GuildServiceClient interface {
 	RespondGuildWarFeud(ctx context.Context, in *RespondGuildWarFeudRequest, opts ...grpc.CallOption) (*RespondGuildWarFeudResponse, error)
 	// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
 	GetGuildJianghuGrudgeWall(ctx context.Context, in *GetGuildJianghuGrudgeWallRequest, opts ...grpc.CallOption) (*GetGuildJianghuGrudgeWallResponse, error)
+	// 帮会徽记/旗帜定制外观（帮主自愿以个人真实灵石买断，绝不扣帮会资金、绝不催帮众捐钱，零数值加成）。
+	UnlockGuildEmblem(ctx context.Context, in *UnlockGuildEmblemRequest, opts ...grpc.CallOption) (*UnlockGuildEmblemResponse, error)
+	EquipGuildEmblem(ctx context.Context, in *EquipGuildEmblemRequest, opts ...grpc.CallOption) (*EquipGuildEmblemResponse, error)
 }
 
 type guildServiceClient struct {
@@ -575,6 +580,26 @@ func (c *guildServiceClient) GetGuildJianghuGrudgeWall(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *guildServiceClient) UnlockGuildEmblem(ctx context.Context, in *UnlockGuildEmblemRequest, opts ...grpc.CallOption) (*UnlockGuildEmblemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnlockGuildEmblemResponse)
+	err := c.cc.Invoke(ctx, GuildService_UnlockGuildEmblem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) EquipGuildEmblem(ctx context.Context, in *EquipGuildEmblemRequest, opts ...grpc.CallOption) (*EquipGuildEmblemResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EquipGuildEmblemResponse)
+	err := c.cc.Invoke(ctx, GuildService_EquipGuildEmblem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GuildServiceServer is the server API for GuildService service.
 // All implementations must embed UnimplementedGuildServiceServer
 // for forward compatibility.
@@ -645,6 +670,9 @@ type GuildServiceServer interface {
 	RespondGuildWarFeud(context.Context, *RespondGuildWarFeudRequest) (*RespondGuildWarFeudResponse, error)
 	// 江湖恩怨·帮派生死状恩怨墙(docs/design/battle-jianghu-grudge-duel-bounty-v1.md §2.2):仅本帮成员可读。
 	GetGuildJianghuGrudgeWall(context.Context, *GetGuildJianghuGrudgeWallRequest) (*GetGuildJianghuGrudgeWallResponse, error)
+	// 帮会徽记/旗帜定制外观（帮主自愿以个人真实灵石买断，绝不扣帮会资金、绝不催帮众捐钱，零数值加成）。
+	UnlockGuildEmblem(context.Context, *UnlockGuildEmblemRequest) (*UnlockGuildEmblemResponse, error)
+	EquipGuildEmblem(context.Context, *EquipGuildEmblemRequest) (*EquipGuildEmblemResponse, error)
 	mustEmbedUnimplementedGuildServiceServer()
 }
 
@@ -783,6 +811,12 @@ func (UnimplementedGuildServiceServer) RespondGuildWarFeud(context.Context, *Res
 }
 func (UnimplementedGuildServiceServer) GetGuildJianghuGrudgeWall(context.Context, *GetGuildJianghuGrudgeWallRequest) (*GetGuildJianghuGrudgeWallResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGuildJianghuGrudgeWall not implemented")
+}
+func (UnimplementedGuildServiceServer) UnlockGuildEmblem(context.Context, *UnlockGuildEmblemRequest) (*UnlockGuildEmblemResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnlockGuildEmblem not implemented")
+}
+func (UnimplementedGuildServiceServer) EquipGuildEmblem(context.Context, *EquipGuildEmblemRequest) (*EquipGuildEmblemResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EquipGuildEmblem not implemented")
 }
 func (UnimplementedGuildServiceServer) mustEmbedUnimplementedGuildServiceServer() {}
 func (UnimplementedGuildServiceServer) testEmbeddedByValue()                      {}
@@ -1579,6 +1613,42 @@ func _GuildService_GetGuildJianghuGrudgeWall_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_UnlockGuildEmblem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnlockGuildEmblemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).UnlockGuildEmblem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_UnlockGuildEmblem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).UnlockGuildEmblem(ctx, req.(*UnlockGuildEmblemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_EquipGuildEmblem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EquipGuildEmblemRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).EquipGuildEmblem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_EquipGuildEmblem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).EquipGuildEmblem(ctx, req.(*EquipGuildEmblemRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GuildService_ServiceDesc is the grpc.ServiceDesc for GuildService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1757,6 +1827,14 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGuildJianghuGrudgeWall",
 			Handler:    _GuildService_GetGuildJianghuGrudgeWall_Handler,
+		},
+		{
+			MethodName: "UnlockGuildEmblem",
+			Handler:    _GuildService_UnlockGuildEmblem_Handler,
+		},
+		{
+			MethodName: "EquipGuildEmblem",
+			Handler:    _GuildService_EquipGuildEmblem_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

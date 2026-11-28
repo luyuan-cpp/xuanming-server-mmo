@@ -3,6 +3,7 @@ option go_package = "proto/scene";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
+import "proto/scene/player_bag.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -26,6 +27,23 @@ message HostedRecapSummary
 	bool pending_ack = 8;     // true = 待客户端弹窗展示并确认
 }
 
+// 轻享卡单档套餐报价与开卡一次性直赠预览（绝不拆成每日登录领）。
+message AfkPassPlanView
+{
+	uint32 plan_id = 1;             // AfkPassRule.id（1 = 30天月享卡，2 = 90天季享卡）
+	string plan_name = 2;           // 套餐展示名
+	uint32 period_days = 3;         // 单次开通增加天数
+	uint32 price_currency_type = 4; // 结算货币（CurrencyType）
+	uint64 price = 5;               // 价格
+	uint32 bonus_item_id = 6;       // 开卡一次性直赠绑定道具 ID（0 = 无）
+	uint32 bonus_item_count = 7;    // 开卡一次性直赠绑定道具数量
+	string bonus_item_name = 8;     // 道具展示名
+	string bonus_item_icon_key = 9; // 道具图标资源键
+	string bonus_frame_key = 10;    // 开卡一次性附赠的零战力纪念头像框键（空 = 无）
+	string icon_key = 11;           // 套餐令牌图标资源键
+	string desc = 12;               // 套餐说明
+}
+
 // 月卡此刻的状态与售价。所有时间都是服务器墙钟的 Unix 秒。
 message AfkPassInfo
 {
@@ -41,6 +59,11 @@ message AfkPassInfo
 	HostedRecapSummary hosted_recap = 10;   // 最近一次待确认的离线托管收获简报(无记录时不填)
 	uint32 unlocked_loadout_slots = 11;     // 当前已解锁的方案槽位数（免费 3；仙途轻享卡生效 6，纯便利零数值）
 	bool stage2_tradable_enabled = 12;      // true = 阶段二每周 150 池胜局可交易资格生效中（不增加总额度）
+	uint32 market_listing_limit = 13;       // 集市同时在售挂单上限（普通 10 / 轻享卡生效 20，纯便利零战力）
+	uint32 stall_duration_hours = 14;       // 离线摆摊单次营业时长小时数（普通 48 / 轻享卡生效 96）
+	uint32 weekly_free_trial_quota = 15;    // 轻享卡每周额外衣柜随心试穿额度（未生效 0 / 生效 3，UTC+8 周一 05:00 重置）
+	uint32 weekly_free_trial_used = 16;     // 本周已消耗的轻享卡衣柜随心试穿次数
+	repeated AfkPassPlanView plans = 17;    // 可选套餐列表（按 plan_id 升序：月享卡 30 天 / 季享卡 90 天）
 }
 
 message GetAfkPassRequest {}
@@ -61,6 +84,8 @@ message BuyAfkPassRequest
 	uint64 client_request_id = 1;
 	uint32 expected_currency_type = 2;
 	uint64 expected_price = 3;
+	uint32 plan_id = 4;              // 0 兼容默认套餐 1（30 天月享卡）；2 = 90 天季享卡
+	uint32 expected_period_days = 5; // 0 兼容旧客户端跳过天数校验；非 0 时防热更改天数
 }
 
 message BuyAfkPassResponse
@@ -68,6 +93,7 @@ message BuyAfkPassResponse
 	TipInfoMessage error_message = 1;
 	AfkPassInfo info = 2; // 成功(含重放)时是开通之后的状态
 	bool replayed = 3;    // true = 这个键之前已经成功过,这一次没有再执行,info 是当前状态
+	BagInfo bag = 4;      // 开卡一次性直赠绑定道具后的最新背包快照
 }
 
 // GM(只在 dev / test 放行):把到期设为 现在 + remaining_seconds;0 = 清除。上限 366 天。

@@ -82,6 +82,15 @@ var payloadRules = map[inboxpb.PlayerInboxMessageType]payloadRule{
 	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN: {
 		message: "player_inbox.GmItemGainPayload", validate: validateItemGainPayload,
 	},
+	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT: {
+		message: "player_inbox.CosmeticGiftCreditPayload", validate: validateCosmeticGiftCreditPayload,
+	},
+	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND: {
+		message: "player_inbox.CosmeticGiftRefundPayload", validate: validateCosmeticGiftRefundPayload,
+	},
+	inboxpb.PlayerInboxMessageType_PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE: {
+		message: "player_inbox.CosmeticGiftRevokePayload", validate: validateCosmeticGiftRevokePayload,
+	},
 }
 
 // 只核原件形状，不在Inbox重算战斗奖励；业务效果由Scene同一持久账本裁决。
@@ -196,6 +205,42 @@ func validateDebtPayload(m proto.Message) error {
 	if p.GetExpiresAt() > maxDebtExpiresAtSeconds {
 		return fmt.Errorf("%w: expires_at=%d exceeds Unix seconds upper bound (milliseconds passed by mistake?)",
 			errPayloadRule, p.GetExpiresAt())
+	}
+	return nil
+}
+
+func validateCosmeticGiftCreditPayload(m proto.Message) error {
+	p, ok := m.(*inboxpb.CosmeticGiftCreditPayload)
+	if !ok {
+		return fmt.Errorf("%w: want CosmeticGiftCreditPayload, got %T", errPayloadRule, m)
+	}
+	if p.GetGiftId() == 0 || p.GetSenderPlayerId() == 0 || p.GetTargetKind() < 1 || p.GetTargetKind() > 5 {
+		return fmt.Errorf("%w: invalid gift credit identity or target_kind", errPayloadRule)
+	}
+	if p.GetPaidDiamond() > math.MaxInt64 {
+		return fmt.Errorf("%w: paid_diamond overflow", errPayloadRule)
+	}
+	return nil
+}
+
+func validateCosmeticGiftRefundPayload(m proto.Message) error {
+	p, ok := m.(*inboxpb.CosmeticGiftRefundPayload)
+	if !ok {
+		return fmt.Errorf("%w: want CosmeticGiftRefundPayload, got %T", errPayloadRule, m)
+	}
+	if p.GetGiftId() == 0 || p.GetRefundDiamond() == 0 || p.GetRefundDiamond() > math.MaxInt64 {
+		return fmt.Errorf("%w: invalid gift refund identity or amount", errPayloadRule)
+	}
+	return nil
+}
+
+func validateCosmeticGiftRevokePayload(m proto.Message) error {
+	p, ok := m.(*inboxpb.CosmeticGiftRevokePayload)
+	if !ok {
+		return fmt.Errorf("%w: want CosmeticGiftRevokePayload, got %T", errPayloadRule, m)
+	}
+	if p.GetGiftId() == 0 || p.GetTargetKind() < 1 || p.GetTargetKind() > 5 {
+		return fmt.Errorf("%w: invalid gift revoke identity or target_kind", errPayloadRule)
 	}
 	return nil
 }

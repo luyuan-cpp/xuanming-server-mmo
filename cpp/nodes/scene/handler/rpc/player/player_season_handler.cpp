@@ -133,3 +133,12 @@ void SceneSeasonClientPlayerHandler::ResolveWuxingRealmEvent(entt::entity player
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneSeasonClientPlayerHandler::ExpandSavedBuildSlots(entt::entity player,const ::ExpandSavedBuildSlotsRequest* request,
+	::ExpandSavedBuildSlotsResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+	PlayerSeasonSystem::ExpandSavedBuildSlots(player, TimeSystem::NowMillisecondsUTC(), *request, *response);
+///<<< END WRITING YOUR CODE
+
+}

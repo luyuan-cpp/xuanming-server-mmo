@@ -131,6 +131,18 @@ ClientRequestVerdict Check(const ClientRequestLedgerComp &ledger, uint64_t key, 
 	result.skillLoadoutRentedSlots = record->skill_loadout_rented_slots();
 	result.skillLoadoutRentExpiresAtSec = record->skill_loadout_rent_expires_at_sec();
 	result.skillLoadoutRentSpentDiamond = record->skill_loadout_rent_spent_diamond();
+	result.appearanceBundleUnlockedCount = record->appearance_bundle_unlocked_count();
+	result.appearanceBundleSpentDiamond = record->appearance_bundle_spent_diamond();
+	result.cityCelebrationId = record->city_celebration_id();
+	result.cityCelebrationBindGold = record->city_celebration_bind_gold();
+	result.cosmeticGiftOrderId = record->cosmetic_gift_order_id();
+	result.cosmeticGiftSpentDiamond = record->cosmetic_gift_spent_diamond();
+	result.bagExpandNewCapacity = record->bag_expand_new_capacity();
+	result.bagExpandSpentDiamond = record->bag_expand_spent_diamond();
+	result.petSquadUnlockedSlots = record->pet_squad_unlocked_slots();
+	result.petSquadSpentDiamond = record->pet_squad_spent_diamond();
+	result.buildBookmarkNewCapacity = record->build_bookmark_new_capacity();
+	result.buildBookmarkSpentDiamond = record->build_bookmark_spent_diamond();
 	return ClientRequestVerdict::kReplay;
 }
 
@@ -190,6 +202,18 @@ bool Remember(ClientRequestLedgerComp &ledger, uint64_t key, ClientRequestKind k
 	record->set_skill_loadout_rented_slots(result.skillLoadoutRentedSlots);
 	record->set_skill_loadout_rent_expires_at_sec(result.skillLoadoutRentExpiresAtSec);
 	record->set_skill_loadout_rent_spent_diamond(result.skillLoadoutRentSpentDiamond);
+	record->set_appearance_bundle_unlocked_count(result.appearanceBundleUnlockedCount);
+	record->set_appearance_bundle_spent_diamond(result.appearanceBundleSpentDiamond);
+	record->set_city_celebration_id(result.cityCelebrationId);
+	record->set_city_celebration_bind_gold(result.cityCelebrationBindGold);
+	record->set_cosmetic_gift_order_id(result.cosmeticGiftOrderId);
+	record->set_cosmetic_gift_spent_diamond(result.cosmeticGiftSpentDiamond);
+	record->set_bag_expand_new_capacity(result.bagExpandNewCapacity);
+	record->set_bag_expand_spent_diamond(result.bagExpandSpentDiamond);
+	record->set_pet_squad_unlocked_slots(result.petSquadUnlockedSlots);
+	record->set_pet_squad_spent_diamond(result.petSquadSpentDiamond);
+	record->set_build_bookmark_new_capacity(result.buildBookmarkNewCapacity);
+	record->set_build_bookmark_spent_diamond(result.buildBookmarkSpentDiamond);
 	ledger.set_next_seq(seq + 1);
 	return true;
 }

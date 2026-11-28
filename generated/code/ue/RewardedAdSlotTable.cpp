@@ -118,6 +118,7 @@ static void RewardedAdSlotTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& R
 	RewardedAdSlotTableCheckNarrowedField(RowObject, TEXT("reward_amount"), TEXT("reward_amount"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	RewardedAdSlotTableCheckNarrowedField(RowObject, TEXT("require_ssv"), TEXT("require_ssv"), RowIndex, 2147483647.0, TEXT("uint32"));
 	RewardedAdSlotTableCheckNarrowedField(RowObject, TEXT("platform_mask"), TEXT("platform_mask"), RowIndex, 2147483647.0, TEXT("uint32"));
+	RewardedAdSlotTableCheckNarrowedField(RowObject, TEXT("reward_kind"), TEXT("reward_kind"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool URewardedAdSlotTable::LoadFromJson(const FString& JsonText, FString& OutError)

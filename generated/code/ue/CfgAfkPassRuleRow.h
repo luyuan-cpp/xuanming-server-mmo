@@ -55,7 +55,7 @@ struct FCfgAfkPassRuleRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
-	/** 规则行 id(固定 1) */
+	/** 规则行 id（套餐 ID：1 = 30 天仙途轻享卡，2 = 90 天仙途季享卡） */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
 	int32 id = 0;
 
@@ -82,4 +82,24 @@ struct FCfgAfkPassRuleRow : public FTableRowBase
 	/** 说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
 	FString desc;
+
+	/** 开通/续费一次性直赠绑定道具 ID（0 = 无；如 3405 定星保底符，绝不拆成每日登录领） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
+	int32 bonus_item_id = 0;
+
+	/** 开通/续费一次性直赠绑定道具数量（bonus_item_id > 0 时须 >= 1） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
+	int32 bonus_item_count = 0;
+
+	/** 开通/续费一次性附赠的零战力纪念头像框键（空串 = 无；如 frame_lightcard_s1 / frame_lightcard_season_s1） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
+	FString bonus_frame_key;
+
+	/** 套餐中文展示名（如「仙途轻享月卡」「仙途季享卡」） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
+	FString plan_name;
+
+	/** 套餐令牌图标资源键（如 UI/Ugui/AfkPassV2/icon_season_pass_90d） */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AfkPassRule")
+	FString icon_key;
 };

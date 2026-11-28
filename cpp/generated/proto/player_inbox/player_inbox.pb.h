@@ -113,6 +113,30 @@ extern const ::google::protobuf::internal::ClassDataFull BattleSettlementInboxRe
 #else
 extern const BattleSettlementInboxResponseGlobalsTypeInternal BattleSettlementInboxResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class CosmeticGiftCreditPayload;
+struct CosmeticGiftCreditPayloadGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CosmeticGiftCreditPayloadGlobalsTypeInternal CosmeticGiftCreditPayload_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CosmeticGiftCreditPayload_class_data_;
+#else
+extern const CosmeticGiftCreditPayloadGlobalsTypeInternal CosmeticGiftCreditPayload_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CosmeticGiftRefundPayload;
+struct CosmeticGiftRefundPayloadGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CosmeticGiftRefundPayloadGlobalsTypeInternal CosmeticGiftRefundPayload_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CosmeticGiftRefundPayload_class_data_;
+#else
+extern const CosmeticGiftRefundPayloadGlobalsTypeInternal CosmeticGiftRefundPayload_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class CosmeticGiftRevokePayload;
+struct CosmeticGiftRevokePayloadGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern CosmeticGiftRevokePayloadGlobalsTypeInternal CosmeticGiftRevokePayload_globals_;
+extern const ::google::protobuf::internal::ClassDataFull CosmeticGiftRevokePayload_class_data_;
+#else
+extern const CosmeticGiftRevokePayloadGlobalsTypeInternal CosmeticGiftRevokePayload_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class FetchPlayerInboxRequest;
 struct FetchPlayerInboxRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -277,6 +301,7 @@ enum PlayerInboxProducerKind : int {
   PLAYER_INBOX_PRODUCER_UNSPECIFIED = 0,
   PLAYER_INBOX_PRODUCER_GM = 1,
   PLAYER_INBOX_PRODUCER_MATCH = 2,
+  PLAYER_INBOX_PRODUCER_SCENE = 3,
   PlayerInboxProducerKind_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerInboxProducerKind_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -287,11 +312,11 @@ extern const uint32_t PlayerInboxProducerKind_internal_data_[];
 inline constexpr PlayerInboxProducerKind PlayerInboxProducerKind_MIN =
     static_cast<PlayerInboxProducerKind>(0);
 inline constexpr PlayerInboxProducerKind PlayerInboxProducerKind_MAX =
-    static_cast<PlayerInboxProducerKind>(2);
+    static_cast<PlayerInboxProducerKind>(3);
 [[nodiscard]] inline bool PlayerInboxProducerKind_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int PlayerInboxProducerKind_ARRAYSIZE = 2 + 1;
+inline constexpr int PlayerInboxProducerKind_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxProducerKind_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerInboxProducerKind) {
@@ -306,7 +331,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerInboxProducerKind_Name(PlayerInboxProducerKind value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxProducerKind_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxProducerKind_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerInboxProducerKind_Parse(
@@ -318,6 +343,7 @@ enum PlayerInboxDomain : int {
   PLAYER_INBOX_DOMAIN_UNSPECIFIED = 0,
   PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION = 1,
   PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT = 2,
+  PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT = 3,
   PlayerInboxDomain_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerInboxDomain_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -328,11 +354,11 @@ extern const uint32_t PlayerInboxDomain_internal_data_[];
 inline constexpr PlayerInboxDomain PlayerInboxDomain_MIN =
     static_cast<PlayerInboxDomain>(0);
 inline constexpr PlayerInboxDomain PlayerInboxDomain_MAX =
-    static_cast<PlayerInboxDomain>(2);
+    static_cast<PlayerInboxDomain>(3);
 [[nodiscard]] inline bool PlayerInboxDomain_IsValid(int value) {
-  return 0 <= value && value <= 2;
+  return 0 <= value && value <= 3;
 }
-inline constexpr int PlayerInboxDomain_ARRAYSIZE = 2 + 1;
+inline constexpr int PlayerInboxDomain_ARRAYSIZE = 3 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxDomain_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerInboxDomain) {
@@ -347,7 +373,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerInboxDomain_Name(PlayerInboxDomain value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxDomain_descriptor, 0, 2>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxDomain_descriptor, 0, 3>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerInboxDomain_Parse(
@@ -363,6 +389,9 @@ enum PlayerInboxMessageType : int {
   PLAYER_INBOX_MSG_BATTLE_SETTLEMENT = 4,
   PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN = 5,
   PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN = 6,
+  PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT = 7,
+  PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND = 8,
+  PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE = 9,
   PlayerInboxMessageType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   PlayerInboxMessageType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -373,11 +402,11 @@ extern const uint32_t PlayerInboxMessageType_internal_data_[];
 inline constexpr PlayerInboxMessageType PlayerInboxMessageType_MIN =
     static_cast<PlayerInboxMessageType>(0);
 inline constexpr PlayerInboxMessageType PlayerInboxMessageType_MAX =
-    static_cast<PlayerInboxMessageType>(6);
+    static_cast<PlayerInboxMessageType>(9);
 [[nodiscard]] inline bool PlayerInboxMessageType_IsValid(int value) {
-  return 0 <= value && value <= 6;
+  return 0 <= value && value <= 9;
 }
-inline constexpr int PlayerInboxMessageType_ARRAYSIZE = 6 + 1;
+inline constexpr int PlayerInboxMessageType_ARRAYSIZE = 9 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 PlayerInboxMessageType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(PlayerInboxMessageType) {
@@ -392,7 +421,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& PlayerInboxMessageType_Name(PlayerInboxMessageType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxMessageType_descriptor, 0, 6>(
+  return ::google::protobuf::internal::NameOfDenseEnum<PlayerInboxMessageType_descriptor, 0, 9>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool PlayerInboxMessageType_Parse(
@@ -1007,7 +1036,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxItem final : public ::go
   [[nodiscard]] static const PlayerInboxItem& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerInboxItem>(&PlayerInboxItem_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(PlayerInboxItem& a, PlayerInboxItem& b) { a.Swap(&b); }
   inline void Swap(PlayerInboxItem* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1510,7 +1539,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxDecisionReport final : p
   [[nodiscard]] static const PlayerInboxDecisionReport& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerInboxDecisionReport>(&PlayerInboxDecisionReport_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(PlayerInboxDecisionReport& a, PlayerInboxDecisionReport& b) { a.Swap(&b); }
   inline void Swap(PlayerInboxDecisionReport* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1747,7 +1776,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerInboxAckItem final : public :
   [[nodiscard]] static const PlayerInboxAckItem& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<PlayerInboxAckItem>(&PlayerInboxAckItem_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(PlayerInboxAckItem& a, PlayerInboxAckItem& b) { a.Swap(&b); }
   inline void Swap(PlayerInboxAckItem* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2577,6 +2606,802 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GmCurrencyDebtPayload final : publi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CosmeticGiftRevokePayload final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:player_inbox.CosmeticGiftRevokePayload) */ {
+ public:
+  inline CosmeticGiftRevokePayload() : CosmeticGiftRevokePayload(nullptr) {}
+  ~CosmeticGiftRevokePayload() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CosmeticGiftRevokePayload* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CosmeticGiftRevokePayload));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CosmeticGiftRevokePayload(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CosmeticGiftRevokePayload(const CosmeticGiftRevokePayload& from) : CosmeticGiftRevokePayload(nullptr, from) {}
+  inline CosmeticGiftRevokePayload(CosmeticGiftRevokePayload&& from) noexcept : CosmeticGiftRevokePayload(nullptr, ::std::move(from)) {}
+  inline CosmeticGiftRevokePayload& operator=(const CosmeticGiftRevokePayload& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CosmeticGiftRevokePayload& operator=(CosmeticGiftRevokePayload&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CosmeticGiftRevokePayload& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CosmeticGiftRevokePayload>(&CosmeticGiftRevokePayload_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(CosmeticGiftRevokePayload& a, CosmeticGiftRevokePayload& b) { a.Swap(&b); }
+  inline void Swap(CosmeticGiftRevokePayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CosmeticGiftRevokePayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CosmeticGiftRevokePayload* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CosmeticGiftRevokePayload>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CosmeticGiftRevokePayload& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CosmeticGiftRevokePayload& from) { CosmeticGiftRevokePayload::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CosmeticGiftRevokePayload* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "player_inbox.CosmeticGiftRevokePayload"; }
+
+  explicit CosmeticGiftRevokePayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CosmeticGiftRevokePayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CosmeticGiftRevokePayload& from);
+  CosmeticGiftRevokePayload(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CosmeticGiftRevokePayload&& from) noexcept
+      : CosmeticGiftRevokePayload(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kTargetIdStrFieldNumber = 5,
+    kReasonFieldNumber = 6,
+    kGiftIdFieldNumber = 1,
+    kSenderPlayerIdFieldNumber = 2,
+    kTargetKindFieldNumber = 3,
+    kTargetIdU32FieldNumber = 4,
+  };
+  // string target_id_str = 5;
+  void clear_target_id_str() ;
+  [[nodiscard]] const ::std::string& target_id_str() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_id_str(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_id_str();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_id_str();
+  void set_allocated_target_id_str(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_id_str() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_id_str(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_id_str();
+
+  public:
+  // string reason = 6;
+  void clear_reason() ;
+  [[nodiscard]] const ::std::string& reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
+  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
+
+  public:
+  // uint64 gift_id = 1;
+  void clear_gift_id() ;
+  [[nodiscard]] ::uint64_t gift_id() const;
+  void set_gift_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gift_id() const;
+  void _internal_set_gift_id(::uint64_t value);
+
+  public:
+  // uint64 sender_player_id = 2;
+  void clear_sender_player_id() ;
+  [[nodiscard]] ::uint64_t sender_player_id() const;
+  void set_sender_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sender_player_id() const;
+  void _internal_set_sender_player_id(::uint64_t value);
+
+  public:
+  // uint32 target_kind = 3;
+  void clear_target_kind() ;
+  [[nodiscard]] ::uint32_t target_kind() const;
+  void set_target_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_kind() const;
+  void _internal_set_target_kind(::uint32_t value);
+
+  public:
+  // uint32 target_id_u32 = 4;
+  void clear_target_id_u32() ;
+  [[nodiscard]] ::uint32_t target_id_u32() const;
+  void set_target_id_u32(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_id_u32() const;
+  void _internal_set_target_id_u32(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:player_inbox.CosmeticGiftRevokePayload)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 6,
+                          0, 66,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CosmeticGiftRevokePayload& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr target_id_str_;
+    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::uint64_t gift_id_;
+    ::uint64_t sender_player_id_;
+    ::uint32_t target_kind_;
+    ::uint32_t target_id_u32_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CosmeticGiftRefundPayload final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:player_inbox.CosmeticGiftRefundPayload) */ {
+ public:
+  inline CosmeticGiftRefundPayload() : CosmeticGiftRefundPayload(nullptr) {}
+  ~CosmeticGiftRefundPayload() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CosmeticGiftRefundPayload* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CosmeticGiftRefundPayload));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CosmeticGiftRefundPayload(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CosmeticGiftRefundPayload(const CosmeticGiftRefundPayload& from) : CosmeticGiftRefundPayload(nullptr, from) {}
+  inline CosmeticGiftRefundPayload(CosmeticGiftRefundPayload&& from) noexcept : CosmeticGiftRefundPayload(nullptr, ::std::move(from)) {}
+  inline CosmeticGiftRefundPayload& operator=(const CosmeticGiftRefundPayload& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CosmeticGiftRefundPayload& operator=(CosmeticGiftRefundPayload&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CosmeticGiftRefundPayload& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CosmeticGiftRefundPayload>(&CosmeticGiftRefundPayload_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 6;
+  friend void swap(CosmeticGiftRefundPayload& a, CosmeticGiftRefundPayload& b) { a.Swap(&b); }
+  inline void Swap(CosmeticGiftRefundPayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CosmeticGiftRefundPayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CosmeticGiftRefundPayload* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CosmeticGiftRefundPayload>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CosmeticGiftRefundPayload& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CosmeticGiftRefundPayload& from) { CosmeticGiftRefundPayload::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CosmeticGiftRefundPayload* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "player_inbox.CosmeticGiftRefundPayload"; }
+
+  explicit CosmeticGiftRefundPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CosmeticGiftRefundPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CosmeticGiftRefundPayload& from);
+  CosmeticGiftRefundPayload(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CosmeticGiftRefundPayload&& from) noexcept
+      : CosmeticGiftRefundPayload(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kReasonFieldNumber = 4,
+    kGiftIdFieldNumber = 1,
+    kRecipientPlayerIdFieldNumber = 2,
+    kRefundDiamondFieldNumber = 3,
+  };
+  // string reason = 4;
+  void clear_reason() ;
+  [[nodiscard]] const ::std::string& reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_reason();
+  void set_allocated_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_reason();
+
+  public:
+  // uint64 gift_id = 1;
+  void clear_gift_id() ;
+  [[nodiscard]] ::uint64_t gift_id() const;
+  void set_gift_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gift_id() const;
+  void _internal_set_gift_id(::uint64_t value);
+
+  public:
+  // uint64 recipient_player_id = 2;
+  void clear_recipient_player_id() ;
+  [[nodiscard]] ::uint64_t recipient_player_id() const;
+  void set_recipient_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_recipient_player_id() const;
+  void _internal_set_recipient_player_id(::uint64_t value);
+
+  public:
+  // uint64 refund_diamond = 3;
+  void clear_refund_diamond() ;
+  [[nodiscard]] ::uint64_t refund_diamond() const;
+  void set_refund_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_refund_diamond() const;
+  void _internal_set_refund_diamond(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:player_inbox.CosmeticGiftRefundPayload)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 4,
+                          0, 53,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CosmeticGiftRefundPayload& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr reason_;
+    ::uint64_t gift_id_;
+    ::uint64_t recipient_player_id_;
+    ::uint64_t refund_diamond_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CosmeticGiftCreditPayload final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:player_inbox.CosmeticGiftCreditPayload) */ {
+ public:
+  inline CosmeticGiftCreditPayload() : CosmeticGiftCreditPayload(nullptr) {}
+  ~CosmeticGiftCreditPayload() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(CosmeticGiftCreditPayload* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(CosmeticGiftCreditPayload));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr CosmeticGiftCreditPayload(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline CosmeticGiftCreditPayload(const CosmeticGiftCreditPayload& from) : CosmeticGiftCreditPayload(nullptr, from) {}
+  inline CosmeticGiftCreditPayload(CosmeticGiftCreditPayload&& from) noexcept : CosmeticGiftCreditPayload(nullptr, ::std::move(from)) {}
+  inline CosmeticGiftCreditPayload& operator=(const CosmeticGiftCreditPayload& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline CosmeticGiftCreditPayload& operator=(CosmeticGiftCreditPayload&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const CosmeticGiftCreditPayload& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<CosmeticGiftCreditPayload>(&CosmeticGiftCreditPayload_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 5;
+  friend void swap(CosmeticGiftCreditPayload& a, CosmeticGiftCreditPayload& b) { a.Swap(&b); }
+  inline void Swap(CosmeticGiftCreditPayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(CosmeticGiftCreditPayload* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] CosmeticGiftCreditPayload* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<CosmeticGiftCreditPayload>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const CosmeticGiftCreditPayload& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const CosmeticGiftCreditPayload& from) { CosmeticGiftCreditPayload::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(CosmeticGiftCreditPayload* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "player_inbox.CosmeticGiftCreditPayload"; }
+
+  explicit CosmeticGiftCreditPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  CosmeticGiftCreditPayload(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const CosmeticGiftCreditPayload& from);
+  CosmeticGiftCreditPayload(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, CosmeticGiftCreditPayload&& from) noexcept
+      : CosmeticGiftCreditPayload(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSenderNameFieldNumber = 3,
+    kTargetIdStrFieldNumber = 6,
+    kGiftIdFieldNumber = 1,
+    kSenderPlayerIdFieldNumber = 2,
+    kTargetKindFieldNumber = 4,
+    kTargetIdU32FieldNumber = 5,
+    kPaidDiamondFieldNumber = 7,
+  };
+  // string sender_name = 3;
+  void clear_sender_name() ;
+  [[nodiscard]] const ::std::string& sender_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_sender_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_sender_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_sender_name();
+  void set_allocated_sender_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_sender_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_sender_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_sender_name();
+
+  public:
+  // string target_id_str = 6;
+  void clear_target_id_str() ;
+  [[nodiscard]] const ::std::string& target_id_str() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_target_id_str(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_target_id_str();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_target_id_str();
+  void set_allocated_target_id_str(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_target_id_str() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_target_id_str(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_target_id_str();
+
+  public:
+  // uint64 gift_id = 1;
+  void clear_gift_id() ;
+  [[nodiscard]] ::uint64_t gift_id() const;
+  void set_gift_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_gift_id() const;
+  void _internal_set_gift_id(::uint64_t value);
+
+  public:
+  // uint64 sender_player_id = 2;
+  void clear_sender_player_id() ;
+  [[nodiscard]] ::uint64_t sender_player_id() const;
+  void set_sender_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_sender_player_id() const;
+  void _internal_set_sender_player_id(::uint64_t value);
+
+  public:
+  // uint32 target_kind = 4;
+  void clear_target_kind() ;
+  [[nodiscard]] ::uint32_t target_kind() const;
+  void set_target_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_kind() const;
+  void _internal_set_target_kind(::uint32_t value);
+
+  public:
+  // uint32 target_id_u32 = 5;
+  void clear_target_id_u32() ;
+  [[nodiscard]] ::uint32_t target_id_u32() const;
+  void set_target_id_u32(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_id_u32() const;
+  void _internal_set_target_id_u32(::uint32_t value);
+
+  public:
+  // uint64 paid_diamond = 7;
+  void clear_paid_diamond() ;
+  [[nodiscard]] ::uint64_t paid_diamond() const;
+  void set_paid_diamond(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_paid_diamond() const;
+  void _internal_set_paid_diamond(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:player_inbox.CosmeticGiftCreditPayload)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 71,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const CosmeticGiftCreditPayload& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr sender_name_;
+    ::google::protobuf::internal::ArenaStringPtr target_id_str_;
+    ::uint64_t gift_id_;
+    ::uint64_t sender_player_id_;
+    ::uint32_t target_kind_;
+    ::uint32_t target_id_u32_;
+    ::uint64_t paid_diamond_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fplayer_5finbox_2fplayer_5finbox_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FetchPlayerInboxResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:player_inbox.FetchPlayerInboxResponse) */ {
  public:
@@ -2633,7 +3458,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FetchPlayerInboxResponse final : pu
   [[nodiscard]] static const FetchPlayerInboxResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FetchPlayerInboxResponse>(&FetchPlayerInboxResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(FetchPlayerInboxResponse& a, FetchPlayerInboxResponse& b) { a.Swap(&b); }
   inline void Swap(FetchPlayerInboxResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2923,7 +3748,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED FetchPlayerInboxRequest final : pub
   [[nodiscard]] static const FetchPlayerInboxRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<FetchPlayerInboxRequest>(&FetchPlayerInboxRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 7;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(FetchPlayerInboxRequest& a, FetchPlayerInboxRequest& b) { a.Swap(&b); }
   inline void Swap(FetchPlayerInboxRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3232,7 +4057,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementInboxResponse final
   [[nodiscard]] static const BattleSettlementInboxResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleSettlementInboxResponse>(&BattleSettlementInboxResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 6;
+  static constexpr int kIndexInFileMessages = 9;
   friend void swap(BattleSettlementInboxResponse& a, BattleSettlementInboxResponse& b) { a.Swap(&b); }
   inline void Swap(BattleSettlementInboxResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3539,7 +4364,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementInboxRequest final 
   [[nodiscard]] static const BattleSettlementInboxRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BattleSettlementInboxRequest>(&BattleSettlementInboxRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 5;
+  static constexpr int kIndexInFileMessages = 8;
   friend void swap(BattleSettlementInboxRequest& a, BattleSettlementInboxRequest& b) { a.Swap(&b); }
   inline void Swap(BattleSettlementInboxRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3828,7 +4653,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckPlayerInboxResponse final : publ
   [[nodiscard]] static const AckPlayerInboxResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckPlayerInboxResponse>(&AckPlayerInboxResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(AckPlayerInboxResponse& a, AckPlayerInboxResponse& b) { a.Swap(&b); }
   inline void Swap(AckPlayerInboxResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4106,7 +4931,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AckPlayerInboxRequest final : publi
   [[nodiscard]] static const AckPlayerInboxRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AckPlayerInboxRequest>(&AckPlayerInboxRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(AckPlayerInboxRequest& a, AckPlayerInboxRequest& b) { a.Swap(&b); }
   inline void Swap(AckPlayerInboxRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4825,6 +5650,626 @@ inline ::uint32_t GmItemGainPayload::_internal_item_config_id() const {
 inline void GmItemGainPayload::_internal_set_item_config_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.item_config_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CosmeticGiftCreditPayload
+
+// uint64 gift_id = 1;
+inline void CosmeticGiftCreditPayload::clear_gift_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gift_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t CosmeticGiftCreditPayload::gift_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.gift_id)
+  return _internal_gift_id();
+}
+inline void CosmeticGiftCreditPayload::set_gift_id(::uint64_t value) {
+  _internal_set_gift_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.gift_id)
+}
+inline ::uint64_t CosmeticGiftCreditPayload::_internal_gift_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gift_id_;
+}
+inline void CosmeticGiftCreditPayload::_internal_set_gift_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gift_id_ = value;
+}
+
+// uint64 sender_player_id = 2;
+inline void CosmeticGiftCreditPayload::clear_sender_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t CosmeticGiftCreditPayload::sender_player_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.sender_player_id)
+  return _internal_sender_player_id();
+}
+inline void CosmeticGiftCreditPayload::set_sender_player_id(::uint64_t value) {
+  _internal_set_sender_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.sender_player_id)
+}
+inline ::uint64_t CosmeticGiftCreditPayload::_internal_sender_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sender_player_id_;
+}
+inline void CosmeticGiftCreditPayload::_internal_set_sender_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_player_id_ = value;
+}
+
+// string sender_name = 3;
+inline void CosmeticGiftCreditPayload::clear_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CosmeticGiftCreditPayload::sender_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.sender_name)
+  return _internal_sender_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CosmeticGiftCreditPayload::set_sender_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.sender_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.sender_name)
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftCreditPayload::mutable_sender_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_sender_name();
+  // @@protoc_insertion_point(field_mutable:player_inbox.CosmeticGiftCreditPayload.sender_name)
+  return _s;
+}
+inline const ::std::string& CosmeticGiftCreditPayload::_internal_sender_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sender_name_.Get();
+}
+inline void CosmeticGiftCreditPayload::_internal_set_sender_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftCreditPayload::_internal_mutable_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.sender_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CosmeticGiftCreditPayload::release_sender_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_inbox.CosmeticGiftCreditPayload.sender_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.sender_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.sender_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CosmeticGiftCreditPayload::set_allocated_sender_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.sender_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.sender_name_.IsDefault()) {
+    _impl_.sender_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.CosmeticGiftCreditPayload.sender_name)
+}
+
+// uint32 target_kind = 4;
+inline void CosmeticGiftCreditPayload::clear_target_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t CosmeticGiftCreditPayload::target_kind() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.target_kind)
+  return _internal_target_kind();
+}
+inline void CosmeticGiftCreditPayload::set_target_kind(::uint32_t value) {
+  _internal_set_target_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.target_kind)
+}
+inline ::uint32_t CosmeticGiftCreditPayload::_internal_target_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_kind_;
+}
+inline void CosmeticGiftCreditPayload::_internal_set_target_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_kind_ = value;
+}
+
+// uint32 target_id_u32 = 5;
+inline void CosmeticGiftCreditPayload::clear_target_id_u32() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_u32_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t CosmeticGiftCreditPayload::target_id_u32() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.target_id_u32)
+  return _internal_target_id_u32();
+}
+inline void CosmeticGiftCreditPayload::set_target_id_u32(::uint32_t value) {
+  _internal_set_target_id_u32(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.target_id_u32)
+}
+inline ::uint32_t CosmeticGiftCreditPayload::_internal_target_id_u32() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_id_u32_;
+}
+inline void CosmeticGiftCreditPayload::_internal_set_target_id_u32(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_u32_ = value;
+}
+
+// string target_id_str = 6;
+inline void CosmeticGiftCreditPayload::clear_target_id_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_str_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& CosmeticGiftCreditPayload::target_id_str() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.target_id_str)
+  return _internal_target_id_str();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CosmeticGiftCreditPayload::set_target_id_str(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.target_id_str_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.target_id_str)
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftCreditPayload::mutable_target_id_str()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_target_id_str();
+  // @@protoc_insertion_point(field_mutable:player_inbox.CosmeticGiftCreditPayload.target_id_str)
+  return _s;
+}
+inline const ::std::string& CosmeticGiftCreditPayload::_internal_target_id_str() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_id_str_.Get();
+}
+inline void CosmeticGiftCreditPayload::_internal_set_target_id_str(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_str_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftCreditPayload::_internal_mutable_target_id_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_id_str_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CosmeticGiftCreditPayload::release_target_id_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_inbox.CosmeticGiftCreditPayload.target_id_str)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.target_id_str_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_id_str_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CosmeticGiftCreditPayload::set_allocated_target_id_str(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.target_id_str_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_id_str_.IsDefault()) {
+    _impl_.target_id_str_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.CosmeticGiftCreditPayload.target_id_str)
+}
+
+// uint64 paid_diamond = 7;
+inline void CosmeticGiftCreditPayload::clear_paid_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.paid_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t CosmeticGiftCreditPayload::paid_diamond() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftCreditPayload.paid_diamond)
+  return _internal_paid_diamond();
+}
+inline void CosmeticGiftCreditPayload::set_paid_diamond(::uint64_t value) {
+  _internal_set_paid_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftCreditPayload.paid_diamond)
+}
+inline ::uint64_t CosmeticGiftCreditPayload::_internal_paid_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.paid_diamond_;
+}
+inline void CosmeticGiftCreditPayload::_internal_set_paid_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.paid_diamond_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// CosmeticGiftRefundPayload
+
+// uint64 gift_id = 1;
+inline void CosmeticGiftRefundPayload::clear_gift_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gift_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t CosmeticGiftRefundPayload::gift_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRefundPayload.gift_id)
+  return _internal_gift_id();
+}
+inline void CosmeticGiftRefundPayload::set_gift_id(::uint64_t value) {
+  _internal_set_gift_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRefundPayload.gift_id)
+}
+inline ::uint64_t CosmeticGiftRefundPayload::_internal_gift_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gift_id_;
+}
+inline void CosmeticGiftRefundPayload::_internal_set_gift_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gift_id_ = value;
+}
+
+// uint64 recipient_player_id = 2;
+inline void CosmeticGiftRefundPayload::clear_recipient_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recipient_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t CosmeticGiftRefundPayload::recipient_player_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRefundPayload.recipient_player_id)
+  return _internal_recipient_player_id();
+}
+inline void CosmeticGiftRefundPayload::set_recipient_player_id(::uint64_t value) {
+  _internal_set_recipient_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRefundPayload.recipient_player_id)
+}
+inline ::uint64_t CosmeticGiftRefundPayload::_internal_recipient_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recipient_player_id_;
+}
+inline void CosmeticGiftRefundPayload::_internal_set_recipient_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recipient_player_id_ = value;
+}
+
+// uint64 refund_diamond = 3;
+inline void CosmeticGiftRefundPayload::clear_refund_diamond() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.refund_diamond_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t CosmeticGiftRefundPayload::refund_diamond() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRefundPayload.refund_diamond)
+  return _internal_refund_diamond();
+}
+inline void CosmeticGiftRefundPayload::set_refund_diamond(::uint64_t value) {
+  _internal_set_refund_diamond(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRefundPayload.refund_diamond)
+}
+inline ::uint64_t CosmeticGiftRefundPayload::_internal_refund_diamond() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.refund_diamond_;
+}
+inline void CosmeticGiftRefundPayload::_internal_set_refund_diamond(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.refund_diamond_ = value;
+}
+
+// string reason = 4;
+inline void CosmeticGiftRefundPayload::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CosmeticGiftRefundPayload::reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRefundPayload.reason)
+  return _internal_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CosmeticGiftRefundPayload::set_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRefundPayload.reason)
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftRefundPayload::mutable_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_reason();
+  // @@protoc_insertion_point(field_mutable:player_inbox.CosmeticGiftRefundPayload.reason)
+  return _s;
+}
+inline const ::std::string& CosmeticGiftRefundPayload::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_.Get();
+}
+inline void CosmeticGiftRefundPayload::_internal_set_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftRefundPayload::_internal_mutable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CosmeticGiftRefundPayload::release_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_inbox.CosmeticGiftRefundPayload.reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CosmeticGiftRefundPayload::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.CosmeticGiftRefundPayload.reason)
+}
+
+// -------------------------------------------------------------------
+
+// CosmeticGiftRevokePayload
+
+// uint64 gift_id = 1;
+inline void CosmeticGiftRevokePayload::clear_gift_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gift_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t CosmeticGiftRevokePayload::gift_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRevokePayload.gift_id)
+  return _internal_gift_id();
+}
+inline void CosmeticGiftRevokePayload::set_gift_id(::uint64_t value) {
+  _internal_set_gift_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRevokePayload.gift_id)
+}
+inline ::uint64_t CosmeticGiftRevokePayload::_internal_gift_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gift_id_;
+}
+inline void CosmeticGiftRevokePayload::_internal_set_gift_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gift_id_ = value;
+}
+
+// uint64 sender_player_id = 2;
+inline void CosmeticGiftRevokePayload::clear_sender_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t CosmeticGiftRevokePayload::sender_player_id() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRevokePayload.sender_player_id)
+  return _internal_sender_player_id();
+}
+inline void CosmeticGiftRevokePayload::set_sender_player_id(::uint64_t value) {
+  _internal_set_sender_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRevokePayload.sender_player_id)
+}
+inline ::uint64_t CosmeticGiftRevokePayload::_internal_sender_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sender_player_id_;
+}
+inline void CosmeticGiftRevokePayload::_internal_set_sender_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sender_player_id_ = value;
+}
+
+// uint32 target_kind = 3;
+inline void CosmeticGiftRevokePayload::clear_target_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t CosmeticGiftRevokePayload::target_kind() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRevokePayload.target_kind)
+  return _internal_target_kind();
+}
+inline void CosmeticGiftRevokePayload::set_target_kind(::uint32_t value) {
+  _internal_set_target_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRevokePayload.target_kind)
+}
+inline ::uint32_t CosmeticGiftRevokePayload::_internal_target_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_kind_;
+}
+inline void CosmeticGiftRevokePayload::_internal_set_target_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_kind_ = value;
+}
+
+// uint32 target_id_u32 = 4;
+inline void CosmeticGiftRevokePayload::clear_target_id_u32() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_u32_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t CosmeticGiftRevokePayload::target_id_u32() const {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRevokePayload.target_id_u32)
+  return _internal_target_id_u32();
+}
+inline void CosmeticGiftRevokePayload::set_target_id_u32(::uint32_t value) {
+  _internal_set_target_id_u32(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRevokePayload.target_id_u32)
+}
+inline ::uint32_t CosmeticGiftRevokePayload::_internal_target_id_u32() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_id_u32_;
+}
+inline void CosmeticGiftRevokePayload::_internal_set_target_id_u32(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_u32_ = value;
+}
+
+// string target_id_str = 5;
+inline void CosmeticGiftRevokePayload::clear_target_id_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_str_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CosmeticGiftRevokePayload::target_id_str() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRevokePayload.target_id_str)
+  return _internal_target_id_str();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CosmeticGiftRevokePayload::set_target_id_str(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.target_id_str_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRevokePayload.target_id_str)
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftRevokePayload::mutable_target_id_str()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_target_id_str();
+  // @@protoc_insertion_point(field_mutable:player_inbox.CosmeticGiftRevokePayload.target_id_str)
+  return _s;
+}
+inline const ::std::string& CosmeticGiftRevokePayload::_internal_target_id_str() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_id_str_.Get();
+}
+inline void CosmeticGiftRevokePayload::_internal_set_target_id_str(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_id_str_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftRevokePayload::_internal_mutable_target_id_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.target_id_str_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CosmeticGiftRevokePayload::release_target_id_str() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_inbox.CosmeticGiftRevokePayload.target_id_str)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.target_id_str_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.target_id_str_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CosmeticGiftRevokePayload::set_allocated_target_id_str(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.target_id_str_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.target_id_str_.IsDefault()) {
+    _impl_.target_id_str_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.CosmeticGiftRevokePayload.target_id_str)
+}
+
+// string reason = 6;
+inline void CosmeticGiftRevokePayload::clear_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& CosmeticGiftRevokePayload::reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_inbox.CosmeticGiftRevokePayload.reason)
+  return _internal_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CosmeticGiftRevokePayload::set_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:player_inbox.CosmeticGiftRevokePayload.reason)
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftRevokePayload::mutable_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_reason();
+  // @@protoc_insertion_point(field_mutable:player_inbox.CosmeticGiftRevokePayload.reason)
+  return _s;
+}
+inline const ::std::string& CosmeticGiftRevokePayload::_internal_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_.Get();
+}
+inline void CosmeticGiftRevokePayload::_internal_set_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CosmeticGiftRevokePayload::_internal_mutable_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CosmeticGiftRevokePayload::release_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_inbox.CosmeticGiftRevokePayload.reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CosmeticGiftRevokePayload::set_allocated_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.reason_.IsDefault()) {
+    _impl_.reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:player_inbox.CosmeticGiftRevokePayload.reason)
 }
 
 // -------------------------------------------------------------------

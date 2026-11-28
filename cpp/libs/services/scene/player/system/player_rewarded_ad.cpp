@@ -16,8 +16,12 @@
 #include "modules/currency/system/currency_system.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "player/system/client_request_ledger.h"
+#include "player/system/player_appearance.h"
+#include "player/system/player_level_rules.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_mutability.h"
+#include "player/system/player_mystery_merchant.h"
+#include "player/system/player_season.h"
 #include "player/system/rewarded_ad_rules.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/client_request_ledger_comp.pb.h"
@@ -52,6 +56,7 @@ rewarded_ad_rules::SlotConfig ToSlotConfig(const RewardedAdSlotTable &row)
 	cfg.rewardAmount = row.reward_amount();
 	cfg.requireSsv = row.require_ssv() != 0;
 	cfg.platformMask = row.platform_mask();
+	cfg.rewardKind = rewarded_ad_rules::NormalizeRewardKind(row.reward_kind());
 	return cfg;
 }
 
@@ -109,12 +114,13 @@ void FillSlotView(const rewarded_ad_rules::SlotConfig &cfg, const RewardedAdLedg
 	out.set_enabled(cfg.enabled && platformOk && playerLevel >= cfg.minLevel);
 	out.set_min_level(cfg.minLevel);
 	out.set_daily_limit(cfg.dailyLimit);
-	out.set_claimed_today(rewarded_ad_rules::EffectiveClaimedToday(adLedger, dayStartMs));
+	out.set_claimed_today(rewarded_ad_rules::EffectiveSlotClaimed(adLedger, cfg.slotId, dayStartMs));
 	out.set_next_reset_ms(nextDayMs);
 	const uint64_t cooldownUntil = rewarded_ad_rules::CooldownUntilMs(adLedger, cfg.cooldownSec);
 	out.set_cooldown_until_ms(cooldownUntil > nowMs ? cooldownUntil : 0u);
 	out.set_currency_type(cfg.currencyType);
 	out.set_reward_amount(cfg.rewardAmount);
+	out.set_reward_kind(rewarded_ad_rules::NormalizeRewardKind(cfg.rewardKind));
 }
 
 bool IsBindGoldBlocked(entt::entity player)
@@ -169,7 +175,7 @@ uint32_t PlayerRewardedAdSystem::GetInfo(entt::entity player, const GetRewardedA
 	}
 
 	const auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
-	const uint32_t playerLevel = tlsEcs.actorRegistry.get<LevelComp>(player).level();
+	const uint32_t playerLevel = playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 	response.set_server_time_ms(nowMs);
 	response.set_bind_gold_balance(CurrencySystem::GetBalance(player, kCurrencyBindGold));
 	response.set_gold_balance(CurrencySystem::GetBalance(player, kCurrencyGold));
@@ -238,7 +244,7 @@ uint32_t PlayerRewardedAdSystem::BeginSession(entt::entity player, const BeginRe
 	{
 		return kRewardedAdPlatformUnsupported;
 	}
-	const uint32_t playerLevel = tlsEcs.actorRegistry.get<LevelComp>(player).level();
+	const uint32_t playerLevel = playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 	if (playerLevel < cfg.minLevel)
 	{
 		return kRewardedAdLevelNotEnough;
@@ -253,7 +259,7 @@ uint32_t PlayerRewardedAdSystem::BeginSession(entt::entity player, const BeginRe
 
 	auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
 	auto &adLedger = *ledger.mutable_rewarded_ad();
-	const uint32_t claimedInPeriod = rewarded_ad_rules::EffectiveClaimedToday(adLedger, weekStartMs);
+	const uint32_t claimedInPeriod = rewarded_ad_rules::EffectiveSlotClaimed(adLedger, cfg.slotId, weekStartMs);
 	if (claimedInPeriod >= cfg.dailyLimit)
 	{
 		return kRewardedAdDailyLimitReached;
@@ -263,13 +269,16 @@ uint32_t PlayerRewardedAdSystem::BeginSession(entt::entity player, const BeginRe
 	{
 		return kRewardedAdCooldown;
 	}
-	if (IsBindGoldBlocked(player))
+	if (rewarded_ad_rules::NormalizeRewardKind(cfg.rewardKind) == rewarded_ad_rules::kRewardBindGold)
 	{
-		return kRewardedAdCurrencyBlocked;
-	}
-	if (CurrencySystem::CreditOverflows(player, kCurrencyBindGold, cfg.rewardAmount))
-	{
-		return kRewardedAdUnavailable;
+		if (IsBindGoldBlocked(player))
+		{
+			return kRewardedAdCurrencyBlocked;
+		}
+		if (CurrencySystem::CreditOverflows(player, kCurrencyBindGold, cfg.rewardAmount))
+		{
+			return kRewardedAdUnavailable;
+		}
 	}
 
 	rewarded_ad_rules::AdvanceDayIfNeeded(adLedger, weekStartMs);
@@ -337,9 +346,10 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 			TryResolveSlot(request.slot_id(), cfg, reason))
 		{
 			const auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
-			const uint32_t level = tlsEcs.actorRegistry.get<LevelComp>(player).level();
+			const uint32_t level = playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 			FillSlotView(cfg, ledger.rewarded_ad(), 0u, level, weekStartMs, nextWeekMs, nowMs,
 						 *response.mutable_slot());
+			response.set_reward_kind(rewarded_ad_rules::NormalizeRewardKind(cfg.rewardKind));
 		}
 		return kSuccess;
 	}
@@ -358,7 +368,7 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 		return kRewardedAdUnavailable;
 	}
 
-	// 3. 配表、等级、日限与冷却校验。
+	// 3. 配表、等级、周限与冷却校验。
 	rewarded_ad_rules::SlotConfig cfg;
 	const char *reason = nullptr;
 	if (!TryResolveSlot(request.slot_id(), cfg, reason))
@@ -369,7 +379,7 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 	{
 		return kRewardedAdDisabled;
 	}
-	const uint32_t playerLevel = tlsEcs.actorRegistry.get<LevelComp>(player).level();
+	const uint32_t playerLevel = playerlevel::CappedLevel(tlsEcs.actorRegistry.get<LevelComp>(player).level());
 	if (playerLevel < cfg.minLevel)
 	{
 		return kRewardedAdLevelNotEnough;
@@ -384,7 +394,7 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 
 	auto &ledger = tlsEcs.actorRegistry.get<ClientRequestLedgerComp>(player);
 	const auto &adLedger = ledger.rewarded_ad();
-	if (rewarded_ad_rules::EffectiveClaimedToday(adLedger, weekStartMs) >= cfg.dailyLimit)
+	if (rewarded_ad_rules::EffectiveSlotClaimed(adLedger, cfg.slotId, weekStartMs) >= cfg.dailyLimit)
 	{
 		return kRewardedAdDailyLimitReached;
 	}
@@ -423,25 +433,64 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 		return kRewardedAdSsvRequired;
 	}
 
-	// 5. 产出封禁与溢出预检。
-	if (IsBindGoldBlocked(player))
+	// 5. 按 reward_kind 做只读前置校验（不通过绝不入账、不扣会话）。
+	const uint32_t rewardKind = rewarded_ad_rules::NormalizeRewardKind(cfg.rewardKind);
+	std::vector<uint32_t> previewOffers;
+	uint64_t merchantRoundId = 0u;
+	if (rewardKind == rewarded_ad_rules::kRewardBindGold)
 	{
-		return kRewardedAdCurrencyBlocked;
+		if (IsBindGoldBlocked(player))
+		{
+			return kRewardedAdCurrencyBlocked;
+		}
+		if (CurrencySystem::CreditOverflows(player, kCurrencyBindGold, cfg.rewardAmount))
+		{
+			return kRewardedAdUnavailable;
+		}
 	}
-	if (CurrencySystem::CreditOverflows(player, kCurrencyBindGold, cfg.rewardAmount))
+	else if (rewardKind == rewarded_ad_rules::kRewardTowerBoonReroll)
+	{
+		const uint32_t checkErr = PlayerSeasonSystem::RerollWuxingTowerOffersByAd(
+			player, request.target_param_u32(), nowMs, previewOffers, /*dryRun=*/true);
+		if (checkErr != kSuccess)
+		{
+			return checkErr;
+		}
+	}
+	else if (rewardKind == rewarded_ad_rules::kRewardWardrobe1hTrial)
+	{
+		const uint32_t checkErr = PlayerAppearanceSystem::GrantAdTrial(
+			player, request.target_param_str(), nowMs / 1000ULL, /*dryRun=*/true);
+		if (checkErr != kSuccess)
+		{
+			return checkErr;
+		}
+	}
+	else if (rewardKind == rewarded_ad_rules::kRewardMerchantPersonalRefresh)
+	{
+		const uint32_t checkErr = PlayerMysteryMerchantSystem::ValidatePersonalShelfRefresh(
+			player, request.target_param_u32(), nowMs, merchantRoundId);
+		if (checkErr != kSuccess)
+		{
+			return checkErr;
+		}
+	}
+	else
 	{
 		return kRewardedAdUnavailable;
 	}
 
-	// 6. 候选账本预演（不通过绝不发钱），随后同帧原子入账 + 落账 + 关键进度存盘。
+	// 6. 候选账本预演（不通过绝不发奖），随后同帧原子生效 + 落账 + 关键进度存盘。
 	ClientRequestResult applied;
-	applied.rewardedAdCurrencyType = static_cast<uint32_t>(kCurrencyBindGold);
-	applied.rewardedAdAmount = cfg.rewardAmount;
+	applied.rewardedAdCurrencyType = rewardKind == rewarded_ad_rules::kRewardBindGold
+										 ? static_cast<uint32_t>(kCurrencyBindGold)
+										 : 0u;
+	applied.rewardedAdAmount = rewardKind == rewarded_ad_rules::kRewardBindGold ? cfg.rewardAmount : 0u;
 
 	ClientRequestLedgerComp candidateLedger = ledger;
 	auto &candidateAd = *candidateLedger.mutable_rewarded_ad();
 	rewarded_ad_rules::AdvanceDayIfNeeded(candidateAd, weekStartMs);
-	candidateAd.set_claimed_today(candidateAd.claimed_today() + 1u);
+	rewarded_ad_rules::IncrementSlotClaimed(candidateAd, cfg.slotId);
 	candidateAd.set_last_claim_at_ms(nowMs);
 	if (candidateAd.total_claimed_lifetime() < std::numeric_limits<uint64_t>::max())
 	{
@@ -450,6 +499,11 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 	candidateAd.set_active_session_id(0u);
 	candidateAd.set_active_session_issued_ms(0u);
 	candidateAd.set_active_session_slot_id(0u);
+	if (rewardKind == rewarded_ad_rules::kRewardMerchantPersonalRefresh)
+	{
+		candidateAd.set_merchant_reroll_round_id(merchantRoundId);
+		candidateAd.set_merchant_reroll_seq(1u);
+	}
 
 	if (!client_request_ledger::Remember(candidateLedger, clientRequestId, ClientRequestKind::kClaimRewardedAd,
 										 fingerprint, applied) ||
@@ -458,39 +512,67 @@ uint32_t PlayerRewardedAdSystem::Claim(entt::entity player, const ClaimRewardedA
 		return kServiceUnavailable;
 	}
 
-	const uint32_t addErr = CurrencySystem::AddCurrency(
-		player, kCurrencyBindGold, static_cast<int64_t>(cfg.rewardAmount),
-		TX_SYSTEM_GRANT, request.ad_session_id());
-	if (addErr != kSuccess)
+	std::vector<uint32_t> rerolledOffers;
+	if (rewardKind == rewarded_ad_rules::kRewardBindGold)
 	{
-		if (addErr == kAssetBlocked)
+		const uint32_t addErr = CurrencySystem::AddCurrency(
+			player, kCurrencyBindGold, static_cast<int64_t>(cfg.rewardAmount),
+			TX_SYSTEM_GRANT, request.ad_session_id());
+		if (addErr != kSuccess)
 		{
-			return kRewardedAdCurrencyBlocked;
+			if (addErr == kAssetBlocked)
+			{
+				return kRewardedAdCurrencyBlocked;
+			}
+			if (addErr == kAssetFrozen)
+			{
+				return kRewardedAdFrozen;
+			}
+			LOG_ERROR << "[RewardedAd] AddCurrency failed after precheck " << PlayerLogId(player)
+					  << " slot_id=" << cfg.slotId << " amount=" << cfg.rewardAmount << " err=" << addErr;
+			return kRewardedAdUnavailable;
 		}
-		if (addErr == kAssetFrozen)
+	}
+	else if (rewardKind == rewarded_ad_rules::kRewardTowerBoonReroll)
+	{
+		const uint32_t rerollErr = PlayerSeasonSystem::RerollWuxingTowerOffersByAd(
+			player, request.target_param_u32(), nowMs, rerolledOffers, /*dryRun=*/false);
+		if (rerollErr != kSuccess)
 		{
-			return kRewardedAdFrozen;
+			return rerollErr;
 		}
-		LOG_ERROR << "[RewardedAd] AddCurrency failed after precheck " << PlayerLogId(player)
-				  << " slot_id=" << cfg.slotId << " amount=" << cfg.rewardAmount << " err=" << addErr;
-		return kRewardedAdUnavailable;
+	}
+	else if (rewardKind == rewarded_ad_rules::kRewardWardrobe1hTrial)
+	{
+		const uint32_t trialErr = PlayerAppearanceSystem::GrantAdTrial(
+			player, request.target_param_str(), nowMs / 1000ULL, /*dryRun=*/false);
+		if (trialErr != kSuccess)
+		{
+			return trialErr;
+		}
 	}
 
 	ledger.Swap(&candidateLedger);
 	PlayerLifecycleSystem::RequestKeyProgressSave(player, "rewarded_ad_claimed");
 
-	response.set_currency_type(static_cast<uint32_t>(kCurrencyBindGold));
-	response.set_reward_amount(cfg.rewardAmount);
+	response.set_currency_type(applied.rewardedAdCurrencyType);
+	response.set_reward_amount(applied.rewardedAdAmount);
 	response.set_currency_balance(CurrencySystem::GetBalance(player, kCurrencyBindGold));
 	response.set_gold_balance(CurrencySystem::GetBalance(player, kCurrencyGold));
 	response.set_replayed(false);
+	response.set_reward_kind(rewardKind);
+	for (const uint32_t sigilId : rerolledOffers)
+	{
+		response.add_rerolled_sigil_ids(sigilId);
+	}
 	FillSlotView(cfg, ledger.rewarded_ad(), 0u, playerLevel, weekStartMs, nextWeekMs, nowMs,
 				 *response.mutable_slot());
 
 	LOG_INFO << "[RewardedAd] metric=rewarded_ad_claimed " << PlayerLogId(player)
-			 << " slot_id=" << cfg.slotId << " currency_type=" << static_cast<uint32_t>(kCurrencyBindGold)
-			 << " reward_amount=" << cfg.rewardAmount
-			 << " claimed_today=" << ledger.rewarded_ad().claimed_today()
+			 << " slot_id=" << cfg.slotId << " reward_kind=" << rewardKind
+			 << " currency_type=" << applied.rewardedAdCurrencyType
+			 << " reward_amount=" << applied.rewardedAdAmount
+			 << " claimed_slot=" << rewarded_ad_rules::EffectiveSlotClaimed(ledger.rewarded_ad(), cfg.slotId, weekStartMs)
 			 << " client_request_id=" << clientRequestId;
 	return kSuccess;
 }

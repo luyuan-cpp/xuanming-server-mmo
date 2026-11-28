@@ -37,6 +37,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
         // ::PetInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::PetSquadPresetInfo
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
         // ::PetListInfo
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
         // ::GetPetListRequest
@@ -119,9 +121,173 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
         // ::AscendPetTierResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::SavePetSquadPresetRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::SavePetSquadPresetResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::UnlockPetSquadPresetSlotRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
+        // ::UnlockPetSquadPresetSlotResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
+class UnlockPetSquadPresetSlotRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnlockPetSquadPresetSlotRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_._has_bits_);
+};
+
+constexpr UnlockPetSquadPresetSlotRequest::ParseTableT_ UnlockPetSquadPresetSlotRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::UnlockPetSquadPresetSlotRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 client_request_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockPetSquadPresetSlotRequest, _impl_.client_request_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.client_request_id_)}},
+      // uint32 expected_unlocked_slots = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockPetSquadPresetSlotRequest, _impl_.expected_unlocked_slots_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.expected_unlocked_slots_)}},
+      // uint64 expected_price_diamond = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockPetSquadPresetSlotRequest, _impl_.expected_price_diamond_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.expected_price_diamond_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 client_request_id = 1;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.client_request_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 expected_unlocked_slots = 2;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.expected_unlocked_slots_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 expected_price_diamond = 3;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.expected_price_diamond_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnlockPetSquadPresetSlotRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        client_request_id_{::uint64_t{0u}},
+        expected_price_diamond_{::uint64_t{0u}},
+        expected_unlocked_slots_{0u} {}
+
+template <typename>
+constexpr UnlockPetSquadPresetSlotRequest::UnlockPetSquadPresetSlotRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnlockPetSquadPresetSlotRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnlockPetSquadPresetSlotRequest(arena);
+}
+constexpr auto UnlockPetSquadPresetSlotRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnlockPetSquadPresetSlotRequest), alignof(UnlockPetSquadPresetSlotRequest));
+}
+constexpr auto UnlockPetSquadPresetSlotRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnlockPetSquadPresetSlotRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnlockPetSquadPresetSlotRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnlockPetSquadPresetSlotRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnlockPetSquadPresetSlotRequest>(), &UnlockPetSquadPresetSlotRequest::ByteSizeLong,
+              &UnlockPetSquadPresetSlotRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[48],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnlockPetSquadPresetSlotRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnlockPetSquadPresetSlotRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnlockPetSquadPresetSlotRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnlockPetSquadPresetSlotRequest::InternalGenerateClassData_(
+            _default, &UnlockPetSquadPresetSlotRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnlockPetSquadPresetSlotRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnlockPetSquadPresetSlotRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnlockPetSquadPresetSlotRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnlockPetSquadPresetSlotRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnlockPetSquadPresetSlotRequestGlobalsTypeInternal UnlockPetSquadPresetSlotRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnlockPetSquadPresetSlotRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnlockPetSquadPresetSlotRequest_globals_.GetClassData();
+#else
+  return UnlockPetSquadPresetSlotRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SwitchPetEntryPresetRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<SwitchPetEntryPresetRequest>()._impl_._has_bits_);
@@ -254,7 +420,7 @@ constexpr auto SwitchPetEntryPresetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[41],
+      &file_reflection_data[42],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -395,7 +561,7 @@ constexpr auto SummonPetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -442,6 +608,173 @@ const ::_pbi::ClassData* SummonPetRequest_get_class_data() {
   return SummonPetRequest_globals_.GetClassData();
 #else
   return SummonPetRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SavePetSquadPresetRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SavePetSquadPresetRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_._has_bits_);
+};
+
+constexpr SavePetSquadPresetRequest::ParseTableT_ SavePetSquadPresetRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SavePetSquadPresetRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // bool summon_first = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(SavePetSquadPresetRequest, _impl_.summon_first_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.summon_first_)}},
+      // uint32 slot_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePetSquadPresetRequest, _impl_.slot_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.slot_id_)}},
+      // uint32 tag = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(SavePetSquadPresetRequest, _impl_.tag_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.tag_)}},
+      // repeated uint64 pet_ids = 3;
+      {::_pbi::TcParser::FastV64P1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.pet_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 slot_id = 1;
+      {PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.slot_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tag = 2;
+      {PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.tag_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint64 pet_ids = 3;
+      {PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.pet_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+      // bool summon_first = 4;
+      {PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.summon_first_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SavePetSquadPresetRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        pet_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SavePetSquadPresetRequest,
+            PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.pet_ids_)>()
+         }
+        ,
+        _pet_ids_cached_byte_size_{0},
+        slot_id_{0u},
+        tag_{0u},
+        summon_first_{false} {}
+
+template <typename>
+constexpr SavePetSquadPresetRequest::SavePetSquadPresetRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SavePetSquadPresetRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SavePetSquadPresetRequest(arena);
+}
+constexpr auto SavePetSquadPresetRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(SavePetSquadPresetRequest), alignof(SavePetSquadPresetRequest));
+}
+constexpr auto SavePetSquadPresetRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SavePetSquadPresetRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SavePetSquadPresetRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SavePetSquadPresetRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SavePetSquadPresetRequest>(), &SavePetSquadPresetRequest::ByteSizeLong,
+              &SavePetSquadPresetRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[46],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SavePetSquadPresetRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SavePetSquadPresetRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SavePetSquadPresetRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SavePetSquadPresetRequest::InternalGenerateClassData_(
+            _default, &SavePetSquadPresetRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SavePetSquadPresetRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SavePetSquadPresetRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SavePetSquadPresetRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SavePetSquadPresetRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SavePetSquadPresetRequestGlobalsTypeInternal SavePetSquadPresetRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SavePetSquadPresetRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SavePetSquadPresetRequest_globals_.GetClassData();
+#else
+  return SavePetSquadPresetRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -528,7 +861,7 @@ constexpr auto SavePetEntriesRequest_TargetEntry_DoNotUse::InternalGenerateClass
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[38],
+      &file_reflection_data[39],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -669,7 +1002,7 @@ constexpr auto ResetPetPointsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -822,7 +1155,7 @@ constexpr auto RenamePetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -946,7 +1279,7 @@ constexpr auto RecallPetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -1079,7 +1412,7 @@ constexpr auto PreviewPetEntriesRequest_TargetEntry_DoNotUse::InternalGenerateCl
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[35],
+      &file_reflection_data[36],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -1354,6 +1687,167 @@ const ::_pbi::ClassData* PetTierAscensionInfo_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class PetSquadPresetInfo::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PetSquadPresetInfo>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_._has_bits_);
+};
+
+constexpr PetSquadPresetInfo::ParseTableT_ PetSquadPresetInfo::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PetSquadPresetInfo>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 slot_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetSquadPresetInfo, _impl_.slot_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.slot_id_)}},
+      // uint32 tag = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetSquadPresetInfo, _impl_.tag_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.tag_)}},
+      // repeated uint64 pet_ids = 3;
+      {::_pbi::TcParser::FastV64P1,
+       {26, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.pet_ids_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 slot_id = 1;
+      {PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.slot_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 tag = 2;
+      {PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.tag_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint64 pet_ids = 3;
+      {PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.pet_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr PetSquadPresetInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        pet_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PetSquadPresetInfo,
+            PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_.pet_ids_)>()
+         }
+        ,
+        _pet_ids_cached_byte_size_{0},
+        slot_id_{0u},
+        tag_{0u} {}
+
+template <typename>
+constexpr PetSquadPresetInfo::PetSquadPresetInfo(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PetSquadPresetInfo::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PetSquadPresetInfo(arena);
+}
+constexpr auto PetSquadPresetInfo::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PetSquadPresetInfo), alignof(PetSquadPresetInfo));
+}
+constexpr auto PetSquadPresetInfo::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PetSquadPresetInfo::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PetSquadPresetInfo>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PetSquadPresetInfo::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PetSquadPresetInfo>(), &PetSquadPresetInfo::ByteSizeLong,
+              &PetSquadPresetInfo::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[4],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PetSquadPresetInfoGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PetSquadPresetInfoGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PetSquadPresetInfo_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PetSquadPresetInfo::InternalGenerateClassData_(
+            _default, &PetSquadPresetInfo_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PetSquadPresetInfo>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PetSquadPresetInfoGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PetSquadPresetInfo _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PetSquadPresetInfo>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PetSquadPresetInfoGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PetSquadPresetInfoGlobalsTypeInternal PetSquadPresetInfo_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PetSquadPresetInfo_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PetSquadPresetInfo_globals_.GetClassData();
+#else
+  return PetSquadPresetInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PetShopOffer::_Internal {
  public:
   using HasBits = decltype(::std::declval<PetShopOffer>()._impl_._has_bits_);
@@ -1489,7 +1983,7 @@ constexpr auto PetShopOffer::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[24],
+      &file_reflection_data[25],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -1622,7 +2116,7 @@ constexpr auto PetEntryPresetSummary_AllocatedEntry_DoNotUse::InternalGenerateCl
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[30],
+      &file_reflection_data[31],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -1855,7 +2349,7 @@ constexpr auto PetEntryInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[29],
+      &file_reflection_data[30],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -2398,7 +2892,7 @@ constexpr auto GmGrantPetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -2522,7 +3016,7 @@ constexpr auto GetPetShopRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[25],
+      &file_reflection_data[26],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -2646,7 +3140,7 @@ constexpr auto GetPetListRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[5],
+      &file_reflection_data[6],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -2787,7 +3281,7 @@ constexpr auto GetPetEntriesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[33],
+      &file_reflection_data[34],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -2943,7 +3437,7 @@ constexpr auto BuyPetRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[27],
+      &file_reflection_data[28],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -3076,7 +3570,7 @@ constexpr auto AutoAllocatePetPointsResponse_SuggestedEntry_DoNotUse::InternalGe
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -3217,7 +3711,7 @@ constexpr auto AutoAllocatePetPointsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -3373,7 +3867,7 @@ constexpr auto AscendPetTierRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[43],
+      &file_reflection_data[44],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -3506,7 +4000,7 @@ constexpr auto AllocatePetPointsRequest_AllocatedEntry_DoNotUse::InternalGenerat
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -3687,7 +4181,7 @@ constexpr auto SavePetEntriesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[39],
+      &file_reflection_data[40],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -3853,7 +4347,7 @@ constexpr auto PreviewPetEntriesRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[36],
+      &file_reflection_data[37],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -4019,7 +4513,7 @@ constexpr auto PetEntryPresetSummary::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[31],
+      &file_reflection_data[32],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -4196,7 +4690,7 @@ constexpr auto GetPetShopResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[26],
+      &file_reflection_data[27],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -4359,7 +4853,7 @@ constexpr auto AutoAllocatePetPointsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -4510,7 +5004,7 @@ constexpr auto AllocatePetPointsRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -4767,7 +5261,7 @@ constexpr auto PetEntriesInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[32],
+      &file_reflection_data[33],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -4945,7 +5439,7 @@ constexpr auto SwitchPetEntryPresetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[42],
+      &file_reflection_data[43],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -5123,7 +5617,7 @@ constexpr auto SavePetEntriesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[40],
+      &file_reflection_data[41],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -5282,7 +5776,7 @@ constexpr auto PreviewPetEntriesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[37],
+      &file_reflection_data[38],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -5792,7 +6286,7 @@ constexpr auto GetPetEntriesResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[34],
+      &file_reflection_data[35],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -5855,12 +6349,12 @@ constexpr PetListInfo::ParseTableT_ PetListInfo::InternalGenerateParseTable_(con
     {
       PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
-      1,  // num_aux_entries
+      9,  // num_field_entries
+      2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -5869,39 +6363,81 @@ constexpr PetListInfo::ParseTableT_ PetListInfo::InternalGenerateParseTable_(con
       ::_pbi::TcParser::GetTable<::PetListInfo>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 rename_cost_gold = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetListInfo, _impl_.rename_cost_gold_), 2>(),
-       {32, 2, 0,
-        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.rename_cost_gold_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated .PetInfo pets = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.pets_)}},
       // uint64 active_pet_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetListInfo, _impl_.active_pet_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetListInfo, _impl_.active_pet_id_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.active_pet_id_)}},
       // uint32 max_pets = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetListInfo, _impl_.max_pets_), 3>(),
-       {24, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetListInfo, _impl_.max_pets_), 4>(),
+       {24, 4, 0,
         PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.max_pets_)}},
+      // uint64 rename_cost_gold = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetListInfo, _impl_.rename_cost_gold_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.rename_cost_gold_)}},
+      // repeated .PetSquadPresetInfo squad_presets = 5;
+      {::_pbi::TcParser::FastMtR1,
+       {42, 1, 1,
+        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.squad_presets_)}},
+      // uint32 unlocked_squad_preset_slots = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetListInfo, _impl_.unlocked_squad_preset_slots_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.unlocked_squad_preset_slots_)}},
+      // uint32 effective_squad_preset_slots = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetListInfo, _impl_.effective_squad_preset_slots_), 6>(),
+       {56, 6, 0,
+        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.effective_squad_preset_slots_)}},
+      // uint32 max_squad_preset_slots = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PetListInfo, _impl_.max_squad_preset_slots_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.max_squad_preset_slots_)}},
+      // uint64 next_squad_slot_price_diamond = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PetListInfo, _impl_.next_squad_slot_price_diamond_), 8>(),
+       {72, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.next_squad_slot_price_diamond_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated .PetInfo pets = 1;
       {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.pets_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 active_pet_id = 2;
-      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.active_pet_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.active_pet_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 max_pets = 3;
-      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.max_pets_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.max_pets_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint64 rename_cost_gold = 4;
-      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.rename_cost_gold_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.rename_cost_gold_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // repeated .PetSquadPresetInfo squad_presets = 5;
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.squad_presets_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 unlocked_squad_preset_slots = 6;
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.unlocked_squad_preset_slots_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 effective_squad_preset_slots = 7;
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.effective_squad_preset_slots_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 max_squad_preset_slots = 8;
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.max_squad_preset_slots_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 next_squad_slot_price_diamond = 9;
+      {PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.next_squad_slot_price_diamond_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
         {::_pbi::TcParser::GetTable<::PetInfo>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::PetInfo_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PetSquadPresetInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PetSquadPresetInfo_globals_},
         #endif
     }},
     {{
@@ -5919,9 +6455,18 @@ inline constexpr PetListInfo::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.pets_)>()
          }
         ,
+        squad_presets_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PetListInfo,
+            PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.squad_presets_)>()
+         }
+        ,
         active_pet_id_{::uint64_t{0u}},
         rename_cost_gold_{::uint64_t{0u}},
-        max_pets_{0u} {}
+        max_pets_{0u},
+        unlocked_squad_preset_slots_{0u},
+        effective_squad_preset_slots_{0u},
+        max_squad_preset_slots_{0u},
+        next_squad_slot_price_diamond_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr PetListInfo::PetListInfo(::_pbi::ConstantInitialized,
@@ -5964,7 +6509,7 @@ constexpr auto PetListInfo::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[4],
+      &file_reflection_data[5],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -6011,6 +6556,195 @@ const ::_pbi::ClassData* PetListInfo_get_class_data() {
   return PetListInfo_globals_.GetClassData();
 #else
   return PetListInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class UnlockPetSquadPresetSlotResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnlockPetSquadPresetSlotResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_._has_bits_);
+};
+
+constexpr UnlockPetSquadPresetSlotResponse::ParseTableT_ UnlockPetSquadPresetSlotResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      6, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967232,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      6,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::UnlockPetSquadPresetSlotResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.error_message_)}},
+      // bool replayed = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(UnlockPetSquadPresetSlotResponse, _impl_.replayed_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.replayed_)}},
+      // uint32 unlocked_slots = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnlockPetSquadPresetSlotResponse, _impl_.unlocked_slots_), 3>(),
+       {24, 3, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.unlocked_slots_)}},
+      // uint64 spent_diamond = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockPetSquadPresetSlotResponse, _impl_.spent_diamond_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.spent_diamond_)}},
+      // uint64 diamond_balance = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnlockPetSquadPresetSlotResponse, _impl_.diamond_balance_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.diamond_balance_)}},
+      // .PetListInfo pets = 6;
+      {::_pbi::TcParser::FastMtS1,
+       {50, 1, 1,
+        PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.pets_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // bool replayed = 2;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.replayed_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 unlocked_slots = 3;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.unlocked_slots_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 spent_diamond = 4;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.spent_diamond_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 diamond_balance = 5;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.diamond_balance_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .PetListInfo pets = 6;
+      {PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.pets_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PetListInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PetListInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnlockPetSquadPresetSlotResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        pets_{nullptr},
+        replayed_{false},
+        unlocked_slots_{0u},
+        spent_diamond_{::uint64_t{0u}},
+        diamond_balance_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr UnlockPetSquadPresetSlotResponse::UnlockPetSquadPresetSlotResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnlockPetSquadPresetSlotResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnlockPetSquadPresetSlotResponse(arena);
+}
+constexpr auto UnlockPetSquadPresetSlotResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnlockPetSquadPresetSlotResponse), alignof(UnlockPetSquadPresetSlotResponse));
+}
+constexpr auto UnlockPetSquadPresetSlotResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnlockPetSquadPresetSlotResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnlockPetSquadPresetSlotResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnlockPetSquadPresetSlotResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnlockPetSquadPresetSlotResponse>(), &UnlockPetSquadPresetSlotResponse::ByteSizeLong,
+              &UnlockPetSquadPresetSlotResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[49],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnlockPetSquadPresetSlotResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnlockPetSquadPresetSlotResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnlockPetSquadPresetSlotResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnlockPetSquadPresetSlotResponse::InternalGenerateClassData_(
+            _default, &UnlockPetSquadPresetSlotResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnlockPetSquadPresetSlotResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnlockPetSquadPresetSlotResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnlockPetSquadPresetSlotResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnlockPetSquadPresetSlotResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnlockPetSquadPresetSlotResponseGlobalsTypeInternal UnlockPetSquadPresetSlotResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnlockPetSquadPresetSlotResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnlockPetSquadPresetSlotResponse_globals_.GetClassData();
+#else
+  return UnlockPetSquadPresetSlotResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -6123,7 +6857,7 @@ constexpr auto SummonPetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -6170,6 +6904,165 @@ const ::_pbi::ClassData* SummonPetResponse_get_class_data() {
   return SummonPetResponse_globals_.GetClassData();
 #else
   return SummonPetResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class SavePetSquadPresetResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<SavePetSquadPresetResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_._has_bits_);
+};
+
+constexpr SavePetSquadPresetResponse::ParseTableT_ SavePetSquadPresetResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      2,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::SavePetSquadPresetResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .PetListInfo pets = 2;
+      {::_pbi::TcParser::FastMtS1,
+       {18, 1, 1,
+        PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_.pets_)}},
+      // .TipInfoMessage error_message = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_.error_message_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .TipInfoMessage error_message = 1;
+      {PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_.error_message_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .PetListInfo pets = 2;
+      {PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_.pets_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::TipInfoMessage>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::TipInfoMessage_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::PetListInfo>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::PetListInfo_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr SavePetSquadPresetResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        error_message_{nullptr},
+        pets_{nullptr} {}
+
+template <typename>
+constexpr SavePetSquadPresetResponse::SavePetSquadPresetResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL SavePetSquadPresetResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) SavePetSquadPresetResponse(arena);
+}
+constexpr auto SavePetSquadPresetResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(SavePetSquadPresetResponse), alignof(SavePetSquadPresetResponse));
+}
+constexpr auto SavePetSquadPresetResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &SavePetSquadPresetResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<SavePetSquadPresetResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &SavePetSquadPresetResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<SavePetSquadPresetResponse>(), &SavePetSquadPresetResponse::ByteSizeLong,
+              &SavePetSquadPresetResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[47],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct SavePetSquadPresetResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr SavePetSquadPresetResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 SavePetSquadPresetResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(SavePetSquadPresetResponse::InternalGenerateClassData_(
+            _default, &SavePetSquadPresetResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<SavePetSquadPresetResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~SavePetSquadPresetResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) SavePetSquadPresetResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<SavePetSquadPresetResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST SavePetSquadPresetResponseGlobalsTypeInternal SavePetSquadPresetResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* SavePetSquadPresetResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return SavePetSquadPresetResponse_globals_.GetClassData();
+#else
+  return SavePetSquadPresetResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -6282,7 +7175,7 @@ constexpr auto ResetPetPointsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -6441,7 +7334,7 @@ constexpr auto RenamePetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -6600,7 +7493,7 @@ constexpr auto RecallPetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -6747,7 +7640,7 @@ constexpr auto PetListChangedS2C::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -6914,7 +7807,7 @@ constexpr auto GmGrantPetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[23],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -7073,7 +7966,7 @@ constexpr auto GetPetListResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[6],
+      &file_reflection_data[7],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -7256,7 +8149,7 @@ constexpr auto BuyPetResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[28],
+      &file_reflection_data[29],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -7445,7 +8338,7 @@ constexpr auto AscendPetTierResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[44],
+      &file_reflection_data[45],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -7604,7 +8497,7 @@ constexpr auto AllocatePetPointsResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto,
@@ -7777,16 +8670,35 @@ const ::uint32_t
         22,
         6,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_.slot_id_),
+        PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_.tag_),
+        PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_.pet_ids_),
+        1,
+        2,
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_._has_bits_),
-        7, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.pets_),
         PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.active_pet_id_),
         PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.max_pets_),
         PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.rename_cost_gold_),
+        PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.squad_presets_),
+        PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.unlocked_squad_preset_slots_),
+        PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.effective_squad_preset_slots_),
+        PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.max_squad_preset_slots_),
+        PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.next_squad_slot_price_diamond_),
         0,
-        1,
-        3,
         2,
+        4,
+        3,
+        1,
+        5,
+        6,
+        7,
+        8,
         0x000, // bitmap
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetPetListResponse, _impl_._has_bits_),
@@ -8143,6 +9055,48 @@ const ::uint32_t
         3,
         4,
         5,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.slot_id_),
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.tag_),
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.pet_ids_),
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.summon_first_),
+        1,
+        2,
+        0,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetResponse, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetResponse, _impl_.pets_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotRequest, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotRequest, _impl_.client_request_id_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotRequest, _impl_.expected_unlocked_slots_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotRequest, _impl_.expected_price_diamond_),
+        0,
+        2,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_._has_bits_),
+        9, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_.error_message_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_.replayed_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_.unlocked_slots_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_.spent_diamond_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_.diamond_balance_),
+        PROTOBUF_FIELD_OFFSET(::UnlockPetSquadPresetSlotResponse, _impl_.pets_),
+        0,
+        2,
+        3,
+        4,
+        5,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -8151,47 +9105,52 @@ static const ::_pbi::MigrationSchema
         {21, sizeof(::PetDerivedInfo)},
         {40, sizeof(::PetTierAscensionInfo)},
         {65, sizeof(::PetInfo)},
-        {114, sizeof(::PetListInfo)},
-        {125, sizeof(::GetPetListRequest)},
-        {126, sizeof(::GetPetListResponse)},
-        {133, sizeof(::SummonPetRequest)},
-        {138, sizeof(::SummonPetResponse)},
-        {145, sizeof(::RecallPetRequest)},
-        {146, sizeof(::RecallPetResponse)},
-        {153, sizeof(::AllocatePetPointsRequest_AllocatedEntry_DoNotUse)},
-        {160, sizeof(::AllocatePetPointsRequest)},
-        {167, sizeof(::AllocatePetPointsResponse)},
-        {174, sizeof(::ResetPetPointsRequest)},
-        {179, sizeof(::ResetPetPointsResponse)},
-        {186, sizeof(::AutoAllocatePetPointsRequest)},
-        {191, sizeof(::AutoAllocatePetPointsResponse_SuggestedEntry_DoNotUse)},
-        {198, sizeof(::AutoAllocatePetPointsResponse)},
-        {207, sizeof(::RenamePetRequest)},
-        {214, sizeof(::RenamePetResponse)},
-        {221, sizeof(::PetListChangedS2C)},
-        {226, sizeof(::GmGrantPetRequest)},
-        {231, sizeof(::GmGrantPetResponse)},
-        {240, sizeof(::PetShopOffer)},
-        {255, sizeof(::GetPetShopRequest)},
-        {256, sizeof(::GetPetShopResponse)},
-        {267, sizeof(::BuyPetRequest)},
-        {276, sizeof(::BuyPetResponse)},
-        {289, sizeof(::PetEntryInfo)},
-        {316, sizeof(::PetEntryPresetSummary_AllocatedEntry_DoNotUse)},
-        {323, sizeof(::PetEntryPresetSummary)},
-        {334, sizeof(::PetEntriesInfo)},
-        {363, sizeof(::GetPetEntriesRequest)},
-        {368, sizeof(::GetPetEntriesResponse)},
-        {375, sizeof(::PreviewPetEntriesRequest_TargetEntry_DoNotUse)},
-        {382, sizeof(::PreviewPetEntriesRequest)},
-        {393, sizeof(::PreviewPetEntriesResponse)},
-        {400, sizeof(::SavePetEntriesRequest_TargetEntry_DoNotUse)},
-        {407, sizeof(::SavePetEntriesRequest)},
-        {420, sizeof(::SavePetEntriesResponse)},
-        {431, sizeof(::SwitchPetEntryPresetRequest)},
-        {446, sizeof(::SwitchPetEntryPresetResponse)},
-        {457, sizeof(::AscendPetTierRequest)},
-        {466, sizeof(::AscendPetTierResponse)},
+        {114, sizeof(::PetSquadPresetInfo)},
+        {123, sizeof(::PetListInfo)},
+        {144, sizeof(::GetPetListRequest)},
+        {145, sizeof(::GetPetListResponse)},
+        {152, sizeof(::SummonPetRequest)},
+        {157, sizeof(::SummonPetResponse)},
+        {164, sizeof(::RecallPetRequest)},
+        {165, sizeof(::RecallPetResponse)},
+        {172, sizeof(::AllocatePetPointsRequest_AllocatedEntry_DoNotUse)},
+        {179, sizeof(::AllocatePetPointsRequest)},
+        {186, sizeof(::AllocatePetPointsResponse)},
+        {193, sizeof(::ResetPetPointsRequest)},
+        {198, sizeof(::ResetPetPointsResponse)},
+        {205, sizeof(::AutoAllocatePetPointsRequest)},
+        {210, sizeof(::AutoAllocatePetPointsResponse_SuggestedEntry_DoNotUse)},
+        {217, sizeof(::AutoAllocatePetPointsResponse)},
+        {226, sizeof(::RenamePetRequest)},
+        {233, sizeof(::RenamePetResponse)},
+        {240, sizeof(::PetListChangedS2C)},
+        {245, sizeof(::GmGrantPetRequest)},
+        {250, sizeof(::GmGrantPetResponse)},
+        {259, sizeof(::PetShopOffer)},
+        {274, sizeof(::GetPetShopRequest)},
+        {275, sizeof(::GetPetShopResponse)},
+        {286, sizeof(::BuyPetRequest)},
+        {295, sizeof(::BuyPetResponse)},
+        {308, sizeof(::PetEntryInfo)},
+        {335, sizeof(::PetEntryPresetSummary_AllocatedEntry_DoNotUse)},
+        {342, sizeof(::PetEntryPresetSummary)},
+        {353, sizeof(::PetEntriesInfo)},
+        {382, sizeof(::GetPetEntriesRequest)},
+        {387, sizeof(::GetPetEntriesResponse)},
+        {394, sizeof(::PreviewPetEntriesRequest_TargetEntry_DoNotUse)},
+        {401, sizeof(::PreviewPetEntriesRequest)},
+        {412, sizeof(::PreviewPetEntriesResponse)},
+        {419, sizeof(::SavePetEntriesRequest_TargetEntry_DoNotUse)},
+        {426, sizeof(::SavePetEntriesRequest)},
+        {439, sizeof(::SavePetEntriesResponse)},
+        {450, sizeof(::SwitchPetEntryPresetRequest)},
+        {465, sizeof(::SwitchPetEntryPresetResponse)},
+        {476, sizeof(::AscendPetTierRequest)},
+        {485, sizeof(::AscendPetTierResponse)},
+        {500, sizeof(::SavePetSquadPresetRequest)},
+        {511, sizeof(::SavePetSquadPresetResponse)},
+        {518, sizeof(::UnlockPetSquadPresetSlotRequest)},
+        {527, sizeof(::UnlockPetSquadPresetSlotResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -8199,6 +9158,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::PetDerivedInfo_globals_,
         &::PetTierAscensionInfo_globals_,
         &::PetInfo_globals_,
+        &::PetSquadPresetInfo_globals_,
         &::PetListInfo_globals_,
         &::GetPetListRequest_globals_,
         &::GetPetListResponse_globals_,
@@ -8240,6 +9200,10 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::SwitchPetEntryPresetResponse_globals_,
         &::AscendPetTierRequest_globals_,
         &::AscendPetTierResponse_globals_,
+        &::SavePetSquadPresetRequest_globals_,
+        &::SavePetSquadPresetResponse_globals_,
+        &::UnlockPetSquadPresetSlotRequest_globals_,
+        &::UnlockPetSquadPresetSlotResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -8276,135 +9240,159 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto[] ABSL
     " \001(\t\022 \n\007entries\030\024 \001(\0132\017.PetEntriesInfo\022("
     "\n\tnext_tier\030\025 \001(\0132\025.PetTierAscensionInfo"
     "\022\014\n\004desc\030\020 \001(\t\022\023\n\013cosmetic_id\030\026 \001(\r\022\030\n\020c"
-    "osmetic_art_key\030\027 \001(\t\"h\n\013PetListInfo\022\026\n\004"
-    "pets\030\001 \003(\0132\010.PetInfo\022\025\n\ractive_pet_id\030\002 "
-    "\001(\004\022\020\n\010max_pets\030\003 \001(\r\022\030\n\020rename_cost_gol"
-    "d\030\004 \001(\004\"\023\n\021GetPetListRequest\"X\n\022GetPetLi"
-    "stResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\""
-    "\n\020SummonPetRequest\022\016\n\006pet_id\030\001 \001(\004\"W\n\021Su"
-    "mmonPetResponse\022&\n\rerror_message\030\001 \001(\0132\017"
-    ".TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListI"
-    "nfo\"\022\n\020RecallPetRequest\"W\n\021RecallPetResp"
-    "onse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMes"
-    "sage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"\231\001\n\030All"
-    "ocatePetPointsRequest\022\016\n\006pet_id\030\001 \001(\004\022;\n"
-    "\tallocated\030\002 \003(\0132(.AllocatePetPointsRequ"
-    "est.AllocatedEntry\0320\n\016AllocatedEntry\022\013\n\003"
-    "key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"_\n\031Allocate"
-    "PetPointsResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetLis"
-    "tInfo\"\'\n\025ResetPetPointsRequest\022\016\n\006pet_id"
-    "\030\001 \001(\004\"\\\n\026ResetPetPointsResponse\022&\n\rerro"
-    "r_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets"
-    "\030\002 \001(\0132\014.PetListInfo\".\n\034AutoAllocatePetP"
-    "ointsRequest\022\016\n\006pet_id\030\001 \001(\004\"\313\001\n\035AutoAll"
-    "ocatePetPointsResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\022\016\n\006pet_id\030\002 \001(\004\022@"
-    "\n\tsuggested\030\003 \003(\0132-.AutoAllocatePetPoint"
-    "sResponse.SuggestedEntry\0320\n\016SuggestedEnt"
-    "ry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"0\n\020Re"
-    "namePetRequest\022\016\n\006pet_id\030\001 \001(\004\022\014\n\004name\030\002"
-    " \001(\t\"W\n\021RenamePetResponse\022&\n\rerror_messa"
-    "ge\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132"
-    "\014.PetListInfo\"/\n\021PetListChangedS2C\022\032\n\004pe"
-    "ts\030\001 \001(\0132\014.PetListInfo\")\n\021GmGrantPetRequ"
-    "est\022\024\n\014pet_table_id\030\001 \001(\r\"h\n\022GmGrantPetR"
+    "osmetic_art_key\030\027 \001(\t\"C\n\022PetSquadPresetI"
+    "nfo\022\017\n\007slot_id\030\001 \001(\r\022\013\n\003tag\030\002 \001(\r\022\017\n\007pet"
+    "_ids\030\003 \003(\004\"\246\002\n\013PetListInfo\022\026\n\004pets\030\001 \003(\013"
+    "2\010.PetInfo\022\025\n\ractive_pet_id\030\002 \001(\004\022\020\n\010max"
+    "_pets\030\003 \001(\r\022\030\n\020rename_cost_gold\030\004 \001(\004\022*\n"
+    "\rsquad_presets\030\005 \003(\0132\023.PetSquadPresetInf"
+    "o\022#\n\033unlocked_squad_preset_slots\030\006 \001(\r\022$"
+    "\n\034effective_squad_preset_slots\030\007 \001(\r\022\036\n\026"
+    "max_squad_preset_slots\030\010 \001(\r\022%\n\035next_squ"
+    "ad_slot_price_diamond\030\t \001(\004\"\023\n\021GetPetLis"
+    "tRequest\"X\n\022GetPetListResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002"
+    " \001(\0132\014.PetListInfo\"\"\n\020SummonPetRequest\022\016"
+    "\n\006pet_id\030\001 \001(\004\"W\n\021SummonPetResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004p"
+    "ets\030\002 \001(\0132\014.PetListInfo\"\022\n\020RecallPetRequ"
+    "est\"W\n\021RecallPetResponse\022&\n\rerror_messag"
+    "e\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014"
+    ".PetListInfo\"\231\001\n\030AllocatePetPointsReques"
+    "t\022\016\n\006pet_id\030\001 \001(\004\022;\n\tallocated\030\002 \003(\0132(.A"
+    "llocatePetPointsRequest.AllocatedEntry\0320"
+    "\n\016AllocatedEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002"
+    " \001(\r:\0028\001\"_\n\031AllocatePetPointsResponse\022&\n"
+    "\rerror_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n"
+    "\004pets\030\002 \001(\0132\014.PetListInfo\"\'\n\025ResetPetPoi"
+    "ntsRequest\022\016\n\006pet_id\030\001 \001(\004\"\\\n\026ResetPetPo"
+    "intsResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
+    "pInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo"
+    "\".\n\034AutoAllocatePetPointsRequest\022\016\n\006pet_"
+    "id\030\001 \001(\004\"\313\001\n\035AutoAllocatePetPointsRespon"
+    "se\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessa"
+    "ge\022\016\n\006pet_id\030\002 \001(\004\022@\n\tsuggested\030\003 \003(\0132-."
+    "AutoAllocatePetPointsResponse.SuggestedE"
+    "ntry\0320\n\016SuggestedEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005v"
+    "alue\030\002 \001(\r:\0028\001\"0\n\020RenamePetRequest\022\016\n\006pe"
+    "t_id\030\001 \001(\004\022\014\n\004name\030\002 \001(\t\"W\n\021RenamePetRes"
+    "ponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMe"
+    "ssage\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\"/\n\021Pet"
+    "ListChangedS2C\022\032\n\004pets\030\001 \001(\0132\014.PetListIn"
+    "fo\")\n\021GmGrantPetRequest\022\024\n\014pet_table_id\030"
+    "\001 \001(\r\"h\n\022GmGrantPetResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001("
+    "\0132\014.PetListInfo\022\016\n\006pet_id\030\003 \001(\004\"|\n\014PetSh"
+    "opOffer\022\024\n\014pet_table_id\030\001 \001(\r\022\014\n\004name\030\002 "
+    "\001(\t\022\020\n\010model_id\030\003 \001(\r\022\024\n\014unlock_level\030\004 "
+    "\001(\r\022\022\n\nprice_gold\030\005 \001(\004\022\014\n\004desc\030\006 \001(\t\"\023\n"
+    "\021GetPetShopRequest\"\211\001\n\022GetPetShopRespons"
+    "e\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessag"
+    "e\022\035\n\006offers\030\002 \003(\0132\r.PetShopOffer\022\014\n\004gold"
+    "\030\003 \001(\004\022\036\n\026next_purchase_sequence\030\004 \001(\004\"T"
+    "\n\rBuyPetRequest\022\024\n\014pet_table_id\030\001 \001(\r\022\031\n"
+    "\021purchase_sequence\030\002 \001(\004\022\022\n\nprice_gold\030\003"
+    " \001(\004\"\222\001\n\016BuyPetResponse\022&\n\rerror_message"
+    "\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014."
+    "PetListInfo\022\016\n\006pet_id\030\003 \001(\004\022\014\n\004gold\030\004 \001("
+    "\004\022\036\n\026next_purchase_sequence\030\005 \001(\004\"\327\001\n\014Pe"
+    "tEntryInfo\022\n\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\014\n\004"
+    "desc\030\003 \001(\t\022\020\n\010category\030\004 \001(\r\022\017\n\007channel\030"
+    "\005 \001(\r\022\022\n\nstate_kind\030\006 \001(\r\022\013\n\003cap\030\007 \001(\r\022\025"
+    "\n\rper_point_bps\030\010 \001(\r\022\021\n\tallocated\030\t \001(\r"
+    "\022\025\n\reffective_bps\030\n \001(\r\022\014\n\004sort\030\013 \001(\r\022\014\n"
+    "\004icon\030\014 \001(\t\"\266\001\n\025PetEntryPresetSummary\022\017\n"
+    "\007slot_id\030\001 \001(\r\022\013\n\003tag\030\002 \001(\r\022\023\n\013used_poin"
+    "ts\030\003 \001(\r\0228\n\tallocated\030\004 \003(\0132%.PetEntryPr"
+    "esetSummary.AllocatedEntry\0320\n\016AllocatedE"
+    "ntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\356\002\n"
+    "\016PetEntriesInfo\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rstate"
+    "_version\030\002 \001(\004\022\026\n\016config_version\030\003 \001(\r\022\024"
+    "\n\014total_points\030\004 \001(\r\022\030\n\020remaining_points"
+    "\030\005 \001(\r\022\026\n\016max_directions\030\006 \001(\r\022\036\n\007entrie"
+    "s\030\007 \003(\0132\r.PetEntryInfo\022\'\n\007effects\030\010 \001(\0132"
+    "\026.PetCultivationEffects\022\021\n\teffective\030\t \001"
+    "(\010\022\033\n\023unknown_used_points\030\n \001(\004\022\027\n\017last_"
+    "request_id\030\013 \001(\t\022\032\n\022active_preset_slot\030\014"
+    " \001(\r\022\'\n\007presets\030\r \003(\0132\026.PetEntryPresetSu"
+    "mmary\"&\n\024GetPetEntriesRequest\022\016\n\006pet_id\030"
+    "\001 \001(\004\"a\n\025GetPetEntriesResponse\022&\n\rerror_"
+    "message\030\001 \001(\0132\017.TipInfoMessage\022 \n\007entrie"
+    "s\030\002 \001(\0132\017.PetEntriesInfo\"\277\001\n\030PreviewPetE"
+    "ntriesRequest\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rstate_v"
+    "ersion\030\002 \001(\004\022\026\n\016config_version\030\003 \001(\r\0225\n\006"
+    "target\030\004 \003(\0132%.PreviewPetEntriesRequest."
+    "TargetEntry\032-\n\013TargetEntry\022\013\n\003key\030\001 \001(\r\022"
+    "\r\n\005value\030\002 \001(\r:\0028\001\"e\n\031PreviewPetEntriesR"
     "esponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfo"
-    "Message\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\022\016\n\006p"
-    "et_id\030\003 \001(\004\"|\n\014PetShopOffer\022\024\n\014pet_table"
-    "_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\020\n\010model_id\030\003 \001("
-    "\r\022\024\n\014unlock_level\030\004 \001(\r\022\022\n\nprice_gold\030\005 "
-    "\001(\004\022\014\n\004desc\030\006 \001(\t\"\023\n\021GetPetShopRequest\"\211"
-    "\001\n\022GetPetShopResponse\022&\n\rerror_message\030\001"
-    " \001(\0132\017.TipInfoMessage\022\035\n\006offers\030\002 \003(\0132\r."
-    "PetShopOffer\022\014\n\004gold\030\003 \001(\004\022\036\n\026next_purch"
-    "ase_sequence\030\004 \001(\004\"T\n\rBuyPetRequest\022\024\n\014p"
-    "et_table_id\030\001 \001(\r\022\031\n\021purchase_sequence\030\002"
-    " \001(\004\022\022\n\nprice_gold\030\003 \001(\004\"\222\001\n\016BuyPetRespo"
-    "nse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMess"
-    "age\022\032\n\004pets\030\002 \001(\0132\014.PetListInfo\022\016\n\006pet_i"
-    "d\030\003 \001(\004\022\014\n\004gold\030\004 \001(\004\022\036\n\026next_purchase_s"
-    "equence\030\005 \001(\004\"\327\001\n\014PetEntryInfo\022\n\n\002id\030\001 \001"
-    "(\r\022\014\n\004name\030\002 \001(\t\022\014\n\004desc\030\003 \001(\t\022\020\n\010catego"
-    "ry\030\004 \001(\r\022\017\n\007channel\030\005 \001(\r\022\022\n\nstate_kind\030"
-    "\006 \001(\r\022\013\n\003cap\030\007 \001(\r\022\025\n\rper_point_bps\030\010 \001("
-    "\r\022\021\n\tallocated\030\t \001(\r\022\025\n\reffective_bps\030\n "
-    "\001(\r\022\014\n\004sort\030\013 \001(\r\022\014\n\004icon\030\014 \001(\t\"\266\001\n\025PetE"
-    "ntryPresetSummary\022\017\n\007slot_id\030\001 \001(\r\022\013\n\003ta"
-    "g\030\002 \001(\r\022\023\n\013used_points\030\003 \001(\r\0228\n\tallocate"
-    "d\030\004 \003(\0132%.PetEntryPresetSummary.Allocate"
-    "dEntry\0320\n\016AllocatedEntry\022\013\n\003key\030\001 \001(\r\022\r\n"
-    "\005value\030\002 \001(\r:\0028\001\"\356\002\n\016PetEntriesInfo\022\016\n\006p"
-    "et_id\030\001 \001(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016co"
-    "nfig_version\030\003 \001(\r\022\024\n\014total_points\030\004 \001(\r"
-    "\022\030\n\020remaining_points\030\005 \001(\r\022\026\n\016max_direct"
-    "ions\030\006 \001(\r\022\036\n\007entries\030\007 \003(\0132\r.PetEntryIn"
-    "fo\022\'\n\007effects\030\010 \001(\0132\026.PetCultivationEffe"
-    "cts\022\021\n\teffective\030\t \001(\010\022\033\n\023unknown_used_p"
-    "oints\030\n \001(\004\022\027\n\017last_request_id\030\013 \001(\t\022\032\n\022"
-    "active_preset_slot\030\014 \001(\r\022\'\n\007presets\030\r \003("
-    "\0132\026.PetEntryPresetSummary\"&\n\024GetPetEntri"
-    "esRequest\022\016\n\006pet_id\030\001 \001(\004\"a\n\025GetPetEntri"
-    "esResponse\022&\n\rerror_message\030\001 \001(\0132\017.TipI"
-    "nfoMessage\022 \n\007entries\030\002 \001(\0132\017.PetEntries"
-    "Info\"\277\001\n\030PreviewPetEntriesRequest\022\016\n\006pet"
-    "_id\030\001 \001(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016conf"
-    "ig_version\030\003 \001(\r\0225\n\006target\030\004 \003(\0132%.Previ"
-    "ewPetEntriesRequest.TargetEntry\032-\n\013Targe"
-    "tEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"e"
-    "\n\031PreviewPetEntriesResponse\022&\n\rerror_mes"
-    "sage\030\001 \001(\0132\017.TipInfoMessage\022 \n\007entries\030\002"
-    " \001(\0132\017.PetEntriesInfo\"\315\001\n\025SavePetEntries"
-    "Request\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rstate_version"
-    "\030\002 \001(\004\022\026\n\016config_version\030\003 \001(\r\0222\n\006target"
-    "\030\004 \003(\0132\".SavePetEntriesRequest.TargetEnt"
-    "ry\022\022\n\nrequest_id\030\005 \001(\t\032-\n\013TargetEntry\022\013\n"
-    "\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"\210\001\n\026SavePe"
-    "tEntriesResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022 \n\007entries\030\002 \001(\0132\017.PetE"
-    "ntriesInfo\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replay"
-    "ed\030\004 \001(\010\"\216\001\n\033SwitchPetEntryPresetRequest"
-    "\022\016\n\006pet_id\030\001 \001(\004\022\017\n\007slot_id\030\002 \001(\r\022\013\n\003tag"
-    "\030\003 \001(\r\022\025\n\rstate_version\030\004 \001(\004\022\026\n\016config_"
-    "version\030\005 \001(\r\022\022\n\nrequest_id\030\006 \001(\t\"\216\001\n\034Sw"
-    "itchPetEntryPresetResponse\022&\n\rerror_mess"
-    "age\030\001 \001(\0132\017.TipInfoMessage\022 \n\007entries\030\002 "
-    "\001(\0132\017.PetEntriesInfo\022\022\n\nrequest_id\030\003 \001(\t"
-    "\022\020\n\010replayed\030\004 \001(\010\"X\n\024AscendPetTierReque"
-    "st\022\016\n\006pet_id\030\001 \001(\004\022\025\n\rexpected_tier\030\002 \001("
-    "\r\022\031\n\021client_request_id\030\003 \001(\004\"\250\001\n\025AscendP"
-    "etTierResponse\022&\n\rerror_message\030\001 \001(\0132\017."
-    "TipInfoMessage\022\032\n\004pets\030\002 \001(\0132\014.PetListIn"
-    "fo\022\014\n\004gold\030\003 \001(\004\022\031\n\021client_request_id\030\004 "
-    "\001(\004\022\020\n\010replayed\030\005 \001(\010\022\020\n\010new_tier\030\006 \001(\r2"
-    "\224\010\n\024ScenePetClientPlayer\0225\n\nGetPetList\022\022"
-    ".GetPetListRequest\032\023.GetPetListResponse\022"
-    "2\n\tSummonPet\022\021.SummonPetRequest\032\022.Summon"
-    "PetResponse\0222\n\tRecallPet\022\021.RecallPetRequ"
-    "est\032\022.RecallPetResponse\022J\n\021AllocatePetPo"
-    "ints\022\031.AllocatePetPointsRequest\032\032.Alloca"
-    "tePetPointsResponse\022A\n\016ResetPetPoints\022\026."
-    "ResetPetPointsRequest\032\027.ResetPetPointsRe"
-    "sponse\022V\n\025AutoAllocatePetPoints\022\035.AutoAl"
-    "locatePetPointsRequest\032\036.AutoAllocatePet"
-    "PointsResponse\0222\n\tRenamePet\022\021.RenamePetR"
-    "equest\032\022.RenamePetResponse\0229\n\024NotifyPetL"
-    "istChanged\022\022.PetListChangedS2C\032\006.Empty\"\005"
-    "\210\231\310\001\002\0225\n\nGmGrantPet\022\022.GmGrantPetRequest\032"
-    "\023.GmGrantPetResponse\0225\n\nGetPetShop\022\022.Get"
-    "PetShopRequest\032\023.GetPetShopResponse\022)\n\006B"
-    "uyPet\022\016.BuyPetRequest\032\017.BuyPetResponse\022>"
-    "\n\rGetPetEntries\022\025.GetPetEntriesRequest\032\026"
-    ".GetPetEntriesResponse\022J\n\021PreviewPetEntr"
-    "ies\022\031.PreviewPetEntriesRequest\032\032.Preview"
-    "PetEntriesResponse\022A\n\016SavePetEntries\022\026.S"
-    "avePetEntriesRequest\032\027.SavePetEntriesRes"
-    "ponse\022S\n\024SwitchPetEntryPreset\022\034.SwitchPe"
-    "tEntryPresetRequest\032\035.SwitchPetEntryPres"
-    "etResponse\022>\n\rAscendPetTier\022\025.AscendPetT"
-    "ierRequest\032\026.AscendPetTierResponse\032\n\200\250\303\001"
-    "\001\210\250\303\001\001B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
+    "Message\022 \n\007entries\030\002 \001(\0132\017.PetEntriesInf"
+    "o\"\315\001\n\025SavePetEntriesRequest\022\016\n\006pet_id\030\001 "
+    "\001(\004\022\025\n\rstate_version\030\002 \001(\004\022\026\n\016config_ver"
+    "sion\030\003 \001(\r\0222\n\006target\030\004 \003(\0132\".SavePetEntr"
+    "iesRequest.TargetEntry\022\022\n\nrequest_id\030\005 \001"
+    "(\t\032-\n\013TargetEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030"
+    "\002 \001(\r:\0028\001\"\210\001\n\026SavePetEntriesResponse\022&\n\r"
+    "error_message\030\001 \001(\0132\017.TipInfoMessage\022 \n\007"
+    "entries\030\002 \001(\0132\017.PetEntriesInfo\022\022\n\nreques"
+    "t_id\030\003 \001(\t\022\020\n\010replayed\030\004 \001(\010\"\216\001\n\033SwitchP"
+    "etEntryPresetRequest\022\016\n\006pet_id\030\001 \001(\004\022\017\n\007"
+    "slot_id\030\002 \001(\r\022\013\n\003tag\030\003 \001(\r\022\025\n\rstate_vers"
+    "ion\030\004 \001(\004\022\026\n\016config_version\030\005 \001(\r\022\022\n\nreq"
+    "uest_id\030\006 \001(\t\"\216\001\n\034SwitchPetEntryPresetRe"
+    "sponse\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoM"
+    "essage\022 \n\007entries\030\002 \001(\0132\017.PetEntriesInfo"
+    "\022\022\n\nrequest_id\030\003 \001(\t\022\020\n\010replayed\030\004 \001(\010\"X"
+    "\n\024AscendPetTierRequest\022\016\n\006pet_id\030\001 \001(\004\022\025"
+    "\n\rexpected_tier\030\002 \001(\r\022\031\n\021client_request_"
+    "id\030\003 \001(\004\"\250\001\n\025AscendPetTierResponse\022&\n\rer"
+    "ror_message\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pe"
+    "ts\030\002 \001(\0132\014.PetListInfo\022\014\n\004gold\030\003 \001(\004\022\031\n\021"
+    "client_request_id\030\004 \001(\004\022\020\n\010replayed\030\005 \001("
+    "\010\022\020\n\010new_tier\030\006 \001(\r\"`\n\031SavePetSquadPrese"
+    "tRequest\022\017\n\007slot_id\030\001 \001(\r\022\013\n\003tag\030\002 \001(\r\022\017"
+    "\n\007pet_ids\030\003 \003(\004\022\024\n\014summon_first\030\004 \001(\010\"`\n"
+    "\032SavePetSquadPresetResponse\022&\n\rerror_mes"
+    "sage\030\001 \001(\0132\017.TipInfoMessage\022\032\n\004pets\030\002 \001("
+    "\0132\014.PetListInfo\"}\n\037UnlockPetSquadPresetS"
+    "lotRequest\022\031\n\021client_request_id\030\001 \001(\004\022\037\n"
+    "\027expected_unlocked_slots\030\002 \001(\r\022\036\n\026expect"
+    "ed_price_diamond\030\003 \001(\004\"\300\001\n UnlockPetSqua"
+    "dPresetSlotResponse\022&\n\rerror_message\030\001 \001"
+    "(\0132\017.TipInfoMessage\022\020\n\010replayed\030\002 \001(\010\022\026\n"
+    "\016unlocked_slots\030\003 \001(\r\022\025\n\rspent_diamond\030\004"
+    " \001(\004\022\027\n\017diamond_balance\030\005 \001(\004\022\032\n\004pets\030\006 "
+    "\001(\0132\014.PetListInfo2\304\t\n\024ScenePetClientPlay"
+    "er\0225\n\nGetPetList\022\022.GetPetListRequest\032\023.G"
+    "etPetListResponse\0222\n\tSummonPet\022\021.SummonP"
+    "etRequest\032\022.SummonPetResponse\0222\n\tRecallP"
+    "et\022\021.RecallPetRequest\032\022.RecallPetRespons"
+    "e\022J\n\021AllocatePetPoints\022\031.AllocatePetPoin"
+    "tsRequest\032\032.AllocatePetPointsResponse\022A\n"
+    "\016ResetPetPoints\022\026.ResetPetPointsRequest\032"
+    "\027.ResetPetPointsResponse\022V\n\025AutoAllocate"
+    "PetPoints\022\035.AutoAllocatePetPointsRequest"
+    "\032\036.AutoAllocatePetPointsResponse\0222\n\tRena"
+    "mePet\022\021.RenamePetRequest\032\022.RenamePetResp"
+    "onse\0229\n\024NotifyPetListChanged\022\022.PetListCh"
+    "angedS2C\032\006.Empty\"\005\210\231\310\001\002\0225\n\nGmGrantPet\022\022."
+    "GmGrantPetRequest\032\023.GmGrantPetResponse\0225"
+    "\n\nGetPetShop\022\022.GetPetShopRequest\032\023.GetPe"
+    "tShopResponse\022)\n\006BuyPet\022\016.BuyPetRequest\032"
+    "\017.BuyPetResponse\022>\n\rGetPetEntries\022\025.GetP"
+    "etEntriesRequest\032\026.GetPetEntriesResponse"
+    "\022J\n\021PreviewPetEntries\022\031.PreviewPetEntrie"
+    "sRequest\032\032.PreviewPetEntriesResponse\022A\n\016"
+    "SavePetEntries\022\026.SavePetEntriesRequest\032\027"
+    ".SavePetEntriesResponse\022S\n\024SwitchPetEntr"
+    "yPreset\022\034.SwitchPetEntryPresetRequest\032\035."
+    "SwitchPetEntryPresetResponse\022>\n\rAscendPe"
+    "tTier\022\025.AscendPetTierRequest\032\026.AscendPet"
+    "TierResponse\022M\n\022SavePetSquadPreset\022\032.Sav"
+    "ePetSquadPresetRequest\032\033.SavePetSquadPre"
+    "setResponse\022_\n\030UnlockPetSquadPresetSlot\022"
+    " .UnlockPetSquadPresetSlotRequest\032!.Unlo"
+    "ckPetSquadPresetSlotResponse\032\n\200\250\303\001\001\210\250\303\001\001"
+    "B\016Z\005scene\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_deps[4] = {
@@ -8417,13 +9405,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_o
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto = {
     false,
     false,
-    6470,
+    7424,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fpet_2eproto,
     "proto/scene/player_pet.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto_deps,
     4,
-    45,
+    50,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fpet_2eproto::offsets,
@@ -10513,6 +11501,293 @@ void PetInfo::InternalSwap(PetInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
 }
 // ===================================================================
 
+PetSquadPresetInfo::PetSquadPresetInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PetSquadPresetInfo_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PetSquadPresetInfo)
+}
+PROTOBUF_NDEBUG_INLINE PetSquadPresetInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PetSquadPresetInfo& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        pet_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PetSquadPresetInfo,
+              PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_.pet_ids_)>()
+          , from.pet_ids_
+        }
+        ,
+        _pet_ids_cached_byte_size_{0} {}
+
+PetSquadPresetInfo::PetSquadPresetInfo(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PetSquadPresetInfo& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PetSquadPresetInfo_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PetSquadPresetInfo* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, slot_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, slot_id_),
+           offsetof(Impl_, tag_) -
+               offsetof(Impl_, slot_id_) +
+               sizeof(Impl_::tag_));
+
+  // @@protoc_insertion_point(copy_constructor:PetSquadPresetInfo)
+}
+PROTOBUF_NDEBUG_INLINE PetSquadPresetInfo::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        pet_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PetSquadPresetInfo,
+            PROTOBUF_FIELD_OFFSET(::PetSquadPresetInfo, _impl_.pet_ids_)>()
+         }
+        ,
+        _pet_ids_cached_byte_size_{0} {}
+
+inline void PetSquadPresetInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, slot_id_),
+           0,
+           offsetof(Impl_, tag_) -
+               offsetof(Impl_, slot_id_) +
+               sizeof(Impl_::tag_));
+}
+PetSquadPresetInfo::~PetSquadPresetInfo() {
+  // @@protoc_insertion_point(destructor:PetSquadPresetInfo)
+  SharedDtor(*this);
+}
+inline void PetSquadPresetInfo::SharedDtor(MessageLite& self) {
+  PetSquadPresetInfo& this_ = static_cast<PetSquadPresetInfo&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PetSquadPresetInfo_class_data_ =
+        PetSquadPresetInfo::InternalGenerateClassData_(PetSquadPresetInfo_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PetSquadPresetInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PetSquadPresetInfo_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PetSquadPresetInfo_class_data_.tc_table);
+  return PetSquadPresetInfo_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PetSquadPresetInfo::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PetSquadPresetInfo_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PetSquadPresetInfo_globals_));
+  return PetSquadPresetInfo_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PetSquadPresetInfo::ParseTableT_
+    PetSquadPresetInfo::_table_ =
+        PetSquadPresetInfo::InternalGenerateParseTable_(PetSquadPresetInfo_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PetSquadPresetInfo::Clear() {
+// @@protoc_insertion_point(message_clear_start:PetSquadPresetInfo)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.pet_ids_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+    ::memset(&_impl_.slot_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.tag_) -
+        reinterpret_cast<char*>(&_impl_.slot_id_)) + sizeof(_impl_.tag_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PetSquadPresetInfo::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PetSquadPresetInfo& this_ = static_cast<const PetSquadPresetInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PetSquadPresetInfo::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PetSquadPresetInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PetSquadPresetInfo)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 slot_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_slot_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_slot_id(), target);
+    }
+  }
+
+  // uint32 tag = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_tag(), target);
+    }
+  }
+
+  // repeated uint64 pet_ids = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._pet_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            3, this_._internal_pet_ids(), byte_size, target);
+      }
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PetSquadPresetInfo)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PetSquadPresetInfo::ByteSizeLong(const MessageLite& base) {
+  const PetSquadPresetInfo& this_ = static_cast<const PetSquadPresetInfo&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PetSquadPresetInfo::ByteSizeLong() const {
+  const PetSquadPresetInfo& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PetSquadPresetInfo)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // repeated uint64 pet_ids = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_pet_ids(), 1,
+              this_._impl_._pet_ids_cached_byte_size_);
+    }
+    // uint32 slot_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_slot_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_slot_id());
+      }
+    }
+    // uint32 tag = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_tag() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tag());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PetSquadPresetInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PetSquadPresetInfo*>(&to_msg);
+  auto& from = static_cast<const PetSquadPresetInfo&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:PetSquadPresetInfo)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_pet_ids()->MergeFrom(from._internal_pet_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_slot_id() != 0) {
+        _this->_impl_.slot_id_ = from._impl_.slot_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_tag() != 0) {
+        _this->_impl_.tag_ = from._impl_.tag_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PetSquadPresetInfo::CopyFrom(const PetSquadPresetInfo& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PetSquadPresetInfo)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PetSquadPresetInfo::InternalSwap(PetSquadPresetInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.pet_ids_.InternalSwap(&other->_impl_.pet_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.tag_)
+      + sizeof(PetSquadPresetInfo::_impl_.tag_)
+      - PROTOBUF_FIELD_OFFSET(PetSquadPresetInfo, _impl_.slot_id_)>(
+          reinterpret_cast<char*>(&_impl_.slot_id_),
+          reinterpret_cast<char*>(&other->_impl_.slot_id_));
+}
+
+::google::protobuf::Metadata PetSquadPresetInfo::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 PetListInfo::PetListInfo(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : ::google::protobuf::Message(arena, PetListInfo_get_class_data()) {
@@ -10534,6 +11809,13 @@ PROTOBUF_NDEBUG_INLINE PetListInfo::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.pets_)>()
           , from.pets_
         }
+        ,
+        squad_presets_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PetListInfo,
+              PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.squad_presets_)>()
+          , from.squad_presets_
+        }
      {}
 
 PetListInfo::PetListInfo(
@@ -10554,9 +11836,9 @@ PetListInfo::PetListInfo(
                offsetof(Impl_, active_pet_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, active_pet_id_),
-           offsetof(Impl_, max_pets_) -
+           offsetof(Impl_, next_squad_slot_price_diamond_) -
                offsetof(Impl_, active_pet_id_) +
-               sizeof(Impl_::max_pets_));
+               sizeof(Impl_::next_squad_slot_price_diamond_));
 
   // @@protoc_insertion_point(copy_constructor:PetListInfo)
 }
@@ -10568,6 +11850,11 @@ PROTOBUF_NDEBUG_INLINE PetListInfo::Impl_::Impl_(
             ::PetListInfo,
             PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.pets_)>()
          }
+        ,
+        squad_presets_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PetListInfo,
+            PROTOBUF_FIELD_OFFSET(::PetListInfo, _impl_.squad_presets_)>()
+         }
      {}
 
 inline void PetListInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
@@ -10575,9 +11862,9 @@ inline void PetListInfo::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, active_pet_id_),
            0,
-           offsetof(Impl_, max_pets_) -
+           offsetof(Impl_, next_squad_slot_price_diamond_) -
                offsetof(Impl_, active_pet_id_) +
-               sizeof(Impl_::max_pets_));
+               sizeof(Impl_::next_squad_slot_price_diamond_));
 }
 PetListInfo::~PetListInfo() {
   // @@protoc_insertion_point(destructor:PetListInfo)
@@ -10627,14 +11914,20 @@ PROTOBUF_NOINLINE void PetListInfo::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    _impl_.pets_.Clear();
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _impl_.pets_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.squad_presets_.Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000fcU)) {
     ::memset(&_impl_.active_pet_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.max_pets_) -
-        reinterpret_cast<char*>(&_impl_.active_pet_id_)) + sizeof(_impl_.max_pets_));
+        reinterpret_cast<char*>(&_impl_.max_squad_preset_slots_) -
+        reinterpret_cast<char*>(&_impl_.active_pet_id_)) + sizeof(_impl_.max_squad_preset_slots_));
   }
+  _impl_.next_squad_slot_price_diamond_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -10672,7 +11965,7 @@ PROTOBUF_NOINLINE void PetListInfo::Clear() {
   }
 
   // uint64 active_pet_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_active_pet_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -10681,7 +11974,7 @@ PROTOBUF_NOINLINE void PetListInfo::Clear() {
   }
 
   // uint32 max_pets = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_max_pets() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -10690,11 +11983,60 @@ PROTOBUF_NOINLINE void PetListInfo::Clear() {
   }
 
   // uint64 rename_cost_gold = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_rename_cost_gold() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           4, this_._internal_rename_cost_gold(), target);
+    }
+  }
+
+  // repeated .PetSquadPresetInfo squad_presets = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (unsigned i = 0, n = static_cast<unsigned>(
+                             this_._internal_squad_presets_size());
+         i < n; i++) {
+      const auto& repfield = this_._internal_squad_presets().Get(i);
+      target =
+          ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+              5, repfield, repfield.GetCachedSize(),
+              target, stream);
+    }
+  }
+
+  // uint32 unlocked_squad_preset_slots = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_unlocked_squad_preset_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          6, this_._internal_unlocked_squad_preset_slots(), target);
+    }
+  }
+
+  // uint32 effective_squad_preset_slots = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_effective_squad_preset_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          7, this_._internal_effective_squad_preset_slots(), target);
+    }
+  }
+
+  // uint32 max_squad_preset_slots = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_max_squad_preset_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          8, this_._internal_max_squad_preset_slots(), target);
+    }
+  }
+
+  // uint64 next_squad_slot_price_diamond = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_next_squad_slot_price_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_next_squad_slot_price_diamond(), target);
     }
   }
 
@@ -10723,7 +12065,7 @@ PROTOBUF_NOINLINE void PetListInfo::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated .PetInfo pets = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_pets_size();
@@ -10731,25 +12073,62 @@ PROTOBUF_NOINLINE void PetListInfo::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // uint64 active_pet_id = 2;
+    // repeated .PetSquadPresetInfo squad_presets = 5;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1UL * this_._internal_squad_presets_size();
+      for (const auto& msg : this_._internal_squad_presets()) {
+        total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
+      }
+    }
+    // uint64 active_pet_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_active_pet_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_active_pet_id());
       }
     }
     // uint64 rename_cost_gold = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_rename_cost_gold() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_rename_cost_gold());
       }
     }
     // uint32 max_pets = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_max_pets() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_pets());
+      }
+    }
+    // uint32 unlocked_squad_preset_slots = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_unlocked_squad_preset_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unlocked_squad_preset_slots());
+      }
+    }
+    // uint32 effective_squad_preset_slots = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_effective_squad_preset_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_effective_squad_preset_slots());
+      }
+    }
+    // uint32 max_squad_preset_slots = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_max_squad_preset_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_max_squad_preset_slots());
+      }
+    }
+  }
+   {
+    // uint64 next_squad_slot_price_diamond = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_next_squad_slot_price_diamond() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_squad_slot_price_diamond());
       }
     }
   }
@@ -10771,26 +12150,51 @@ void PetListInfo::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_pets()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_pets());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_squad_presets()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_squad_presets());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_active_pet_id() != 0) {
         _this->_impl_.active_pet_id_ = from._impl_.active_pet_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_rename_cost_gold() != 0) {
         _this->_impl_.rename_cost_gold_ = from._impl_.rename_cost_gold_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_max_pets() != 0) {
         _this->_impl_.max_pets_ = from._impl_.max_pets_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_unlocked_squad_preset_slots() != 0) {
+        _this->_impl_.unlocked_squad_preset_slots_ = from._impl_.unlocked_squad_preset_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_effective_squad_preset_slots() != 0) {
+        _this->_impl_.effective_squad_preset_slots_ = from._impl_.effective_squad_preset_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_max_squad_preset_slots() != 0) {
+        _this->_impl_.max_squad_preset_slots_ = from._impl_.max_squad_preset_slots_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_next_squad_slot_price_diamond() != 0) {
+      _this->_impl_.next_squad_slot_price_diamond_ = from._impl_.next_squad_slot_price_diamond_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -10811,9 +12215,10 @@ void PetListInfo::InternalSwap(PetListInfo* PROTOBUF_RESTRICT PROTOBUF_NONNULL o
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.pets_.InternalSwap(&other->_impl_.pets_);
+  _impl_.squad_presets_.InternalSwap(&other->_impl_.squad_presets_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.max_pets_)
-      + sizeof(PetListInfo::_impl_.max_pets_)
+      PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.next_squad_slot_price_diamond_)
+      + sizeof(PetListInfo::_impl_.next_squad_slot_price_diamond_)
       - PROTOBUF_FIELD_OFFSET(PetListInfo, _impl_.active_pet_id_)>(
           reinterpret_cast<char*>(&_impl_.active_pet_id_),
           reinterpret_cast<char*>(&other->_impl_.active_pet_id_));
@@ -20434,6 +21839,1175 @@ void AscendPetTierResponse::InternalSwap(AscendPetTierResponse* PROTOBUF_RESTRIC
 }
 // ===================================================================
 
+SavePetSquadPresetRequest::SavePetSquadPresetRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavePetSquadPresetRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SavePetSquadPresetRequest)
+}
+PROTOBUF_NDEBUG_INLINE SavePetSquadPresetRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SavePetSquadPresetRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        pet_ids_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::SavePetSquadPresetRequest,
+              PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.pet_ids_)>()
+          , from.pet_ids_
+        }
+        ,
+        _pet_ids_cached_byte_size_{0} {}
+
+SavePetSquadPresetRequest::SavePetSquadPresetRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SavePetSquadPresetRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavePetSquadPresetRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SavePetSquadPresetRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, slot_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, slot_id_),
+           offsetof(Impl_, summon_first_) -
+               offsetof(Impl_, slot_id_) +
+               sizeof(Impl_::summon_first_));
+
+  // @@protoc_insertion_point(copy_constructor:SavePetSquadPresetRequest)
+}
+PROTOBUF_NDEBUG_INLINE SavePetSquadPresetRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        pet_ids_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::SavePetSquadPresetRequest,
+            PROTOBUF_FIELD_OFFSET(::SavePetSquadPresetRequest, _impl_.pet_ids_)>()
+         }
+        ,
+        _pet_ids_cached_byte_size_{0} {}
+
+inline void SavePetSquadPresetRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, slot_id_),
+           0,
+           offsetof(Impl_, summon_first_) -
+               offsetof(Impl_, slot_id_) +
+               sizeof(Impl_::summon_first_));
+}
+SavePetSquadPresetRequest::~SavePetSquadPresetRequest() {
+  // @@protoc_insertion_point(destructor:SavePetSquadPresetRequest)
+  SharedDtor(*this);
+}
+inline void SavePetSquadPresetRequest::SharedDtor(MessageLite& self) {
+  SavePetSquadPresetRequest& this_ = static_cast<SavePetSquadPresetRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SavePetSquadPresetRequest_class_data_ =
+        SavePetSquadPresetRequest::InternalGenerateClassData_(SavePetSquadPresetRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavePetSquadPresetRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavePetSquadPresetRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SavePetSquadPresetRequest_class_data_.tc_table);
+  return SavePetSquadPresetRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavePetSquadPresetRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavePetSquadPresetRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SavePetSquadPresetRequest_globals_));
+  return SavePetSquadPresetRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SavePetSquadPresetRequest::ParseTableT_
+    SavePetSquadPresetRequest::_table_ =
+        SavePetSquadPresetRequest::InternalGenerateParseTable_(SavePetSquadPresetRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SavePetSquadPresetRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:SavePetSquadPresetRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.pet_ids_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
+    ::memset(&_impl_.slot_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.summon_first_) -
+        reinterpret_cast<char*>(&_impl_.slot_id_)) + sizeof(_impl_.summon_first_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SavePetSquadPresetRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SavePetSquadPresetRequest& this_ = static_cast<const SavePetSquadPresetRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SavePetSquadPresetRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SavePetSquadPresetRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SavePetSquadPresetRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 slot_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_slot_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_slot_id(), target);
+    }
+  }
+
+  // uint32 tag = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_tag() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_tag(), target);
+    }
+  }
+
+  // repeated uint64 pet_ids = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._pet_ids_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            3, this_._internal_pet_ids(), byte_size, target);
+      }
+    }
+  }
+
+  // bool summon_first = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_summon_first() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          4, this_._internal_summon_first(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SavePetSquadPresetRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SavePetSquadPresetRequest::ByteSizeLong(const MessageLite& base) {
+  const SavePetSquadPresetRequest& this_ = static_cast<const SavePetSquadPresetRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SavePetSquadPresetRequest::ByteSizeLong() const {
+  const SavePetSquadPresetRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SavePetSquadPresetRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // repeated uint64 pet_ids = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_pet_ids(), 1,
+              this_._impl_._pet_ids_cached_byte_size_);
+    }
+    // uint32 slot_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_slot_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_slot_id());
+      }
+    }
+    // uint32 tag = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_tag() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tag());
+      }
+    }
+    // bool summon_first = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_summon_first() != 0) {
+        total_size += 2;
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SavePetSquadPresetRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SavePetSquadPresetRequest*>(&to_msg);
+  auto& from = static_cast<const SavePetSquadPresetRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:SavePetSquadPresetRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_pet_ids()->MergeFrom(from._internal_pet_ids());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_slot_id() != 0) {
+        _this->_impl_.slot_id_ = from._impl_.slot_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_tag() != 0) {
+        _this->_impl_.tag_ = from._impl_.tag_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_summon_first() != 0) {
+        _this->_impl_.summon_first_ = from._impl_.summon_first_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SavePetSquadPresetRequest::CopyFrom(const SavePetSquadPresetRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SavePetSquadPresetRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SavePetSquadPresetRequest::InternalSwap(SavePetSquadPresetRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.pet_ids_.InternalSwap(&other->_impl_.pet_ids_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.summon_first_)
+      + sizeof(SavePetSquadPresetRequest::_impl_.summon_first_)
+      - PROTOBUF_FIELD_OFFSET(SavePetSquadPresetRequest, _impl_.slot_id_)>(
+          reinterpret_cast<char*>(&_impl_.slot_id_),
+          reinterpret_cast<char*>(&other->_impl_.slot_id_));
+}
+
+::google::protobuf::Metadata SavePetSquadPresetRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void SavePetSquadPresetResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+SavePetSquadPresetResponse::SavePetSquadPresetResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavePetSquadPresetResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:SavePetSquadPresetResponse)
+}
+PROTOBUF_NDEBUG_INLINE SavePetSquadPresetResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::SavePetSquadPresetResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+SavePetSquadPresetResponse::SavePetSquadPresetResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const SavePetSquadPresetResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, SavePetSquadPresetResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SavePetSquadPresetResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.pets_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pets_)
+                : nullptr;
+
+  // @@protoc_insertion_point(copy_constructor:SavePetSquadPresetResponse)
+}
+PROTOBUF_NDEBUG_INLINE SavePetSquadPresetResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void SavePetSquadPresetResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, pets_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::pets_));
+}
+SavePetSquadPresetResponse::~SavePetSquadPresetResponse() {
+  // @@protoc_insertion_point(destructor:SavePetSquadPresetResponse)
+  SharedDtor(*this);
+}
+inline void SavePetSquadPresetResponse::SharedDtor(MessageLite& self) {
+  SavePetSquadPresetResponse& this_ = static_cast<SavePetSquadPresetResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.pets_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull SavePetSquadPresetResponse_class_data_ =
+        SavePetSquadPresetResponse::InternalGenerateClassData_(SavePetSquadPresetResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavePetSquadPresetResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavePetSquadPresetResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(SavePetSquadPresetResponse_class_data_.tc_table);
+  return SavePetSquadPresetResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+SavePetSquadPresetResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&SavePetSquadPresetResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&SavePetSquadPresetResponse_globals_));
+  return SavePetSquadPresetResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const SavePetSquadPresetResponse::ParseTableT_
+    SavePetSquadPresetResponse::_table_ =
+        SavePetSquadPresetResponse::InternalGenerateParseTable_(SavePetSquadPresetResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void SavePetSquadPresetResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:SavePetSquadPresetResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.pets_ != nullptr);
+      _impl_.pets_->Clear();
+    }
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL SavePetSquadPresetResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const SavePetSquadPresetResponse& this_ = static_cast<const SavePetSquadPresetResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL SavePetSquadPresetResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const SavePetSquadPresetResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:SavePetSquadPresetResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .PetListInfo pets = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        2, *this_._impl_.pets_, this_._impl_.pets_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:SavePetSquadPresetResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t SavePetSquadPresetResponse::ByteSizeLong(const MessageLite& base) {
+  const SavePetSquadPresetResponse& this_ = static_cast<const SavePetSquadPresetResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t SavePetSquadPresetResponse::ByteSizeLong() const {
+  const SavePetSquadPresetResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:SavePetSquadPresetResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .PetListInfo pets = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.pets_);
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void SavePetSquadPresetResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<SavePetSquadPresetResponse*>(&to_msg);
+  auto& from = static_cast<const SavePetSquadPresetResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:SavePetSquadPresetResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.pets_ != nullptr);
+      if (_this->_impl_.pets_ == nullptr) {
+        _this->_impl_.pets_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pets_);
+      } else {
+        _this->_impl_.pets_->MergeFrom(*from._impl_.pets_);
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void SavePetSquadPresetResponse::CopyFrom(const SavePetSquadPresetResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:SavePetSquadPresetResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void SavePetSquadPresetResponse::InternalSwap(SavePetSquadPresetResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_.pets_)
+      + sizeof(SavePetSquadPresetResponse::_impl_.pets_)
+      - PROTOBUF_FIELD_OFFSET(SavePetSquadPresetResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata SavePetSquadPresetResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UnlockPetSquadPresetSlotRequest::UnlockPetSquadPresetSlotRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockPetSquadPresetSlotRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:UnlockPetSquadPresetSlotRequest)
+}
+UnlockPetSquadPresetSlotRequest::UnlockPetSquadPresetSlotRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnlockPetSquadPresetSlotRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockPetSquadPresetSlotRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UnlockPetSquadPresetSlotRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnlockPetSquadPresetSlotRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, client_request_id_),
+           0,
+           offsetof(Impl_, expected_unlocked_slots_) -
+               offsetof(Impl_, client_request_id_) +
+               sizeof(Impl_::expected_unlocked_slots_));
+}
+UnlockPetSquadPresetSlotRequest::~UnlockPetSquadPresetSlotRequest() {
+  // @@protoc_insertion_point(destructor:UnlockPetSquadPresetSlotRequest)
+  SharedDtor(*this);
+}
+inline void UnlockPetSquadPresetSlotRequest::SharedDtor(MessageLite& self) {
+  UnlockPetSquadPresetSlotRequest& this_ = static_cast<UnlockPetSquadPresetSlotRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnlockPetSquadPresetSlotRequest_class_data_ =
+        UnlockPetSquadPresetSlotRequest::InternalGenerateClassData_(UnlockPetSquadPresetSlotRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockPetSquadPresetSlotRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockPetSquadPresetSlotRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnlockPetSquadPresetSlotRequest_class_data_.tc_table);
+  return UnlockPetSquadPresetSlotRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockPetSquadPresetSlotRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockPetSquadPresetSlotRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnlockPetSquadPresetSlotRequest_globals_));
+  return UnlockPetSquadPresetSlotRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnlockPetSquadPresetSlotRequest::ParseTableT_
+    UnlockPetSquadPresetSlotRequest::_table_ =
+        UnlockPetSquadPresetSlotRequest::InternalGenerateParseTable_(UnlockPetSquadPresetSlotRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnlockPetSquadPresetSlotRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:UnlockPetSquadPresetSlotRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.client_request_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.expected_unlocked_slots_) -
+        reinterpret_cast<char*>(&_impl_.client_request_id_)) + sizeof(_impl_.expected_unlocked_slots_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnlockPetSquadPresetSlotRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnlockPetSquadPresetSlotRequest& this_ = static_cast<const UnlockPetSquadPresetSlotRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnlockPetSquadPresetSlotRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnlockPetSquadPresetSlotRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:UnlockPetSquadPresetSlotRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 client_request_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_client_request_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_client_request_id(), target);
+    }
+  }
+
+  // uint32 expected_unlocked_slots = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_expected_unlocked_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_expected_unlocked_slots(), target);
+    }
+  }
+
+  // uint64 expected_price_diamond = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_expected_price_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_expected_price_diamond(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:UnlockPetSquadPresetSlotRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnlockPetSquadPresetSlotRequest::ByteSizeLong(const MessageLite& base) {
+  const UnlockPetSquadPresetSlotRequest& this_ = static_cast<const UnlockPetSquadPresetSlotRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnlockPetSquadPresetSlotRequest::ByteSizeLong() const {
+  const UnlockPetSquadPresetSlotRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:UnlockPetSquadPresetSlotRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 client_request_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_client_request_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_client_request_id());
+      }
+    }
+    // uint64 expected_price_diamond = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_expected_price_diamond() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_expected_price_diamond());
+      }
+    }
+    // uint32 expected_unlocked_slots = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_expected_unlocked_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_expected_unlocked_slots());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnlockPetSquadPresetSlotRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnlockPetSquadPresetSlotRequest*>(&to_msg);
+  auto& from = static_cast<const UnlockPetSquadPresetSlotRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:UnlockPetSquadPresetSlotRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_client_request_id() != 0) {
+        _this->_impl_.client_request_id_ = from._impl_.client_request_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_expected_price_diamond() != 0) {
+        _this->_impl_.expected_price_diamond_ = from._impl_.expected_price_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_expected_unlocked_slots() != 0) {
+        _this->_impl_.expected_unlocked_slots_ = from._impl_.expected_unlocked_slots_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnlockPetSquadPresetSlotRequest::CopyFrom(const UnlockPetSquadPresetSlotRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:UnlockPetSquadPresetSlotRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnlockPetSquadPresetSlotRequest::InternalSwap(UnlockPetSquadPresetSlotRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.expected_unlocked_slots_)
+      + sizeof(UnlockPetSquadPresetSlotRequest::_impl_.expected_unlocked_slots_)
+      - PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotRequest, _impl_.client_request_id_)>(
+          reinterpret_cast<char*>(&_impl_.client_request_id_),
+          reinterpret_cast<char*>(&other->_impl_.client_request_id_));
+}
+
+::google::protobuf::Metadata UnlockPetSquadPresetSlotRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+void UnlockPetSquadPresetSlotResponse::clear_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+UnlockPetSquadPresetSlotResponse::UnlockPetSquadPresetSlotResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockPetSquadPresetSlotResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:UnlockPetSquadPresetSlotResponse)
+}
+PROTOBUF_NDEBUG_INLINE UnlockPetSquadPresetSlotResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::UnlockPetSquadPresetSlotResponse& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0} {}
+
+UnlockPetSquadPresetSlotResponse::UnlockPetSquadPresetSlotResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const UnlockPetSquadPresetSlotResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnlockPetSquadPresetSlotResponse_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  UnlockPetSquadPresetSlotResponse* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::uint32_t cached_has_bits = _impl_._has_bits_[0];
+  _impl_.error_message_ = (CheckHasBit(cached_has_bits, 0x00000001U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_)
+                : nullptr;
+  _impl_.pets_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+                ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pets_)
+                : nullptr;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, replayed_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, replayed_),
+           offsetof(Impl_, diamond_balance_) -
+               offsetof(Impl_, replayed_) +
+               sizeof(Impl_::diamond_balance_));
+
+  // @@protoc_insertion_point(copy_constructor:UnlockPetSquadPresetSlotResponse)
+}
+PROTOBUF_NDEBUG_INLINE UnlockPetSquadPresetSlotResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnlockPetSquadPresetSlotResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, error_message_),
+           0,
+           offsetof(Impl_, diamond_balance_) -
+               offsetof(Impl_, error_message_) +
+               sizeof(Impl_::diamond_balance_));
+}
+UnlockPetSquadPresetSlotResponse::~UnlockPetSquadPresetSlotResponse() {
+  // @@protoc_insertion_point(destructor:UnlockPetSquadPresetSlotResponse)
+  SharedDtor(*this);
+}
+inline void UnlockPetSquadPresetSlotResponse::SharedDtor(MessageLite& self) {
+  UnlockPetSquadPresetSlotResponse& this_ = static_cast<UnlockPetSquadPresetSlotResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  delete this_._impl_.error_message_;
+  delete this_._impl_.pets_;
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnlockPetSquadPresetSlotResponse_class_data_ =
+        UnlockPetSquadPresetSlotResponse::InternalGenerateClassData_(UnlockPetSquadPresetSlotResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockPetSquadPresetSlotResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockPetSquadPresetSlotResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnlockPetSquadPresetSlotResponse_class_data_.tc_table);
+  return UnlockPetSquadPresetSlotResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnlockPetSquadPresetSlotResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnlockPetSquadPresetSlotResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnlockPetSquadPresetSlotResponse_globals_));
+  return UnlockPetSquadPresetSlotResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnlockPetSquadPresetSlotResponse::ParseTableT_
+    UnlockPetSquadPresetSlotResponse::_table_ =
+        UnlockPetSquadPresetSlotResponse::InternalGenerateParseTable_(UnlockPetSquadPresetSlotResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnlockPetSquadPresetSlotResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:UnlockPetSquadPresetSlotResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(_impl_.error_message_ != nullptr);
+      _impl_.error_message_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(_impl_.pets_ != nullptr);
+      _impl_.pets_->Clear();
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003cU)) {
+    ::memset(&_impl_.replayed_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.diamond_balance_) -
+        reinterpret_cast<char*>(&_impl_.replayed_)) + sizeof(_impl_.diamond_balance_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnlockPetSquadPresetSlotResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnlockPetSquadPresetSlotResponse& this_ = static_cast<const UnlockPetSquadPresetSlotResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnlockPetSquadPresetSlotResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnlockPetSquadPresetSlotResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:UnlockPetSquadPresetSlotResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // .TipInfoMessage error_message = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        1, *this_._impl_.error_message_, this_._impl_.error_message_->GetCachedSize(), target,
+        stream);
+  }
+
+  // bool replayed = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_replayed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          2, this_._internal_replayed(), target);
+    }
+  }
+
+  // uint32 unlocked_slots = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_unlocked_slots() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_unlocked_slots(), target);
+    }
+  }
+
+  // uint64 spent_diamond = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_spent_diamond() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_spent_diamond(), target);
+    }
+  }
+
+  // uint64 diamond_balance = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_diamond_balance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_diamond_balance(), target);
+    }
+  }
+
+  // .PetListInfo pets = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        6, *this_._impl_.pets_, this_._impl_.pets_->GetCachedSize(), target,
+        stream);
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:UnlockPetSquadPresetSlotResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnlockPetSquadPresetSlotResponse::ByteSizeLong(const MessageLite& base) {
+  const UnlockPetSquadPresetSlotResponse& this_ = static_cast<const UnlockPetSquadPresetSlotResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnlockPetSquadPresetSlotResponse::ByteSizeLong() const {
+  const UnlockPetSquadPresetSlotResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:UnlockPetSquadPresetSlotResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // .TipInfoMessage error_message = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.error_message_);
+    }
+    // .PetListInfo pets = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.pets_);
+    }
+    // bool replayed = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_replayed() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint32 unlocked_slots = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_unlocked_slots() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_unlocked_slots());
+      }
+    }
+    // uint64 spent_diamond = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_spent_diamond() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_spent_diamond());
+      }
+    }
+    // uint64 diamond_balance = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_diamond_balance() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_diamond_balance());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnlockPetSquadPresetSlotResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnlockPetSquadPresetSlotResponse*>(&to_msg);
+  auto& from = static_cast<const UnlockPetSquadPresetSlotResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:UnlockPetSquadPresetSlotResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      ABSL_DCHECK(from._impl_.error_message_ != nullptr);
+      if (_this->_impl_.error_message_ == nullptr) {
+        _this->_impl_.error_message_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.error_message_);
+      } else {
+        _this->_impl_.error_message_->MergeFrom(*from._impl_.error_message_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      ABSL_DCHECK(from._impl_.pets_ != nullptr);
+      if (_this->_impl_.pets_ == nullptr) {
+        _this->_impl_.pets_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.pets_);
+      } else {
+        _this->_impl_.pets_->MergeFrom(*from._impl_.pets_);
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_replayed() != 0) {
+        _this->_impl_.replayed_ = from._impl_.replayed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_unlocked_slots() != 0) {
+        _this->_impl_.unlocked_slots_ = from._impl_.unlocked_slots_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_spent_diamond() != 0) {
+        _this->_impl_.spent_diamond_ = from._impl_.spent_diamond_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_diamond_balance() != 0) {
+        _this->_impl_.diamond_balance_ = from._impl_.diamond_balance_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnlockPetSquadPresetSlotResponse::CopyFrom(const UnlockPetSquadPresetSlotResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:UnlockPetSquadPresetSlotResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnlockPetSquadPresetSlotResponse::InternalSwap(UnlockPetSquadPresetSlotResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.diamond_balance_)
+      + sizeof(UnlockPetSquadPresetSlotResponse::_impl_.diamond_balance_)
+      - PROTOBUF_FIELD_OFFSET(UnlockPetSquadPresetSlotResponse, _impl_.error_message_)>(
+          reinterpret_cast<char*>(&_impl_.error_message_),
+          reinterpret_cast<char*>(&other->_impl_.error_message_));
+}
+
+::google::protobuf::Metadata UnlockPetSquadPresetSlotResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL ScenePetClientPlayer::descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fscene_2fplayer_5fpet_2eproto);
   return file_level_service_descriptors_proto_2fscene_2fplayer_5fpet_2eproto[0];
@@ -20555,6 +23129,20 @@ void ScenePetClientPlayer::AscendPetTier(::google::protobuf::RpcController* PROT
   controller->SetFailed("Method AscendPetTier() not implemented.");
   done->Run();
 }
+void ScenePetClientPlayer::SavePetSquadPreset(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::SavePetSquadPresetRequest* PROTOBUF_NONNULL,
+                         ::SavePetSquadPresetResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method SavePetSquadPreset() not implemented.");
+  done->Run();
+}
+void ScenePetClientPlayer::UnlockPetSquadPresetSlot(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::UnlockPetSquadPresetSlotRequest* PROTOBUF_NONNULL,
+                         ::UnlockPetSquadPresetSlotResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method UnlockPetSquadPresetSlot() not implemented.");
+  done->Run();
+}
 
 void ScenePetClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -20627,6 +23215,14 @@ void ScenePetClientPlayer::CallMethod(
       this->AscendPetTier(controller, ::google::protobuf::DownCastMessage<::AscendPetTierRequest>(request),
                    ::google::protobuf::DownCastMessage<::AscendPetTierResponse>(response), done);
       break;
+    case 16:
+      this->SavePetSquadPreset(controller, ::google::protobuf::DownCastMessage<::SavePetSquadPresetRequest>(request),
+                   ::google::protobuf::DownCastMessage<::SavePetSquadPresetResponse>(response), done);
+      break;
+    case 17:
+      this->UnlockPetSquadPresetSlot(controller, ::google::protobuf::DownCastMessage<::UnlockPetSquadPresetSlotRequest>(request),
+                   ::google::protobuf::DownCastMessage<::UnlockPetSquadPresetSlotResponse>(response), done);
+      break;
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -20670,6 +23266,10 @@ const ::google::protobuf::Message& ScenePetClientPlayer::GetRequestPrototype(
       return ::SwitchPetEntryPresetRequest::default_instance();
     case 15:
       return ::AscendPetTierRequest::default_instance();
+    case 16:
+      return ::SavePetSquadPresetRequest::default_instance();
+    case 17:
+      return ::UnlockPetSquadPresetSlotRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -20714,6 +23314,10 @@ const ::google::protobuf::Message& ScenePetClientPlayer::GetResponsePrototype(
       return ::SwitchPetEntryPresetResponse::default_instance();
     case 15:
       return ::AscendPetTierResponse::default_instance();
+    case 16:
+      return ::SavePetSquadPresetResponse::default_instance();
+    case 17:
+      return ::UnlockPetSquadPresetSlotResponse::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -20845,6 +23449,20 @@ void ScenePetClientPlayer_Stub::AscendPetTier(
     const ::AscendPetTierRequest* PROTOBUF_NONNULL request, ::AscendPetTierResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(15), controller,
+                       request, response, done);
+}
+void ScenePetClientPlayer_Stub::SavePetSquadPreset(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::SavePetSquadPresetRequest* PROTOBUF_NONNULL request, ::SavePetSquadPresetResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(16), controller,
+                       request, response, done);
+}
+void ScenePetClientPlayer_Stub::UnlockPetSquadPresetSlot(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::UnlockPetSquadPresetSlotRequest* PROTOBUF_NONNULL request, ::UnlockPetSquadPresetSlotResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(17), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

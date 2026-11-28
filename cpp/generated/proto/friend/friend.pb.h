@@ -3358,6 +3358,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchCheckSocialRelationsRequest fi
   enum : int {
     kSideAPlayerIdsFieldNumber = 1,
     kSideBPlayerIdsFieldNumber = 2,
+    kMinFriendDurationMsFieldNumber = 3,
   };
   // repeated uint64 side_a_player_ids = 1;
   [[nodiscard]] int side_a_player_ids_size()
@@ -3399,11 +3400,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchCheckSocialRelationsRequest fi
   ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_side_b_player_ids();
 
   public:
+  // int64 min_friend_duration_ms = 3;
+  void clear_min_friend_duration_ms() ;
+  [[nodiscard]] ::int64_t min_friend_duration_ms() const;
+  void set_min_friend_duration_ms(::int64_t value);
+
+  private:
+  ::int64_t _internal_min_friend_duration_ms() const;
+  void _internal_set_min_friend_duration_ms(::int64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:friendpb.BatchCheckSocialRelationsRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -3436,6 +3447,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchCheckSocialRelationsRequest fi
     ::google::protobuf::internal::CachedSize _side_a_player_ids_cached_byte_size_;
     ::google::protobuf::RepeatedField<::uint64_t> side_b_player_ids_;
     ::google::protobuf::internal::CachedSize _side_b_player_ids_cached_byte_size_;
+    ::int64_t min_friend_duration_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -9067,6 +9079,30 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
 BatchCheckSocialRelationsRequest::_internal_mutable_side_b_player_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.side_b_player_ids_;
+}
+
+// int64 min_friend_duration_ms = 3;
+inline void BatchCheckSocialRelationsRequest::clear_min_friend_duration_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_friend_duration_ms_ = ::int64_t{0};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::int64_t BatchCheckSocialRelationsRequest::min_friend_duration_ms() const {
+  // @@protoc_insertion_point(field_get:friendpb.BatchCheckSocialRelationsRequest.min_friend_duration_ms)
+  return _internal_min_friend_duration_ms();
+}
+inline void BatchCheckSocialRelationsRequest::set_min_friend_duration_ms(::int64_t value) {
+  _internal_set_min_friend_duration_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:friendpb.BatchCheckSocialRelationsRequest.min_friend_duration_ms)
+}
+inline ::int64_t BatchCheckSocialRelationsRequest::_internal_min_friend_duration_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_friend_duration_ms_;
+}
+inline void BatchCheckSocialRelationsRequest::_internal_set_min_friend_duration_ms(::int64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_friend_duration_ms_ = value;
 }
 
 // -------------------------------------------------------------------

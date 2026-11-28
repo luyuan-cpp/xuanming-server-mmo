@@ -18,6 +18,8 @@ message AppearanceSeriesTable {
 	string completion_badge_name = 7;
 	string epilogue_title = 8;
 	string epilogue_body = 9;
+	uint32 bundle_discount_bps = 10;
+	uint32 unit_price_diamond = 11;
 }
 
 message AppearanceSeriesTableData {

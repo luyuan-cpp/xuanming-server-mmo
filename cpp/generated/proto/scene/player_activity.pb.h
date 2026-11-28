@@ -237,6 +237,22 @@ extern const ::google::protobuf::internal::ClassDataFull PlayerActivityVitalityS
 #else
 extern const PlayerActivityVitalitySnapshotGlobalsTypeInternal PlayerActivityVitalitySnapshot_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class SelectActiveTravelPassRequest;
+struct SelectActiveTravelPassRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SelectActiveTravelPassRequestGlobalsTypeInternal SelectActiveTravelPassRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SelectActiveTravelPassRequest_class_data_;
+#else
+extern const SelectActiveTravelPassRequestGlobalsTypeInternal SelectActiveTravelPassRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class SelectActiveTravelPassResponse;
+struct SelectActiveTravelPassResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern SelectActiveTravelPassResponseGlobalsTypeInternal SelectActiveTravelPassResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull SelectActiveTravelPassResponse_class_data_;
+#else
+extern const SelectActiveTravelPassResponseGlobalsTypeInternal SelectActiveTravelPassResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class StartFestivalBeastChallengeRequest;
 struct StartFestivalBeastChallengeRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -252,6 +268,14 @@ extern StartFestivalBeastChallengeResponseGlobalsTypeInternal StartFestivalBeast
 extern const ::google::protobuf::internal::ClassDataFull StartFestivalBeastChallengeResponse_class_data_;
 #else
 extern const StartFestivalBeastChallengeResponseGlobalsTypeInternal StartFestivalBeastChallengeResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class TravelPassCatalogEntry;
+struct TravelPassCatalogEntryGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern TravelPassCatalogEntryGlobalsTypeInternal TravelPassCatalogEntry_globals_;
+extern const ::google::protobuf::internal::ClassDataFull TravelPassCatalogEntry_class_data_;
+#else
+extern const TravelPassCatalogEntryGlobalsTypeInternal TravelPassCatalogEntry_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class TravelPassSnapshot;
 struct TravelPassSnapshotGlobalsTypeInternal;
@@ -777,7 +801,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockTravelPassPremiumRequest fina
   [[nodiscard]] static const UnlockTravelPassPremiumRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnlockTravelPassPremiumRequest>(&UnlockTravelPassPremiumRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 21;
   friend void swap(UnlockTravelPassPremiumRequest& a, UnlockTravelPassPremiumRequest& b) { a.Swap(&b); }
   inline void Swap(UnlockTravelPassPremiumRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1463,6 +1487,366 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassTierView final : public :
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassCatalogEntry final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:TravelPassCatalogEntry) */ {
+ public:
+  inline TravelPassCatalogEntry() : TravelPassCatalogEntry(nullptr) {}
+  ~TravelPassCatalogEntry() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(TravelPassCatalogEntry* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(TravelPassCatalogEntry));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr TravelPassCatalogEntry(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline TravelPassCatalogEntry(const TravelPassCatalogEntry& from) : TravelPassCatalogEntry(nullptr, from) {}
+  inline TravelPassCatalogEntry(TravelPassCatalogEntry&& from) noexcept : TravelPassCatalogEntry(nullptr, ::std::move(from)) {}
+  inline TravelPassCatalogEntry& operator=(const TravelPassCatalogEntry& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline TravelPassCatalogEntry& operator=(TravelPassCatalogEntry&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const TravelPassCatalogEntry& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TravelPassCatalogEntry>(&TravelPassCatalogEntry_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 17;
+  friend void swap(TravelPassCatalogEntry& a, TravelPassCatalogEntry& b) { a.Swap(&b); }
+  inline void Swap(TravelPassCatalogEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(TravelPassCatalogEntry* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] TravelPassCatalogEntry* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<TravelPassCatalogEntry>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const TravelPassCatalogEntry& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const TravelPassCatalogEntry& from) { TravelPassCatalogEntry::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(TravelPassCatalogEntry* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "TravelPassCatalogEntry"; }
+
+  explicit TravelPassCatalogEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  TravelPassCatalogEntry(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TravelPassCatalogEntry& from);
+  TravelPassCatalogEntry(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, TravelPassCatalogEntry&& from) noexcept
+      : TravelPassCatalogEntry(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kIconKeyFieldNumber = 3,
+    kBannerAssetKeyFieldNumber = 4,
+    kPassIdFieldNumber = 1,
+    kSortOrderFieldNumber = 5,
+    kProgressPointsFieldNumber = 8,
+    kIsArchivedFieldNumber = 6,
+    kIsActiveFieldNumber = 7,
+    kPremiumUnlockedFieldNumber = 10,
+    kOpenForProgressFieldNumber = 12,
+    kMaxPointsFieldNumber = 9,
+    kClaimableCountFieldNumber = 11,
+    kOpenForUnlockFieldNumber = 13,
+  };
+  // string name = 2;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string icon_key = 3;
+  void clear_icon_key() ;
+  [[nodiscard]] const ::std::string& icon_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_icon_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_icon_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_icon_key();
+  void set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_icon_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_icon_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_icon_key();
+
+  public:
+  // string banner_asset_key = 4;
+  void clear_banner_asset_key() ;
+  [[nodiscard]] const ::std::string& banner_asset_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_banner_asset_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_banner_asset_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_banner_asset_key();
+  void set_allocated_banner_asset_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_banner_asset_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_banner_asset_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_banner_asset_key();
+
+  public:
+  // uint32 pass_id = 1;
+  void clear_pass_id() ;
+  [[nodiscard]] ::uint32_t pass_id() const;
+  void set_pass_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pass_id() const;
+  void _internal_set_pass_id(::uint32_t value);
+
+  public:
+  // uint32 sort_order = 5;
+  void clear_sort_order() ;
+  [[nodiscard]] ::uint32_t sort_order() const;
+  void set_sort_order(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_sort_order() const;
+  void _internal_set_sort_order(::uint32_t value);
+
+  public:
+  // uint32 progress_points = 8;
+  void clear_progress_points() ;
+  [[nodiscard]] ::uint32_t progress_points() const;
+  void set_progress_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_progress_points() const;
+  void _internal_set_progress_points(::uint32_t value);
+
+  public:
+  // bool is_archived = 6;
+  void clear_is_archived() ;
+  [[nodiscard]] bool is_archived() const;
+  void set_is_archived(bool value);
+
+  private:
+  bool _internal_is_archived() const;
+  void _internal_set_is_archived(bool value);
+
+  public:
+  // bool is_active = 7;
+  void clear_is_active() ;
+  [[nodiscard]] bool is_active() const;
+  void set_is_active(bool value);
+
+  private:
+  bool _internal_is_active() const;
+  void _internal_set_is_active(bool value);
+
+  public:
+  // bool premium_unlocked = 10;
+  void clear_premium_unlocked() ;
+  [[nodiscard]] bool premium_unlocked() const;
+  void set_premium_unlocked(bool value);
+
+  private:
+  bool _internal_premium_unlocked() const;
+  void _internal_set_premium_unlocked(bool value);
+
+  public:
+  // bool open_for_progress = 12;
+  void clear_open_for_progress() ;
+  [[nodiscard]] bool open_for_progress() const;
+  void set_open_for_progress(bool value);
+
+  private:
+  bool _internal_open_for_progress() const;
+  void _internal_set_open_for_progress(bool value);
+
+  public:
+  // uint32 max_points = 9;
+  void clear_max_points() ;
+  [[nodiscard]] ::uint32_t max_points() const;
+  void set_max_points(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_points() const;
+  void _internal_set_max_points(::uint32_t value);
+
+  public:
+  // uint32 claimable_count = 11;
+  void clear_claimable_count() ;
+  [[nodiscard]] ::uint32_t claimable_count() const;
+  void set_claimable_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_claimable_count() const;
+  void _internal_set_claimable_count(::uint32_t value);
+
+  public:
+  // bool open_for_unlock = 13;
+  void clear_open_for_unlock() ;
+  [[nodiscard]] bool open_for_unlock() const;
+  void set_open_for_unlock(bool value);
+
+  private:
+  bool _internal_open_for_unlock() const;
+  void _internal_set_open_for_unlock(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:TravelPassCatalogEntry)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 13,
+                          0, 67,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const TravelPassCatalogEntry& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr icon_key_;
+    ::google::protobuf::internal::ArenaStringPtr banner_asset_key_;
+    ::uint32_t pass_id_;
+    ::uint32_t sort_order_;
+    ::uint32_t progress_points_;
+    bool is_archived_;
+    bool is_active_;
+    bool premium_unlocked_;
+    bool open_for_progress_;
+    ::uint32_t max_points_;
+    ::uint32_t claimable_count_;
+    bool open_for_unlock_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartFestivalBeastChallengeRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:StartFestivalBeastChallengeRequest) */ {
  public:
@@ -1686,6 +2070,207 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED StartFestivalBeastChallengeRequest 
     ::google::protobuf::internal::ArenaStringPtr client_request_id_;
     ::uint32_t activity_instance_id_;
     ::uint32_t config_revision_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectActiveTravelPassRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SelectActiveTravelPassRequest) */ {
+ public:
+  inline SelectActiveTravelPassRequest() : SelectActiveTravelPassRequest(nullptr) {}
+  ~SelectActiveTravelPassRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SelectActiveTravelPassRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SelectActiveTravelPassRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SelectActiveTravelPassRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SelectActiveTravelPassRequest(const SelectActiveTravelPassRequest& from) : SelectActiveTravelPassRequest(nullptr, from) {}
+  inline SelectActiveTravelPassRequest(SelectActiveTravelPassRequest&& from) noexcept : SelectActiveTravelPassRequest(nullptr, ::std::move(from)) {}
+  inline SelectActiveTravelPassRequest& operator=(const SelectActiveTravelPassRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SelectActiveTravelPassRequest& operator=(SelectActiveTravelPassRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SelectActiveTravelPassRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectActiveTravelPassRequest>(&SelectActiveTravelPassRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 27;
+  friend void swap(SelectActiveTravelPassRequest& a, SelectActiveTravelPassRequest& b) { a.Swap(&b); }
+  inline void Swap(SelectActiveTravelPassRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SelectActiveTravelPassRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SelectActiveTravelPassRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SelectActiveTravelPassRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SelectActiveTravelPassRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SelectActiveTravelPassRequest& from) { SelectActiveTravelPassRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SelectActiveTravelPassRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SelectActiveTravelPassRequest"; }
+
+  explicit SelectActiveTravelPassRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SelectActiveTravelPassRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelectActiveTravelPassRequest& from);
+  SelectActiveTravelPassRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SelectActiveTravelPassRequest&& from) noexcept
+      : SelectActiveTravelPassRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kPassIdFieldNumber = 1,
+  };
+  // uint32 pass_id = 1;
+  void clear_pass_id() ;
+  [[nodiscard]] ::uint32_t pass_id() const;
+  void set_pass_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_pass_id() const;
+  void _internal_set_pass_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:SelectActiveTravelPassRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SelectActiveTravelPassRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t pass_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2013,7 +2598,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTravelPassStateRequest final : p
   [[nodiscard]] static const GetTravelPassStateRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTravelPassStateRequest>(&GetTravelPassStateRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(GetTravelPassStateRequest& a, GetTravelPassStateRequest& b) { a.Swap(&b); }
   inline void Swap(GetTravelPassStateRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3265,7 +3850,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipTravelPassCosmeticRequest fina
   [[nodiscard]] static const EquipTravelPassCosmeticRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipTravelPassCosmeticRequest>(&EquipTravelPassCosmeticRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 24;
+  static constexpr int kIndexInFileMessages = 25;
   friend void swap(EquipTravelPassCosmeticRequest& a, EquipTravelPassCosmeticRequest& b) { a.Swap(&b); }
   inline void Swap(EquipTravelPassCosmeticRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3483,7 +4068,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTravelPassRewardRequest final 
   [[nodiscard]] static const ClaimTravelPassRewardRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTravelPassRewardRequest>(&ClaimTravelPassRewardRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(ClaimTravelPassRewardRequest& a, ClaimTravelPassRewardRequest& b) { a.Swap(&b); }
   inline void Swap(ClaimTravelPassRewardRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4197,7 +4782,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
   [[nodiscard]] static const TravelPassSnapshot& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TravelPassSnapshot>(&TravelPassSnapshot_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(TravelPassSnapshot& a, TravelPassSnapshot& b) { a.Swap(&b); }
   inline void Swap(TravelPassSnapshot* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4297,7 +4882,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
     kIconKeyFieldNumber = 9,
     kBannerAssetKeyFieldNumber = 10,
     kEquippedFrameKeyFieldNumber = 31,
-    kEquippedTitleKeyFieldNumber = 32,
     kServerNowMsFieldNumber = 3,
     kPassRevisionFieldNumber = 4,
     kPassIdFieldNumber = 5,
@@ -4321,6 +4905,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
     kBindDiamondBalanceFieldNumber = 25,
     kClaimablePremiumCountFieldNumber = 27,
     kRetroactivePremiumCountFieldNumber = 28,
+    kBookshelfFieldNumber = 34,
+    kEquippedTitleKeyFieldNumber = 32,
+    kActivePassIdFieldNumber = 33,
   };
   // repeated .TravelPassTierView tiers = 29;
   [[nodiscard]] int tiers_size()
@@ -4458,21 +5045,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
   const ::std::string& _internal_equipped_frame_key() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_equipped_frame_key(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_equipped_frame_key();
-
-  public:
-  // string equipped_title_key = 32;
-  void clear_equipped_title_key() ;
-  [[nodiscard]] const ::std::string& equipped_title_key() const;
-  template <typename Arg_ = const ::std::string&, typename... Args_>
-  void set_equipped_title_key(Arg_&& arg, Args_... args);
-  ::std::string* PROTOBUF_NONNULL mutable_equipped_title_key();
-  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_equipped_title_key();
-  void set_allocated_equipped_title_key(::std::string* PROTOBUF_NULLABLE value);
-
-  private:
-  const ::std::string& _internal_equipped_title_key() const;
-  PROTOBUF_ALWAYS_INLINE void _internal_set_equipped_title_key(const ::std::string& value);
-  ::std::string* PROTOBUF_NONNULL _internal_mutable_equipped_title_key();
 
   public:
   // uint64 server_now_ms = 3;
@@ -4705,13 +5277,59 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
   void _internal_set_retroactive_premium_count(::uint32_t value);
 
   public:
+  // repeated .TravelPassCatalogEntry bookshelf = 34;
+  [[nodiscard]] int bookshelf_size()
+      const;
+  private:
+  int _internal_bookshelf_size() const;
+
+  public:
+  void clear_bookshelf() ;
+  [[nodiscard]] const ::TravelPassCatalogEntry& bookshelf(int index) const;
+  [[nodiscard]] ::TravelPassCatalogEntry* PROTOBUF_NONNULL mutable_bookshelf(int index);
+  ::TravelPassCatalogEntry* PROTOBUF_NONNULL add_bookshelf();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>&
+  bookshelf() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>* PROTOBUF_NONNULL
+  mutable_bookshelf();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>& _internal_bookshelf() const;
+  ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>* PROTOBUF_NONNULL _internal_mutable_bookshelf();
+
+  public:
+  // string equipped_title_key = 32;
+  void clear_equipped_title_key() ;
+  [[nodiscard]] const ::std::string& equipped_title_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_equipped_title_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_equipped_title_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_equipped_title_key();
+  void set_allocated_equipped_title_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_equipped_title_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_equipped_title_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_equipped_title_key();
+
+  public:
+  // uint32 active_pass_id = 33;
+  void clear_active_pass_id() ;
+  [[nodiscard]] ::uint32_t active_pass_id() const;
+  void set_active_pass_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_active_pass_id() const;
+  void _internal_set_active_pass_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TravelPassSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 32,
-                          1, 174,
-                          2>;
+      ::google::protobuf::internal::TcParseTable<5, 34,
+                          2, 174,
+                          7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -4736,7 +5354,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
         ::google::protobuf::internal::InternalVisibility visibility,
         ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
         const TravelPassSnapshot& from_msg);
-    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::HasBits<2> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::TravelPassTierView > tiers_;
     ::google::protobuf::RepeatedPtrField<::std::string> unlocked_cosmetic_keys_;
@@ -4746,7 +5364,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
     ::google::protobuf::internal::ArenaStringPtr icon_key_;
     ::google::protobuf::internal::ArenaStringPtr banner_asset_key_;
     ::google::protobuf::internal::ArenaStringPtr equipped_frame_key_;
-    ::google::protobuf::internal::ArenaStringPtr equipped_title_key_;
     ::uint64_t server_now_ms_;
     ::uint64_t pass_revision_;
     ::uint32_t pass_id_;
@@ -4770,6 +5387,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TravelPassSnapshot final : public :
     ::uint64_t bind_diamond_balance_;
     ::uint32_t claimable_premium_count_;
     ::uint32_t retroactive_premium_count_;
+    ::google::protobuf::RepeatedPtrField< ::TravelPassCatalogEntry > bookshelf_;
+    ::google::protobuf::internal::ArenaStringPtr equipped_title_key_;
+    ::uint32_t active_pass_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7022,7 +7642,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockTravelPassPremiumResponse fin
   [[nodiscard]] static const UnlockTravelPassPremiumResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UnlockTravelPassPremiumResponse>(&UnlockTravelPassPremiumResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(UnlockTravelPassPremiumResponse& a, UnlockTravelPassPremiumResponse& b) { a.Swap(&b); }
   inline void Swap(UnlockTravelPassPremiumResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7196,6 +7816,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UnlockTravelPassPremiumResponse fin
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::TravelPassSnapshot* PROTOBUF_NULLABLE snapshot_;
     bool replayed_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fscene_2fplayer_5factivity_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SelectActiveTravelPassResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:SelectActiveTravelPassResponse) */ {
+ public:
+  inline SelectActiveTravelPassResponse() : SelectActiveTravelPassResponse(nullptr) {}
+  ~SelectActiveTravelPassResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(SelectActiveTravelPassResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(SelectActiveTravelPassResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr SelectActiveTravelPassResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline SelectActiveTravelPassResponse(const SelectActiveTravelPassResponse& from) : SelectActiveTravelPassResponse(nullptr, from) {}
+  inline SelectActiveTravelPassResponse(SelectActiveTravelPassResponse&& from) noexcept : SelectActiveTravelPassResponse(nullptr, ::std::move(from)) {}
+  inline SelectActiveTravelPassResponse& operator=(const SelectActiveTravelPassResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SelectActiveTravelPassResponse& operator=(SelectActiveTravelPassResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const SelectActiveTravelPassResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<SelectActiveTravelPassResponse>(&SelectActiveTravelPassResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 28;
+  friend void swap(SelectActiveTravelPassResponse& a, SelectActiveTravelPassResponse& b) { a.Swap(&b); }
+  inline void Swap(SelectActiveTravelPassResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SelectActiveTravelPassResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] SelectActiveTravelPassResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<SelectActiveTravelPassResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const SelectActiveTravelPassResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const SelectActiveTravelPassResponse& from) { SelectActiveTravelPassResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(SelectActiveTravelPassResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "SelectActiveTravelPassResponse"; }
+
+  explicit SelectActiveTravelPassResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  SelectActiveTravelPassResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const SelectActiveTravelPassResponse& from);
+  SelectActiveTravelPassResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, SelectActiveTravelPassResponse&& from) noexcept
+      : SelectActiveTravelPassResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kSnapshotFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .TravelPassSnapshot snapshot = 2;
+  [[nodiscard]] bool has_snapshot()
+      const;
+  void clear_snapshot() ;
+  [[nodiscard]] const ::TravelPassSnapshot& snapshot() const;
+  [[nodiscard]] ::TravelPassSnapshot* PROTOBUF_NULLABLE release_snapshot();
+  ::TravelPassSnapshot* PROTOBUF_NONNULL mutable_snapshot();
+  void set_allocated_snapshot(::TravelPassSnapshot* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_snapshot(::TravelPassSnapshot* PROTOBUF_NULLABLE value);
+  ::TravelPassSnapshot* PROTOBUF_NULLABLE unsafe_arena_release_snapshot();
+
+  private:
+  const ::TravelPassSnapshot& _internal_snapshot() const;
+  ::TravelPassSnapshot* PROTOBUF_NONNULL _internal_mutable_snapshot();
+
+  public:
+  // @@protoc_insertion_point(class_scope:SelectActiveTravelPassResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const SelectActiveTravelPassResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::TravelPassSnapshot* PROTOBUF_NULLABLE snapshot_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7584,7 +8429,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetTravelPassStateResponse final : 
   [[nodiscard]] static const GetTravelPassStateResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetTravelPassStateResponse>(&GetTravelPassStateResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 19;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(GetTravelPassStateResponse& a, GetTravelPassStateResponse& b) { a.Swap(&b); }
   inline void Swap(GetTravelPassStateResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7809,7 +8654,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EquipTravelPassCosmeticResponse fin
   [[nodiscard]] static const EquipTravelPassCosmeticResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<EquipTravelPassCosmeticResponse>(&EquipTravelPassCosmeticResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 25;
+  static constexpr int kIndexInFileMessages = 26;
   friend void swap(EquipTravelPassCosmeticResponse& a, EquipTravelPassCosmeticResponse& b) { a.Swap(&b); }
   inline void Swap(EquipTravelPassCosmeticResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8572,7 +9417,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClaimTravelPassRewardResponse final
   [[nodiscard]] static const ClaimTravelPassRewardResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ClaimTravelPassRewardResponse>(&ClaimTravelPassRewardResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 23;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(ClaimTravelPassRewardResponse& a, ClaimTravelPassRewardResponse& b) { a.Swap(&b); }
   inline void Swap(ClaimTravelPassRewardResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -8837,6 +9682,10 @@ class SceneActivityClientPlayer : public ::google::protobuf::Service {
                         const ::EquipTravelPassCosmeticRequest* PROTOBUF_NONNULL request,
                         ::EquipTravelPassCosmeticResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
+  virtual void SelectActiveTravelPass(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SelectActiveTravelPassRequest* PROTOBUF_NONNULL request,
+                        ::SelectActiveTravelPassResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done);
 
   // implements Service ----------------------------------------------
   const ::google::protobuf::ServiceDescriptor* PROTOBUF_NONNULL GetDescriptor() override;
@@ -8904,6 +9753,10 @@ class SceneActivityClientPlayer_Stub final : public SceneActivityClientPlayer {
   void EquipTravelPassCosmetic(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
                         const ::EquipTravelPassCosmeticRequest* PROTOBUF_NONNULL request,
                         ::EquipTravelPassCosmeticResponse* PROTOBUF_NONNULL response,
+                        ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
+  void SelectActiveTravelPass(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                        const ::SelectActiveTravelPassRequest* PROTOBUF_NONNULL request,
+                        ::SelectActiveTravelPassResponse* PROTOBUF_NONNULL response,
                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) override;
 
  private:
@@ -15543,13 +16396,449 @@ inline void TravelPassTierView::_internal_set_premium_can_claim(bool value) {
 
 // -------------------------------------------------------------------
 
+// TravelPassCatalogEntry
+
+// uint32 pass_id = 1;
+inline void TravelPassCatalogEntry::clear_pass_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pass_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t TravelPassCatalogEntry::pass_id() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.pass_id)
+  return _internal_pass_id();
+}
+inline void TravelPassCatalogEntry::set_pass_id(::uint32_t value) {
+  _internal_set_pass_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.pass_id)
+}
+inline ::uint32_t TravelPassCatalogEntry::_internal_pass_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pass_id_;
+}
+inline void TravelPassCatalogEntry::_internal_set_pass_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pass_id_ = value;
+}
+
+// string name = 2;
+inline void TravelPassCatalogEntry::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& TravelPassCatalogEntry::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TravelPassCatalogEntry::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.name)
+}
+inline ::std::string* PROTOBUF_NONNULL TravelPassCatalogEntry::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:TravelPassCatalogEntry.name)
+  return _s;
+}
+inline const ::std::string& TravelPassCatalogEntry::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void TravelPassCatalogEntry::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TravelPassCatalogEntry::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TravelPassCatalogEntry::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:TravelPassCatalogEntry.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TravelPassCatalogEntry::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:TravelPassCatalogEntry.name)
+}
+
+// string icon_key = 3;
+inline void TravelPassCatalogEntry::clear_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TravelPassCatalogEntry::icon_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.icon_key)
+  return _internal_icon_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TravelPassCatalogEntry::set_icon_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.icon_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.icon_key)
+}
+inline ::std::string* PROTOBUF_NONNULL TravelPassCatalogEntry::mutable_icon_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_icon_key();
+  // @@protoc_insertion_point(field_mutable:TravelPassCatalogEntry.icon_key)
+  return _s;
+}
+inline const ::std::string& TravelPassCatalogEntry::_internal_icon_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.icon_key_.Get();
+}
+inline void TravelPassCatalogEntry::_internal_set_icon_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TravelPassCatalogEntry::_internal_mutable_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.icon_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TravelPassCatalogEntry::release_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:TravelPassCatalogEntry.icon_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.icon_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TravelPassCatalogEntry::set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.icon_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.icon_key_.IsDefault()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:TravelPassCatalogEntry.icon_key)
+}
+
+// string banner_asset_key = 4;
+inline void TravelPassCatalogEntry::clear_banner_asset_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banner_asset_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TravelPassCatalogEntry::banner_asset_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.banner_asset_key)
+  return _internal_banner_asset_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TravelPassCatalogEntry::set_banner_asset_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.banner_asset_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.banner_asset_key)
+}
+inline ::std::string* PROTOBUF_NONNULL TravelPassCatalogEntry::mutable_banner_asset_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_banner_asset_key();
+  // @@protoc_insertion_point(field_mutable:TravelPassCatalogEntry.banner_asset_key)
+  return _s;
+}
+inline const ::std::string& TravelPassCatalogEntry::_internal_banner_asset_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.banner_asset_key_.Get();
+}
+inline void TravelPassCatalogEntry::_internal_set_banner_asset_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.banner_asset_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TravelPassCatalogEntry::_internal_mutable_banner_asset_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.banner_asset_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TravelPassCatalogEntry::release_banner_asset_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:TravelPassCatalogEntry.banner_asset_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.banner_asset_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.banner_asset_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TravelPassCatalogEntry::set_allocated_banner_asset_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.banner_asset_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.banner_asset_key_.IsDefault()) {
+    _impl_.banner_asset_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:TravelPassCatalogEntry.banner_asset_key)
+}
+
+// uint32 sort_order = 5;
+inline void TravelPassCatalogEntry::clear_sort_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_order_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t TravelPassCatalogEntry::sort_order() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.sort_order)
+  return _internal_sort_order();
+}
+inline void TravelPassCatalogEntry::set_sort_order(::uint32_t value) {
+  _internal_set_sort_order(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.sort_order)
+}
+inline ::uint32_t TravelPassCatalogEntry::_internal_sort_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.sort_order_;
+}
+inline void TravelPassCatalogEntry::_internal_set_sort_order(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.sort_order_ = value;
+}
+
+// bool is_archived = 6;
+inline void TravelPassCatalogEntry::clear_is_archived() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_archived_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool TravelPassCatalogEntry::is_archived() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.is_archived)
+  return _internal_is_archived();
+}
+inline void TravelPassCatalogEntry::set_is_archived(bool value) {
+  _internal_set_is_archived(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.is_archived)
+}
+inline bool TravelPassCatalogEntry::_internal_is_archived() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_archived_;
+}
+inline void TravelPassCatalogEntry::_internal_set_is_archived(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_archived_ = value;
+}
+
+// bool is_active = 7;
+inline void TravelPassCatalogEntry::clear_is_active() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_active_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool TravelPassCatalogEntry::is_active() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.is_active)
+  return _internal_is_active();
+}
+inline void TravelPassCatalogEntry::set_is_active(bool value) {
+  _internal_set_is_active(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.is_active)
+}
+inline bool TravelPassCatalogEntry::_internal_is_active() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_active_;
+}
+inline void TravelPassCatalogEntry::_internal_set_is_active(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_active_ = value;
+}
+
+// uint32 progress_points = 8;
+inline void TravelPassCatalogEntry::clear_progress_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.progress_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t TravelPassCatalogEntry::progress_points() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.progress_points)
+  return _internal_progress_points();
+}
+inline void TravelPassCatalogEntry::set_progress_points(::uint32_t value) {
+  _internal_set_progress_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.progress_points)
+}
+inline ::uint32_t TravelPassCatalogEntry::_internal_progress_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.progress_points_;
+}
+inline void TravelPassCatalogEntry::_internal_set_progress_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.progress_points_ = value;
+}
+
+// uint32 max_points = 9;
+inline void TravelPassCatalogEntry::clear_max_points() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_points_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t TravelPassCatalogEntry::max_points() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.max_points)
+  return _internal_max_points();
+}
+inline void TravelPassCatalogEntry::set_max_points(::uint32_t value) {
+  _internal_set_max_points(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.max_points)
+}
+inline ::uint32_t TravelPassCatalogEntry::_internal_max_points() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_points_;
+}
+inline void TravelPassCatalogEntry::_internal_set_max_points(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_points_ = value;
+}
+
+// bool premium_unlocked = 10;
+inline void TravelPassCatalogEntry::clear_premium_unlocked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.premium_unlocked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline bool TravelPassCatalogEntry::premium_unlocked() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.premium_unlocked)
+  return _internal_premium_unlocked();
+}
+inline void TravelPassCatalogEntry::set_premium_unlocked(bool value) {
+  _internal_set_premium_unlocked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.premium_unlocked)
+}
+inline bool TravelPassCatalogEntry::_internal_premium_unlocked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.premium_unlocked_;
+}
+inline void TravelPassCatalogEntry::_internal_set_premium_unlocked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.premium_unlocked_ = value;
+}
+
+// uint32 claimable_count = 11;
+inline void TravelPassCatalogEntry::clear_claimable_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimable_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t TravelPassCatalogEntry::claimable_count() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.claimable_count)
+  return _internal_claimable_count();
+}
+inline void TravelPassCatalogEntry::set_claimable_count(::uint32_t value) {
+  _internal_set_claimable_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.claimable_count)
+}
+inline ::uint32_t TravelPassCatalogEntry::_internal_claimable_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.claimable_count_;
+}
+inline void TravelPassCatalogEntry::_internal_set_claimable_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.claimable_count_ = value;
+}
+
+// bool open_for_progress = 12;
+inline void TravelPassCatalogEntry::clear_open_for_progress() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_for_progress_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool TravelPassCatalogEntry::open_for_progress() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.open_for_progress)
+  return _internal_open_for_progress();
+}
+inline void TravelPassCatalogEntry::set_open_for_progress(bool value) {
+  _internal_set_open_for_progress(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.open_for_progress)
+}
+inline bool TravelPassCatalogEntry::_internal_open_for_progress() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.open_for_progress_;
+}
+inline void TravelPassCatalogEntry::_internal_set_open_for_progress(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_for_progress_ = value;
+}
+
+// bool open_for_unlock = 13;
+inline void TravelPassCatalogEntry::clear_open_for_unlock() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_for_unlock_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+}
+inline bool TravelPassCatalogEntry::open_for_unlock() const {
+  // @@protoc_insertion_point(field_get:TravelPassCatalogEntry.open_for_unlock)
+  return _internal_open_for_unlock();
+}
+inline void TravelPassCatalogEntry::set_open_for_unlock(bool value) {
+  _internal_set_open_for_unlock(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  // @@protoc_insertion_point(field_set:TravelPassCatalogEntry.open_for_unlock)
+}
+inline bool TravelPassCatalogEntry::_internal_open_for_unlock() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.open_for_unlock_;
+}
+inline void TravelPassCatalogEntry::_internal_set_open_for_unlock(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.open_for_unlock_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // TravelPassSnapshot
 
 // bool available = 1;
 inline void TravelPassSnapshot::clear_available() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.available_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline bool TravelPassSnapshot::available() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.available)
@@ -15557,7 +16846,7 @@ inline bool TravelPassSnapshot::available() const {
 }
 inline void TravelPassSnapshot::set_available(bool value) {
   _internal_set_available(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.available)
 }
 inline bool TravelPassSnapshot::_internal_available() const {
@@ -15637,7 +16926,7 @@ inline void TravelPassSnapshot::set_allocated_unavailable_reason(::std::string* 
 inline void TravelPassSnapshot::clear_server_now_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.server_now_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t TravelPassSnapshot::server_now_ms() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.server_now_ms)
@@ -15645,7 +16934,7 @@ inline ::uint64_t TravelPassSnapshot::server_now_ms() const {
 }
 inline void TravelPassSnapshot::set_server_now_ms(::uint64_t value) {
   _internal_set_server_now_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.server_now_ms)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_server_now_ms() const {
@@ -15661,7 +16950,7 @@ inline void TravelPassSnapshot::_internal_set_server_now_ms(::uint64_t value) {
 inline void TravelPassSnapshot::clear_pass_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pass_revision_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint64_t TravelPassSnapshot::pass_revision() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.pass_revision)
@@ -15669,7 +16958,7 @@ inline ::uint64_t TravelPassSnapshot::pass_revision() const {
 }
 inline void TravelPassSnapshot::set_pass_revision(::uint64_t value) {
   _internal_set_pass_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.pass_revision)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_pass_revision() const {
@@ -15685,7 +16974,7 @@ inline void TravelPassSnapshot::_internal_set_pass_revision(::uint64_t value) {
 inline void TravelPassSnapshot::clear_pass_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pass_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline ::uint32_t TravelPassSnapshot::pass_id() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.pass_id)
@@ -15693,7 +16982,7 @@ inline ::uint32_t TravelPassSnapshot::pass_id() const {
 }
 inline void TravelPassSnapshot::set_pass_id(::uint32_t value) {
   _internal_set_pass_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.pass_id)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_pass_id() const {
@@ -15709,7 +16998,7 @@ inline void TravelPassSnapshot::_internal_set_pass_id(::uint32_t value) {
 inline void TravelPassSnapshot::clear_config_revision() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.config_revision_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t TravelPassSnapshot::config_revision() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.config_revision)
@@ -15717,7 +17006,7 @@ inline ::uint32_t TravelPassSnapshot::config_revision() const {
 }
 inline void TravelPassSnapshot::set_config_revision(::uint32_t value) {
   _internal_set_config_revision(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.config_revision)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_config_revision() const {
@@ -15989,7 +17278,7 @@ inline void TravelPassSnapshot::set_allocated_banner_asset_key(::std::string* PR
 inline void TravelPassSnapshot::clear_starts_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.starts_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t TravelPassSnapshot::starts_at_ms() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.starts_at_ms)
@@ -15997,7 +17286,7 @@ inline ::uint64_t TravelPassSnapshot::starts_at_ms() const {
 }
 inline void TravelPassSnapshot::set_starts_at_ms(::uint64_t value) {
   _internal_set_starts_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.starts_at_ms)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_starts_at_ms() const {
@@ -16013,7 +17302,7 @@ inline void TravelPassSnapshot::_internal_set_starts_at_ms(::uint64_t value) {
 inline void TravelPassSnapshot::clear_ends_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ends_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t TravelPassSnapshot::ends_at_ms() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.ends_at_ms)
@@ -16021,7 +17310,7 @@ inline ::uint64_t TravelPassSnapshot::ends_at_ms() const {
 }
 inline void TravelPassSnapshot::set_ends_at_ms(::uint64_t value) {
   _internal_set_ends_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.ends_at_ms)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_ends_at_ms() const {
@@ -16037,7 +17326,7 @@ inline void TravelPassSnapshot::_internal_set_ends_at_ms(::uint64_t value) {
 inline void TravelPassSnapshot::clear_open_for_progress() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.open_for_progress_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline bool TravelPassSnapshot::open_for_progress() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.open_for_progress)
@@ -16045,7 +17334,7 @@ inline bool TravelPassSnapshot::open_for_progress() const {
 }
 inline void TravelPassSnapshot::set_open_for_progress(bool value) {
   _internal_set_open_for_progress(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.open_for_progress)
 }
 inline bool TravelPassSnapshot::_internal_open_for_progress() const {
@@ -16061,7 +17350,7 @@ inline void TravelPassSnapshot::_internal_set_open_for_progress(bool value) {
 inline void TravelPassSnapshot::clear_open_for_unlock() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.open_for_unlock_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline bool TravelPassSnapshot::open_for_unlock() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.open_for_unlock)
@@ -16069,7 +17358,7 @@ inline bool TravelPassSnapshot::open_for_unlock() const {
 }
 inline void TravelPassSnapshot::set_open_for_unlock(bool value) {
   _internal_set_open_for_unlock(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.open_for_unlock)
 }
 inline bool TravelPassSnapshot::_internal_open_for_unlock() const {
@@ -16085,7 +17374,7 @@ inline void TravelPassSnapshot::_internal_set_open_for_unlock(bool value) {
 inline void TravelPassSnapshot::clear_progress_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.progress_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::uint32_t TravelPassSnapshot::progress_points() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.progress_points)
@@ -16093,7 +17382,7 @@ inline ::uint32_t TravelPassSnapshot::progress_points() const {
 }
 inline void TravelPassSnapshot::set_progress_points(::uint32_t value) {
   _internal_set_progress_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.progress_points)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_progress_points() const {
@@ -16109,7 +17398,7 @@ inline void TravelPassSnapshot::_internal_set_progress_points(::uint32_t value) 
 inline void TravelPassSnapshot::clear_max_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t TravelPassSnapshot::max_points() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.max_points)
@@ -16117,7 +17406,7 @@ inline ::uint32_t TravelPassSnapshot::max_points() const {
 }
 inline void TravelPassSnapshot::set_max_points(::uint32_t value) {
   _internal_set_max_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.max_points)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_max_points() const {
@@ -16133,7 +17422,7 @@ inline void TravelPassSnapshot::_internal_set_max_points(::uint32_t value) {
 inline void TravelPassSnapshot::clear_pve_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pve_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint32_t TravelPassSnapshot::pve_win_points() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.pve_win_points)
@@ -16141,7 +17430,7 @@ inline ::uint32_t TravelPassSnapshot::pve_win_points() const {
 }
 inline void TravelPassSnapshot::set_pve_win_points(::uint32_t value) {
   _internal_set_pve_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.pve_win_points)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_pve_win_points() const {
@@ -16157,7 +17446,7 @@ inline void TravelPassSnapshot::_internal_set_pve_win_points(::uint32_t value) {
 inline void TravelPassSnapshot::clear_hard_or_pvp_win_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.hard_or_pvp_win_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint32_t TravelPassSnapshot::hard_or_pvp_win_points() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.hard_or_pvp_win_points)
@@ -16165,7 +17454,7 @@ inline ::uint32_t TravelPassSnapshot::hard_or_pvp_win_points() const {
 }
 inline void TravelPassSnapshot::set_hard_or_pvp_win_points(::uint32_t value) {
   _internal_set_hard_or_pvp_win_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.hard_or_pvp_win_points)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_hard_or_pvp_win_points() const {
@@ -16181,7 +17470,7 @@ inline void TravelPassSnapshot::_internal_set_hard_or_pvp_win_points(::uint32_t 
 inline void TravelPassSnapshot::clear_pvp_qualified_other_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.pvp_qualified_other_points_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t TravelPassSnapshot::pvp_qualified_other_points() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.pvp_qualified_other_points)
@@ -16189,7 +17478,7 @@ inline ::uint32_t TravelPassSnapshot::pvp_qualified_other_points() const {
 }
 inline void TravelPassSnapshot::set_pvp_qualified_other_points(::uint32_t value) {
   _internal_set_pvp_qualified_other_points(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.pvp_qualified_other_points)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_pvp_qualified_other_points() const {
@@ -16205,7 +17494,7 @@ inline void TravelPassSnapshot::_internal_set_pvp_qualified_other_points(::uint3
 inline void TravelPassSnapshot::clear_premium_unlocked() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.premium_unlocked_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline bool TravelPassSnapshot::premium_unlocked() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.premium_unlocked)
@@ -16213,7 +17502,7 @@ inline bool TravelPassSnapshot::premium_unlocked() const {
 }
 inline void TravelPassSnapshot::set_premium_unlocked(bool value) {
   _internal_set_premium_unlocked(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.premium_unlocked)
 }
 inline bool TravelPassSnapshot::_internal_premium_unlocked() const {
@@ -16229,7 +17518,7 @@ inline void TravelPassSnapshot::_internal_set_premium_unlocked(bool value) {
 inline void TravelPassSnapshot::clear_premium_unlocked_at_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.premium_unlocked_at_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
 }
 inline ::uint64_t TravelPassSnapshot::premium_unlocked_at_ms() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.premium_unlocked_at_ms)
@@ -16237,7 +17526,7 @@ inline ::uint64_t TravelPassSnapshot::premium_unlocked_at_ms() const {
 }
 inline void TravelPassSnapshot::set_premium_unlocked_at_ms(::uint64_t value) {
   _internal_set_premium_unlocked_at_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.premium_unlocked_at_ms)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_premium_unlocked_at_ms() const {
@@ -16253,7 +17542,7 @@ inline void TravelPassSnapshot::_internal_set_premium_unlocked_at_ms(::uint64_t 
 inline void TravelPassSnapshot::clear_premium_currency_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.premium_currency_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
 }
 inline ::uint32_t TravelPassSnapshot::premium_currency_type() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.premium_currency_type)
@@ -16261,7 +17550,7 @@ inline ::uint32_t TravelPassSnapshot::premium_currency_type() const {
 }
 inline void TravelPassSnapshot::set_premium_currency_type(::uint32_t value) {
   _internal_set_premium_currency_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.premium_currency_type)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_premium_currency_type() const {
@@ -16277,7 +17566,7 @@ inline void TravelPassSnapshot::_internal_set_premium_currency_type(::uint32_t v
 inline void TravelPassSnapshot::clear_premium_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.premium_price_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
 }
 inline ::uint64_t TravelPassSnapshot::premium_price() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.premium_price)
@@ -16285,7 +17574,7 @@ inline ::uint64_t TravelPassSnapshot::premium_price() const {
 }
 inline void TravelPassSnapshot::set_premium_price(::uint64_t value) {
   _internal_set_premium_price(value);
-  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.premium_price)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_premium_price() const {
@@ -16301,7 +17590,7 @@ inline void TravelPassSnapshot::_internal_set_premium_price(::uint64_t value) {
 inline void TravelPassSnapshot::clear_diamond_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.diamond_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x04000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x02000000U);
 }
 inline ::uint64_t TravelPassSnapshot::diamond_balance() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.diamond_balance)
@@ -16309,7 +17598,7 @@ inline ::uint64_t TravelPassSnapshot::diamond_balance() const {
 }
 inline void TravelPassSnapshot::set_diamond_balance(::uint64_t value) {
   _internal_set_diamond_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x04000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x02000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.diamond_balance)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_diamond_balance() const {
@@ -16325,7 +17614,7 @@ inline void TravelPassSnapshot::_internal_set_diamond_balance(::uint64_t value) 
 inline void TravelPassSnapshot::clear_bind_diamond_balance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bind_diamond_balance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint64_t TravelPassSnapshot::bind_diamond_balance() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.bind_diamond_balance)
@@ -16333,7 +17622,7 @@ inline ::uint64_t TravelPassSnapshot::bind_diamond_balance() const {
 }
 inline void TravelPassSnapshot::set_bind_diamond_balance(::uint64_t value) {
   _internal_set_bind_diamond_balance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.bind_diamond_balance)
 }
 inline ::uint64_t TravelPassSnapshot::_internal_bind_diamond_balance() const {
@@ -16349,7 +17638,7 @@ inline void TravelPassSnapshot::_internal_set_bind_diamond_balance(::uint64_t va
 inline void TravelPassSnapshot::clear_claimable_free_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimable_free_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x08000000U);
 }
 inline ::uint32_t TravelPassSnapshot::claimable_free_count() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.claimable_free_count)
@@ -16357,7 +17646,7 @@ inline ::uint32_t TravelPassSnapshot::claimable_free_count() const {
 }
 inline void TravelPassSnapshot::set_claimable_free_count(::uint32_t value) {
   _internal_set_claimable_free_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x08000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.claimable_free_count)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_claimable_free_count() const {
@@ -16373,7 +17662,7 @@ inline void TravelPassSnapshot::_internal_set_claimable_free_count(::uint32_t va
 inline void TravelPassSnapshot::clear_claimable_premium_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.claimable_premium_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline ::uint32_t TravelPassSnapshot::claimable_premium_count() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.claimable_premium_count)
@@ -16381,7 +17670,7 @@ inline ::uint32_t TravelPassSnapshot::claimable_premium_count() const {
 }
 inline void TravelPassSnapshot::set_claimable_premium_count(::uint32_t value) {
   _internal_set_claimable_premium_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.claimable_premium_count)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_claimable_premium_count() const {
@@ -16397,7 +17686,7 @@ inline void TravelPassSnapshot::_internal_set_claimable_premium_count(::uint32_t
 inline void TravelPassSnapshot::clear_retroactive_premium_count() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.retroactive_premium_count_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline ::uint32_t TravelPassSnapshot::retroactive_premium_count() const {
   // @@protoc_insertion_point(field_get:TravelPassSnapshot.retroactive_premium_count)
@@ -16405,7 +17694,7 @@ inline ::uint32_t TravelPassSnapshot::retroactive_premium_count() const {
 }
 inline void TravelPassSnapshot::set_retroactive_premium_count(::uint32_t value) {
   _internal_set_retroactive_premium_count(value);
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.retroactive_premium_count)
 }
 inline ::uint32_t TravelPassSnapshot::_internal_retroactive_premium_count() const {
@@ -16612,7 +17901,7 @@ inline void TravelPassSnapshot::set_allocated_equipped_frame_key(::std::string* 
 inline void TravelPassSnapshot::clear_equipped_title_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_title_key_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
 }
 inline const ::std::string& TravelPassSnapshot::equipped_title_key() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -16622,13 +17911,13 @@ inline const ::std::string& TravelPassSnapshot::equipped_title_key() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void TravelPassSnapshot::set_equipped_title_key(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   _impl_.equipped_title_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:TravelPassSnapshot.equipped_title_key)
 }
 inline ::std::string* PROTOBUF_NONNULL TravelPassSnapshot::mutable_equipped_title_key()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   ::std::string* _s = _internal_mutable_equipped_title_key();
   // @@protoc_insertion_point(field_mutable:TravelPassSnapshot.equipped_title_key)
   return _s;
@@ -16648,10 +17937,10 @@ inline ::std::string* PROTOBUF_NONNULL TravelPassSnapshot::_internal_mutable_equ
 inline ::std::string* PROTOBUF_NULLABLE TravelPassSnapshot::release_equipped_title_key() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:TravelPassSnapshot.equipped_title_key)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000100U)) {
+  if (!CheckHasBit(_impl_._has_bits_[1], 0x00000001U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
   auto* released = _impl_.equipped_title_key_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.equipped_title_key_.Set("", GetArena());
@@ -16661,15 +17950,94 @@ inline ::std::string* PROTOBUF_NULLABLE TravelPassSnapshot::release_equipped_tit
 inline void TravelPassSnapshot::set_allocated_equipped_title_key(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+    SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+    ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
   }
   _impl_.equipped_title_key_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.equipped_title_key_.IsDefault()) {
     _impl_.equipped_title_key_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:TravelPassSnapshot.equipped_title_key)
+}
+
+// uint32 active_pass_id = 33;
+inline void TravelPassSnapshot::clear_active_pass_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pass_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+}
+inline ::uint32_t TravelPassSnapshot::active_pass_id() const {
+  // @@protoc_insertion_point(field_get:TravelPassSnapshot.active_pass_id)
+  return _internal_active_pass_id();
+}
+inline void TravelPassSnapshot::set_active_pass_id(::uint32_t value) {
+  _internal_set_active_pass_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  // @@protoc_insertion_point(field_set:TravelPassSnapshot.active_pass_id)
+}
+inline ::uint32_t TravelPassSnapshot::_internal_active_pass_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.active_pass_id_;
+}
+inline void TravelPassSnapshot::_internal_set_active_pass_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.active_pass_id_ = value;
+}
+
+// repeated .TravelPassCatalogEntry bookshelf = 34;
+inline int TravelPassSnapshot::_internal_bookshelf_size() const {
+  return _internal_bookshelf().size();
+}
+inline int TravelPassSnapshot::bookshelf_size() const {
+  return _internal_bookshelf_size();
+}
+inline void TravelPassSnapshot::clear_bookshelf() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bookshelf_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+}
+inline const ::TravelPassCatalogEntry& TravelPassSnapshot::bookshelf(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:TravelPassSnapshot.bookshelf)
+  return _internal_bookshelf().Get(index);
+}
+inline ::TravelPassCatalogEntry* PROTOBUF_NONNULL TravelPassSnapshot::mutable_bookshelf(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:TravelPassSnapshot.bookshelf)
+  return _internal_mutable_bookshelf()->Mutable(index);
+}
+inline ::TravelPassCatalogEntry* PROTOBUF_NONNULL TravelPassSnapshot::add_bookshelf()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::TravelPassCatalogEntry* _add =
+      _internal_mutable_bookshelf()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  // @@protoc_insertion_point(field_add:TravelPassSnapshot.bookshelf)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>& TravelPassSnapshot::bookshelf() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:TravelPassSnapshot.bookshelf)
+  return _internal_bookshelf();
+}
+inline ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>* PROTOBUF_NONNULL
+TravelPassSnapshot::mutable_bookshelf() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  // @@protoc_insertion_point(field_mutable_list:TravelPassSnapshot.bookshelf)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_bookshelf();
+}
+inline const ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>&
+TravelPassSnapshot::_internal_bookshelf() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bookshelf_;
+}
+inline ::google::protobuf::RepeatedPtrField<::TravelPassCatalogEntry>* PROTOBUF_NONNULL
+TravelPassSnapshot::_internal_mutable_bookshelf() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.bookshelf_;
 }
 
 // -------------------------------------------------------------------
@@ -17959,6 +19327,229 @@ inline void EquipTravelPassCosmeticResponse::set_allocated_snapshot(::TravelPass
 
   _impl_.snapshot_ = reinterpret_cast<::TravelPassSnapshot*>(value);
   // @@protoc_insertion_point(field_set_allocated:EquipTravelPassCosmeticResponse.snapshot)
+}
+
+// -------------------------------------------------------------------
+
+// SelectActiveTravelPassRequest
+
+// uint32 pass_id = 1;
+inline void SelectActiveTravelPassRequest::clear_pass_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pass_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t SelectActiveTravelPassRequest::pass_id() const {
+  // @@protoc_insertion_point(field_get:SelectActiveTravelPassRequest.pass_id)
+  return _internal_pass_id();
+}
+inline void SelectActiveTravelPassRequest::set_pass_id(::uint32_t value) {
+  _internal_set_pass_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:SelectActiveTravelPassRequest.pass_id)
+}
+inline ::uint32_t SelectActiveTravelPassRequest::_internal_pass_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pass_id_;
+}
+inline void SelectActiveTravelPassRequest::_internal_set_pass_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pass_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// SelectActiveTravelPassResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool SelectActiveTravelPassResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& SelectActiveTravelPassResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& SelectActiveTravelPassResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SelectActiveTravelPassResponse.error_message)
+  return _internal_error_message();
+}
+inline void SelectActiveTravelPassResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SelectActiveTravelPassResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SelectActiveTravelPassResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE SelectActiveTravelPassResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SelectActiveTravelPassResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SelectActiveTravelPassResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL SelectActiveTravelPassResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:SelectActiveTravelPassResponse.error_message)
+  return _msg;
+}
+inline void SelectActiveTravelPassResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SelectActiveTravelPassResponse.error_message)
+}
+
+// .TravelPassSnapshot snapshot = 2;
+inline bool SelectActiveTravelPassResponse::has_snapshot() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.snapshot_ != nullptr);
+  return value;
+}
+inline void SelectActiveTravelPassResponse::clear_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.snapshot_ != nullptr) _impl_.snapshot_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::TravelPassSnapshot& SelectActiveTravelPassResponse::_internal_snapshot() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TravelPassSnapshot* p = _impl_.snapshot_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TravelPassSnapshot>(&::TravelPassSnapshot_globals_);
+}
+inline const ::TravelPassSnapshot& SelectActiveTravelPassResponse::snapshot() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:SelectActiveTravelPassResponse.snapshot)
+  return _internal_snapshot();
+}
+inline void SelectActiveTravelPassResponse::unsafe_arena_set_allocated_snapshot(
+    ::TravelPassSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.snapshot_);
+  }
+  _impl_.snapshot_ = reinterpret_cast<::TravelPassSnapshot*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:SelectActiveTravelPassResponse.snapshot)
+}
+inline ::TravelPassSnapshot* PROTOBUF_NULLABLE SelectActiveTravelPassResponse::release_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TravelPassSnapshot* released = _impl_.snapshot_;
+  _impl_.snapshot_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TravelPassSnapshot* PROTOBUF_NULLABLE SelectActiveTravelPassResponse::unsafe_arena_release_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:SelectActiveTravelPassResponse.snapshot)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TravelPassSnapshot* temp = _impl_.snapshot_;
+  _impl_.snapshot_ = nullptr;
+  return temp;
+}
+inline ::TravelPassSnapshot* PROTOBUF_NONNULL SelectActiveTravelPassResponse::_internal_mutable_snapshot() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.snapshot_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TravelPassSnapshot>(GetArena());
+    _impl_.snapshot_ = reinterpret_cast<::TravelPassSnapshot*>(p);
+  }
+  return _impl_.snapshot_;
+}
+inline ::TravelPassSnapshot* PROTOBUF_NONNULL SelectActiveTravelPassResponse::mutable_snapshot()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::TravelPassSnapshot* _msg = _internal_mutable_snapshot();
+  // @@protoc_insertion_point(field_mutable:SelectActiveTravelPassResponse.snapshot)
+  return _msg;
+}
+inline void SelectActiveTravelPassResponse::set_allocated_snapshot(::TravelPassSnapshot* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.snapshot_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.snapshot_ = reinterpret_cast<::TravelPassSnapshot*>(value);
+  // @@protoc_insertion_point(field_set_allocated:SelectActiveTravelPassResponse.snapshot)
 }
 
 #ifdef __GNUC__

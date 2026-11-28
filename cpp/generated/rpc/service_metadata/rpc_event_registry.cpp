@@ -273,6 +273,8 @@ namespace guildpb{void SendGuildServiceInspectFieldWarTargetsErased(entt::regist
 namespace guildpb{void SendGuildServiceIssueGuildWarFeudErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceRespondGuildWarFeudErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildServiceGetGuildJianghuGrudgeWallErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceUnlockGuildEmblemErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
+namespace guildpb{void SendGuildServiceEquipGuildEmblemErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace guildpb{void SendGuildInternalListAppliedAssetOpsSinceErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginLoginErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
 namespace loginpb{void SendClientPlayerLoginCreatePlayerErased(entt::registry& , entt::entity , const google::protobuf::Message& , GrpcMessageDone , const GrpcCallOptions& );}
@@ -493,7 +495,7 @@ namespace trade{void SendTradeAdminRecordSellerViolationErased(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 591,
+static_assert(kMaxRpcMethodCount == 604,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1329,6 +1331,16 @@ void InitMessageInfo()
         std::make_unique<::guildpb::GetGuildJianghuGrudgeWallRequest>(),
         std::make_unique<::guildpb::GetGuildJianghuGrudgeWallResponse>(),
         1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildJianghuGrudgeWallErased, "/guildpb.GuildService/GetGuildJianghuGrudgeWall"};
+    gRpcMethodRegistry[GuildServiceUnlockGuildEmblemMessageId] = RpcMethodMeta{
+        "GuildService", "UnlockGuildEmblem",
+        std::make_unique<::guildpb::UnlockGuildEmblemRequest>(),
+        std::make_unique<::guildpb::UnlockGuildEmblemResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceUnlockGuildEmblemErased, "/guildpb.GuildService/UnlockGuildEmblem"};
+    gRpcMethodRegistry[GuildServiceEquipGuildEmblemMessageId] = RpcMethodMeta{
+        "GuildService", "EquipGuildEmblem",
+        std::make_unique<::guildpb::EquipGuildEmblemRequest>(),
+        std::make_unique<::guildpb::EquipGuildEmblemResponse>(),
+        1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceEquipGuildEmblemErased, "/guildpb.GuildService/EquipGuildEmblem"};
 
     // --- GuildInternal ---
     gRpcMethodRegistry[GuildInternalListAppliedAssetOpsSinceMessageId] = RpcMethodMeta{
@@ -2153,6 +2165,11 @@ void InitMessageInfo()
         std::make_unique<::UnlockEquipLoadoutRequest>(),
         std::make_unique<::UnlockEquipLoadoutResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerExpandBagCapacityMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "ExpandBagCapacity",
+        std::make_unique<::ExpandBagCapacityRequest>(),
+        std::make_unique<::ExpandBagCapacityResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneActivityClientPlayer ---
     gRpcMethodRegistry[SceneActivityClientPlayerGetActivityListMessageId] = RpcMethodMeta{
@@ -2199,6 +2216,11 @@ void InitMessageInfo()
         "SceneActivityClientPlayer", "EquipTravelPassCosmetic",
         std::make_unique<::EquipTravelPassCosmeticRequest>(),
         std::make_unique<::EquipTravelPassCosmeticResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneActivityClientPlayerSelectActiveTravelPassMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "SelectActiveTravelPass",
+        std::make_unique<::SelectActiveTravelPassRequest>(),
+        std::make_unique<::SelectActiveTravelPassResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneAfkPassClientPlayer ---
@@ -2268,6 +2290,36 @@ void InitMessageInfo()
         "SceneAppearanceClientPlayer", "EquipSkillVfx",
         std::make_unique<::EquipSkillVfxRequest>(),
         std::make_unique<::EquipSkillVfxResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerBuyAppearanceSeriesBundleMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "BuyAppearanceSeriesBundle",
+        std::make_unique<::BuyAppearanceSeriesBundleRequest>(),
+        std::make_unique<::BuyAppearanceSeriesBundleResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerEquipShowcaseCosmeticMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "EquipShowcaseCosmetic",
+        std::make_unique<::EquipShowcaseCosmeticRequest>(),
+        std::make_unique<::EquipShowcaseCosmeticResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerCastCityCelebrationMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "CastCityCelebration",
+        std::make_unique<::CastCityCelebrationRequest>(),
+        std::make_unique<::CastCityCelebrationResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerClaimCityCelebrationGiftMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "ClaimCityCelebrationGift",
+        std::make_unique<::ClaimCityCelebrationGiftRequest>(),
+        std::make_unique<::ClaimCityCelebrationGiftResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerNotifyCityCelebrationMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "NotifyCityCelebration",
+        std::make_unique<::CityCelebrationNotify>(),
+        std::make_unique<::Empty>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAppearanceClientPlayerSendCosmeticGiftMessageId] = RpcMethodMeta{
+        "SceneAppearanceClientPlayer", "SendCosmeticGift",
+        std::make_unique<::SendCosmeticGiftRequest>(),
+        std::make_unique<::SendCosmeticGiftResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneAttributeClientPlayer ---
@@ -2552,6 +2604,16 @@ void InitMessageInfo()
         std::make_unique<::AscendPetTierRequest>(),
         std::make_unique<::AscendPetTierResponse>(),
         0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerSavePetSquadPresetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "SavePetSquadPreset",
+        std::make_unique<::SavePetSquadPresetRequest>(),
+        std::make_unique<::SavePetSquadPresetResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerUnlockPetSquadPresetSlotMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "UnlockPetSquadPresetSlot",
+        std::make_unique<::UnlockPetSquadPresetSlotRequest>(),
+        std::make_unique<::UnlockPetSquadPresetSlotResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneRewardedAdClientPlayer ---
     gRpcMethodRegistry[SceneRewardedAdClientPlayerGetRewardedAdInfoMessageId] = RpcMethodMeta{
@@ -2702,6 +2764,11 @@ void InitMessageInfo()
         "SceneSeasonClientPlayer", "ResolveWuxingRealmEvent",
         std::make_unique<::ResolveWuxingRealmEventRequest>(),
         std::make_unique<::ResolveWuxingRealmEventResponse>(),
+        0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSeasonClientPlayerExpandSavedBuildSlotsMessageId] = RpcMethodMeta{
+        "SceneSeasonClientPlayer", "ExpandSavedBuildSlots",
+        std::make_unique<::ExpandSavedBuildSlotsRequest>(),
+        std::make_unique<::ExpandSavedBuildSlotsResponse>(),
         0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSkillClientPlayer ---
@@ -3431,6 +3498,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceIssueGuildWarFeudMessageId:
 	case GuildServiceRespondGuildWarFeudMessageId:
 	case GuildServiceGetGuildJianghuGrudgeWallMessageId:
+	case GuildServiceUnlockGuildEmblemMessageId:
+	case GuildServiceEquipGuildEmblemMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:
@@ -3522,6 +3591,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneBagClientPlayerSaveEquipLoadoutMessageId:
 	case SceneBagClientPlayerSwitchEquipLoadoutMessageId:
 	case SceneBagClientPlayerUnlockEquipLoadoutMessageId:
+	case SceneBagClientPlayerExpandBagCapacityMessageId:
 	case SceneActivityClientPlayerGetActivityListMessageId:
 	case SceneActivityClientPlayerClaimActivityVitalityRewardMessageId:
 	case SceneActivityClientPlayerGetFestivalBeastDetailMessageId:
@@ -3531,6 +3601,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneActivityClientPlayerUnlockTravelPassPremiumMessageId:
 	case SceneActivityClientPlayerClaimTravelPassRewardMessageId:
 	case SceneActivityClientPlayerEquipTravelPassCosmeticMessageId:
+	case SceneActivityClientPlayerSelectActiveTravelPassMessageId:
 	case SceneAfkPassClientPlayerGetAfkPassMessageId:
 	case SceneAfkPassClientPlayerBuyAfkPassMessageId:
 	case SceneAfkPassClientPlayerGmSetAfkPassMessageId:
@@ -3542,6 +3613,11 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneAppearanceClientPlayerCancelAppearanceTrialMessageId:
 	case SceneAppearanceClientPlayerEquipPetCosmeticMessageId:
 	case SceneAppearanceClientPlayerEquipSkillVfxMessageId:
+	case SceneAppearanceClientPlayerBuyAppearanceSeriesBundleMessageId:
+	case SceneAppearanceClientPlayerEquipShowcaseCosmeticMessageId:
+	case SceneAppearanceClientPlayerCastCityCelebrationMessageId:
+	case SceneAppearanceClientPlayerClaimCityCelebrationGiftMessageId:
+	case SceneAppearanceClientPlayerSendCosmeticGiftMessageId:
 	case SceneAttributeClientPlayerGetAttributePanelMessageId:
 	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
 	case SceneAttributeClientPlayerResetAttributePointsMessageId:
@@ -3585,6 +3661,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case ScenePetClientPlayerSavePetEntriesMessageId:
 	case ScenePetClientPlayerSwitchPetEntryPresetMessageId:
 	case ScenePetClientPlayerAscendPetTierMessageId:
+	case ScenePetClientPlayerSavePetSquadPresetMessageId:
+	case ScenePetClientPlayerUnlockPetSquadPresetSlotMessageId:
 	case SceneRewardedAdClientPlayerGetRewardedAdInfoMessageId:
 	case SceneRewardedAdClientPlayerBeginRewardedAdSessionMessageId:
 	case SceneRewardedAdClientPlayerClaimRewardedAdMessageId:
@@ -3607,6 +3685,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSeasonClientPlayerSetRetroHonorTargetMessageId:
 	case SceneSeasonClientPlayerChooseWuxingRealmBranchMessageId:
 	case SceneSeasonClientPlayerResolveWuxingRealmEventMessageId:
+	case SceneSeasonClientPlayerExpandSavedBuildSlotsMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
 	case SceneSkillClientPlayerUpgradeSkillMessageId:

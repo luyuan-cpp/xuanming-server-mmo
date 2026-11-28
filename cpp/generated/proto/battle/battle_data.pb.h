@@ -14426,12 +14426,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     kActiveSeasonIdFieldNumber = 24,
     kAiControlledFieldNumber = 25,
     kFormationIdFieldNumber = 28,
-    kMinorPlayDeadlineMsFieldNumber = 33,
-    kIsTeamCaptainFieldNumber = 32,
-    kSpectateChatPrefFieldNumber = 34,
     kSeasonWeeklyAffixIdFieldNumber = 30,
     kSkillRanksFieldNumber = 21,
     kEquippedSkillVfxFieldNumber = 31,
+    kMinorPlayDeadlineMsFieldNumber = 33,
+    kIsTeamCaptainFieldNumber = 32,
+    kSpectateChatPrefFieldNumber = 34,
+    kFormationSkinIdFieldNumber = 35,
+    kEntranceVictorySkinIdFieldNumber = 36,
   };
   // repeated uint32 skill_table_ids = 7;
   [[nodiscard]] int skill_table_ids_size()
@@ -14823,36 +14825,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   void _internal_set_formation_id(::uint32_t value);
 
   public:
-  // uint64 minor_play_deadline_ms = 33;
-  void clear_minor_play_deadline_ms() ;
-  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
-  void set_minor_play_deadline_ms(::uint64_t value);
-
-  private:
-  ::uint64_t _internal_minor_play_deadline_ms() const;
-  void _internal_set_minor_play_deadline_ms(::uint64_t value);
-
-  public:
-  // bool is_team_captain = 32;
-  void clear_is_team_captain() ;
-  [[nodiscard]] bool is_team_captain() const;
-  void set_is_team_captain(bool value);
-
-  private:
-  bool _internal_is_team_captain() const;
-  void _internal_set_is_team_captain(bool value);
-
-  public:
-  // .eSpectateChatPreference spectate_chat_pref = 34;
-  void clear_spectate_chat_pref() ;
-  [[nodiscard]] ::eSpectateChatPreference spectate_chat_pref() const;
-  void set_spectate_chat_pref(::eSpectateChatPreference value);
-
-  private:
-  ::eSpectateChatPreference _internal_spectate_chat_pref() const;
-  void _internal_set_spectate_chat_pref(::eSpectateChatPreference value);
-
-  public:
   // uint32 season_weekly_affix_id = 30;
   void clear_season_weekly_affix_id() ;
   [[nodiscard]] ::uint32_t season_weekly_affix_id() const;
@@ -14895,11 +14867,61 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
   ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL _internal_mutable_equipped_skill_vfx();
 
   public:
+  // uint64 minor_play_deadline_ms = 33;
+  void clear_minor_play_deadline_ms() ;
+  [[nodiscard]] ::uint64_t minor_play_deadline_ms() const;
+  void set_minor_play_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_minor_play_deadline_ms() const;
+  void _internal_set_minor_play_deadline_ms(::uint64_t value);
+
+  public:
+  // bool is_team_captain = 32;
+  void clear_is_team_captain() ;
+  [[nodiscard]] bool is_team_captain() const;
+  void set_is_team_captain(bool value);
+
+  private:
+  bool _internal_is_team_captain() const;
+  void _internal_set_is_team_captain(bool value);
+
+  public:
+  // .eSpectateChatPreference spectate_chat_pref = 34;
+  void clear_spectate_chat_pref() ;
+  [[nodiscard]] ::eSpectateChatPreference spectate_chat_pref() const;
+  void set_spectate_chat_pref(::eSpectateChatPreference value);
+
+  private:
+  ::eSpectateChatPreference _internal_spectate_chat_pref() const;
+  void _internal_set_spectate_chat_pref(::eSpectateChatPreference value);
+
+  public:
+  // uint32 formation_skin_id = 35;
+  void clear_formation_skin_id() ;
+  [[nodiscard]] ::uint32_t formation_skin_id() const;
+  void set_formation_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_formation_skin_id() const;
+  void _internal_set_formation_skin_id(::uint32_t value);
+
+  public:
+  // uint32 entrance_victory_skin_id = 36;
+  void clear_entrance_victory_skin_id() ;
+  [[nodiscard]] ::uint32_t entrance_victory_skin_id() const;
+  void set_entrance_victory_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entrance_victory_skin_id() const;
+  void _internal_set_entrance_victory_skin_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattlePlayerSnapshot)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 34,
+      ::google::protobuf::internal::TcParseTable<5, 36,
                           12, 102,
                           7>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -14957,12 +14979,14 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattlePlayerSnapshot final : public
     ::uint32_t active_season_id_;
     bool ai_controlled_;
     ::uint32_t formation_id_;
-    ::uint64_t minor_play_deadline_ms_;
-    bool is_team_captain_;
-    int spectate_chat_pref_;
     ::uint32_t season_weekly_affix_id_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_SkillRanksEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_ranks_;
     ::google::protobuf::internal::MapField<BattlePlayerSnapshot_EquippedSkillVfxEntry_DoNotUse, ::uint32_t, ::uint32_t> equipped_skill_vfx_;
+    ::uint64_t minor_play_deadline_ms_;
+    bool is_team_captain_;
+    int spectate_chat_pref_;
+    ::uint32_t formation_skin_id_;
+    ::uint32_t entrance_victory_skin_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -15166,6 +15190,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kIsBossFieldNumber = 43,
     kChargingSkillIdFieldNumber = 45,
     kWinStreakFieldNumber = 48,
+    kFormationSkinIdFieldNumber = 49,
+    kEntranceVictorySkinIdFieldNumber = 50,
   };
   // repeated .BattleBuffEntry buffs = 12;
   [[nodiscard]] int buffs_size()
@@ -15770,13 +15796,33 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_win_streak(::uint32_t value);
 
   public:
+  // uint32 formation_skin_id = 49;
+  void clear_formation_skin_id() ;
+  [[nodiscard]] ::uint32_t formation_skin_id() const;
+  void set_formation_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_formation_skin_id() const;
+  void _internal_set_formation_skin_id(::uint32_t value);
+
+  public:
+  // uint32 entrance_victory_skin_id = 50;
+  void clear_entrance_victory_skin_id() ;
+  [[nodiscard]] ::uint32_t entrance_victory_skin_id() const;
+  void set_entrance_victory_skin_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_entrance_victory_skin_id() const;
+  void _internal_set_entrance_victory_skin_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BattleActorState)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 48,
+      ::google::protobuf::internal::TcParseTable<5, 50,
                           13, 110,
-                          7>;
+                          9>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
   friend class ::google::protobuf::internal::TcParser;
@@ -15853,6 +15899,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     bool is_boss_;
     ::uint32_t charging_skill_id_;
     ::uint32_t win_streak_;
+    ::uint32_t formation_skin_id_;
+    ::uint32_t entrance_victory_skin_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -17589,7 +17637,7 @@ inline int BattlePlayerSnapshot::skill_ranks_size() const {
 inline void BattlePlayerSnapshot::clear_skill_ranks() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_ranks_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_skill_ranks() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -17605,7 +17653,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_skill_ranks()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.skill_ranks)
   return _internal_mutable_skill_ranks();
 }
@@ -18006,7 +18054,7 @@ inline void BattlePlayerSnapshot::set_allocated_tower_context(::WuxingTowerBattl
 inline void BattlePlayerSnapshot::clear_season_weekly_affix_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.season_weekly_affix_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
 }
 inline ::uint32_t BattlePlayerSnapshot::season_weekly_affix_id() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.season_weekly_affix_id)
@@ -18014,7 +18062,7 @@ inline ::uint32_t BattlePlayerSnapshot::season_weekly_affix_id() const {
 }
 inline void BattlePlayerSnapshot::set_season_weekly_affix_id(::uint32_t value) {
   _internal_set_season_weekly_affix_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.season_weekly_affix_id)
 }
 inline ::uint32_t BattlePlayerSnapshot::_internal_season_weekly_affix_id() const {
@@ -18036,7 +18084,7 @@ inline int BattlePlayerSnapshot::equipped_skill_vfx_size() const {
 inline void BattlePlayerSnapshot::clear_equipped_skill_vfx() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equipped_skill_vfx_.Clear();
-  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattlePlayerSnapshot::_internal_equipped_skill_vfx() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -18052,7 +18100,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattlePlayerSnapshot::mutable_equipped_skill_vfx()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
   // @@protoc_insertion_point(field_mutable_map:BattlePlayerSnapshot.equipped_skill_vfx)
   return _internal_mutable_equipped_skill_vfx();
 }
@@ -18061,7 +18109,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleP
 inline void BattlePlayerSnapshot::clear_is_team_captain() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.is_team_captain_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x20000000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000001U);
 }
 inline bool BattlePlayerSnapshot::is_team_captain() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.is_team_captain)
@@ -18069,7 +18117,7 @@ inline bool BattlePlayerSnapshot::is_team_captain() const {
 }
 inline void BattlePlayerSnapshot::set_is_team_captain(bool value) {
   _internal_set_is_team_captain(value);
-  SetHasBit(_impl_._has_bits_[0], 0x20000000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000001U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.is_team_captain)
 }
 inline bool BattlePlayerSnapshot::_internal_is_team_captain() const {
@@ -18085,7 +18133,7 @@ inline void BattlePlayerSnapshot::_internal_set_is_team_captain(bool value) {
 inline void BattlePlayerSnapshot::clear_minor_play_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.minor_play_deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x10000000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x80000000U);
 }
 inline ::uint64_t BattlePlayerSnapshot::minor_play_deadline_ms() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.minor_play_deadline_ms)
@@ -18093,7 +18141,7 @@ inline ::uint64_t BattlePlayerSnapshot::minor_play_deadline_ms() const {
 }
 inline void BattlePlayerSnapshot::set_minor_play_deadline_ms(::uint64_t value) {
   _internal_set_minor_play_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x10000000U);
+  SetHasBit(_impl_._has_bits_[0], 0x80000000U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.minor_play_deadline_ms)
 }
 inline ::uint64_t BattlePlayerSnapshot::_internal_minor_play_deadline_ms() const {
@@ -18109,7 +18157,7 @@ inline void BattlePlayerSnapshot::_internal_set_minor_play_deadline_ms(::uint64_
 inline void BattlePlayerSnapshot::clear_spectate_chat_pref() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spectate_chat_pref_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x40000000U);
+  ClearHasBit(_impl_._has_bits_[1], 0x00000002U);
 }
 inline ::eSpectateChatPreference BattlePlayerSnapshot::spectate_chat_pref() const {
   // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.spectate_chat_pref)
@@ -18117,7 +18165,7 @@ inline ::eSpectateChatPreference BattlePlayerSnapshot::spectate_chat_pref() cons
 }
 inline void BattlePlayerSnapshot::set_spectate_chat_pref(::eSpectateChatPreference value) {
   _internal_set_spectate_chat_pref(value);
-  SetHasBit(_impl_._has_bits_[0], 0x40000000U);
+  SetHasBit(_impl_._has_bits_[1], 0x00000002U);
   // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.spectate_chat_pref)
 }
 inline ::eSpectateChatPreference BattlePlayerSnapshot::_internal_spectate_chat_pref() const {
@@ -18127,6 +18175,54 @@ inline ::eSpectateChatPreference BattlePlayerSnapshot::_internal_spectate_chat_p
 inline void BattlePlayerSnapshot::_internal_set_spectate_chat_pref(::eSpectateChatPreference value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.spectate_chat_pref_ = value;
+}
+
+// uint32 formation_skin_id = 35;
+inline void BattlePlayerSnapshot::clear_formation_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000004U);
+}
+inline ::uint32_t BattlePlayerSnapshot::formation_skin_id() const {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.formation_skin_id)
+  return _internal_formation_skin_id();
+}
+inline void BattlePlayerSnapshot::set_formation_skin_id(::uint32_t value) {
+  _internal_set_formation_skin_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.formation_skin_id)
+}
+inline ::uint32_t BattlePlayerSnapshot::_internal_formation_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.formation_skin_id_;
+}
+inline void BattlePlayerSnapshot::_internal_set_formation_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_skin_id_ = value;
+}
+
+// uint32 entrance_victory_skin_id = 36;
+inline void BattlePlayerSnapshot::clear_entrance_victory_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entrance_victory_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00000008U);
+}
+inline ::uint32_t BattlePlayerSnapshot::entrance_victory_skin_id() const {
+  // @@protoc_insertion_point(field_get:BattlePlayerSnapshot.entrance_victory_skin_id)
+  return _internal_entrance_victory_skin_id();
+}
+inline void BattlePlayerSnapshot::set_entrance_victory_skin_id(::uint32_t value) {
+  _internal_set_entrance_victory_skin_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BattlePlayerSnapshot.entrance_victory_skin_id)
+}
+inline ::uint32_t BattlePlayerSnapshot::_internal_entrance_victory_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entrance_victory_skin_id_;
+}
+inline void BattlePlayerSnapshot::_internal_set_entrance_victory_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entrance_victory_skin_id_ = value;
 }
 
 // -------------------------------------------------------------------
@@ -20673,6 +20769,54 @@ inline ::uint32_t BattleActorState::_internal_win_streak() const {
 inline void BattleActorState::_internal_set_win_streak(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.win_streak_ = value;
+}
+
+// uint32 formation_skin_id = 49;
+inline void BattleActorState::clear_formation_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00010000U);
+}
+inline ::uint32_t BattleActorState::formation_skin_id() const {
+  // @@protoc_insertion_point(field_get:BattleActorState.formation_skin_id)
+  return _internal_formation_skin_id();
+}
+inline void BattleActorState::set_formation_skin_id(::uint32_t value) {
+  _internal_set_formation_skin_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00010000U);
+  // @@protoc_insertion_point(field_set:BattleActorState.formation_skin_id)
+}
+inline ::uint32_t BattleActorState::_internal_formation_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.formation_skin_id_;
+}
+inline void BattleActorState::_internal_set_formation_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.formation_skin_id_ = value;
+}
+
+// uint32 entrance_victory_skin_id = 50;
+inline void BattleActorState::clear_entrance_victory_skin_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entrance_victory_skin_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[1], 0x00020000U);
+}
+inline ::uint32_t BattleActorState::entrance_victory_skin_id() const {
+  // @@protoc_insertion_point(field_get:BattleActorState.entrance_victory_skin_id)
+  return _internal_entrance_victory_skin_id();
+}
+inline void BattleActorState::set_entrance_victory_skin_id(::uint32_t value) {
+  _internal_set_entrance_victory_skin_id(value);
+  SetHasBit(_impl_._has_bits_[1], 0x00020000U);
+  // @@protoc_insertion_point(field_set:BattleActorState.entrance_victory_skin_id)
+}
+inline ::uint32_t BattleActorState::_internal_entrance_victory_skin_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.entrance_victory_skin_id_;
+}
+inline void BattleActorState::_internal_set_entrance_victory_skin_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.entrance_victory_skin_id_ = value;
 }
 
 // -------------------------------------------------------------------

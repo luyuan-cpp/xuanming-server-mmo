@@ -107,4 +107,16 @@ public final class TravelPassSeasonTableComp {
         }
     }
 
+    public record Sort_order(int value) {
+        public static Sort_order from(TravelPassSeasonTable row) {
+            return new Sort_order(row.getSortOrder());
+        }
+    }
+
+    public record Is_archived(int value) {
+        public static Is_archived from(TravelPassSeasonTable row) {
+            return new Is_archived(row.getIsArchived());
+        }
+    }
+
 }

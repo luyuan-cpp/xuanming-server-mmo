@@ -4,6 +4,8 @@
 #include <entt/src/entt/entity/entity.hpp>
 
 class BagInfo;
+class ExpandBagCapacityRequest;
+class ExpandBagCapacityResponse;
 class GetMissionListResponse;
 class GetActivityListResponse;
 
@@ -11,8 +13,15 @@ class GetActivityListResponse;
 // 返回既有 tip 表的错误码；成功才发布完整快照，客户端整体覆盖。
 class PlayerBagSystem {
 public:
+    static constexpr uint32_t kWarehouseExpandStep = 20u;
+    static constexpr uint32_t kWarehouseMaxExpandTiers = 5u;
+    static constexpr uint32_t kWarehouseMaxExpandedCapacity = 300u;
+    static constexpr uint64_t kWarehouseExpandPriceDiamond = 60ULL;
+
     static uint32_t BuildSnapshot(entt::entity player, uint32_t bagType, BagInfo& out);
     static uint32_t Sort(entt::entity player, uint32_t bagType, BagInfo& out, bool& changed);
+    static void ExpandCapacity(entt::entity player, const ExpandBagCapacityRequest& request,
+                               ExpandBagCapacityResponse& response);
 
     // 从临时格取回到人物背包(SceneBagClientPlayer.RetrieveTemporaryItems;docs/design/bag-rule-policy-layering.md §6.6)。
     // itemId != 0 取回这一件;takeAll 取回临时格里的全部(按入包先后)。两者恰好给一个。

@@ -376,4 +376,59 @@ TEST_F(PlayerTravelPassTest, FullBagRejectsClaimAtomicallyWithZeroMutation)
 	EXPECT_EQ(0ULL, prog->free_claimed_mask());
 }
 
+TEST_F(PlayerTravelPassTest, BookshelfSelectsSingleActivePassAutoAdvancesAndAcceptsBonusCosmetic)
+{
+	auto &comp = tlsEcs.actorRegistry.get<PlayerTravelPassComp>(player_);
+
+	// 1. 书架预置 6 期全部可见，默认在研为第 1 期。
+	TravelPassSnapshot initialSnap;
+	ASSERT_EQ(kSuccess, PlayerTravelPassSystem::GetState(player_, kNowMs, 0, initialSnap));
+	EXPECT_EQ(6, initialSnap.bookshelf_size());
+	EXPECT_EQ(1u, initialSnap.active_pass_id());
+	EXPECT_EQ(1u, initialSnap.pass_id());
+
+	// 2. 零消耗切换至第 3 期，单场战斗只注入第 3 期（防 M-1 多期并发加点）。
+	SelectActiveTravelPassRequest selectReq;
+	selectReq.set_pass_id(3);
+	SelectActiveTravelPassResponse selectResp;
+	ASSERT_EQ(kSuccess, PlayerTravelPassSystem::SelectActivePass(player_, kNowMs, selectReq, selectResp));
+	EXPECT_EQ(3u, selectResp.snapshot().active_pass_id());
+	EXPECT_EQ(3u, selectResp.snapshot().pass_id());
+
+	PlayerTravelPassComp candidate;
+	bool increased = false;
+	ASSERT_EQ(kSuccess, PlayerTravelPassSystem::PrepareBattleCredit(
+							comp, MakeBattleSettlement(match::MATCH_MODE_PVE_SOLO, BATTLE_OUTCOME_SIDE_A_WIN, 1, 5, 5, true),
+							kNowMs, candidate, increased));
+	ASSERT_TRUE(increased);
+	comp.Swap(&candidate);
+	ASSERT_NE(nullptr, travel_pass_rules::FindSeason(comp, 3));
+	EXPECT_EQ(20u, travel_pass_rules::FindSeason(comp, 3)->progress_points());
+	EXPECT_EQ(nullptr, travel_pass_rules::FindSeason(comp, 1));
+	EXPECT_EQ(nullptr, travel_pass_rules::FindSeason(comp, 2));
+
+	// 3. 第 3 期满点后，下一场战斗自动顺延至第一本未满期次（第 1 期）。
+	travel_pass_rules::FindMutableSeason(comp, 3)->set_progress_points(300);
+	ASSERT_EQ(kSuccess, PlayerTravelPassSystem::PrepareBattleCredit(
+							comp, MakeBattleSettlement(match::MATCH_MODE_PVE_SOLO, BATTLE_OUTCOME_SIDE_A_WIN, 1, 5, 5, true),
+							kNowMs, candidate, increased));
+	ASSERT_TRUE(increased);
+	comp.Swap(&candidate);
+	EXPECT_EQ(1u, comp.active_pass_id());
+	ASSERT_NE(nullptr, travel_pass_rules::FindSeason(comp, 1));
+	EXPECT_EQ(20u, travel_pass_rules::FindSeason(comp, 1)->progress_points());
+
+	// 4. 轻享卡一次性附赠的纪念头像框进入 bonus_cosmetic_keys，幂等去重且可直接佩戴。
+	ASSERT_TRUE(PlayerTravelPassSystem::GrantBonusCosmetic(player_, "frame_lightcard_season_s1"));
+	ASSERT_TRUE(PlayerTravelPassSystem::GrantBonusCosmetic(player_, "frame_lightcard_season_s1"));
+	EXPECT_EQ(1, comp.bonus_cosmetic_keys_size());
+
+	EquipTravelPassCosmeticRequest equipReq;
+	equipReq.set_cosmetic_slot(travel_pass_rules::kCosmeticSlotFrame);
+	equipReq.set_cosmetic_key("frame_lightcard_season_s1");
+	EquipTravelPassCosmeticResponse equipResp;
+	ASSERT_EQ(kSuccess, PlayerTravelPassSystem::EquipCosmetic(player_, kNowMs, equipReq, equipResp));
+	EXPECT_EQ("frame_lightcard_season_s1", equipResp.snapshot().equipped_frame_key());
+}
+
 } // namespace

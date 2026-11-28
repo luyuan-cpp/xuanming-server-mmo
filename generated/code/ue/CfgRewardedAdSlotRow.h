@@ -98,4 +98,8 @@ struct FCfgRewardedAdSlotRow : public FTableRowBase
 	/** 允许开启宿主位掩码:1=微信小游戏 2=抖音小游戏 4=iOS App 8=Android App(默认 3 仅小游戏) */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|RewardedAdSlot")
 	int32 platform_mask = 0;
+
+	/** 激励奖励类型:1=绑定银两小礼(300绑银),2=五行幻境V2奇策重随(单局限1次),3=衣柜续时1小时试穿(不授永久权),4=神秘商人个人换货(每轮限1次) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|RewardedAdSlot")
+	int32 reward_kind = 0;
 };

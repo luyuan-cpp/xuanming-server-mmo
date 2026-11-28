@@ -116,6 +116,10 @@ message BattlePlayerSnapshot {
   uint64 minor_play_deadline_ms = 33;
   // 玩家个人「允许局外人观战交流」偏好（由 scene 在 PrepareBattle 从 PlayerProfileComp 注入，供 match 建房冻结）。
   eSpectateChatPreference spectate_chat_pref = 34;
+  // 玩家权威穿戴的脚底五行阵纹外观 ID（CosmeticShowcase.id, slot_kind=1; 0=默认，纯视觉零数值）。
+  uint32 formation_skin_id = 35;
+  // 玩家权威穿戴的擂台/会武入场与胜利演出横幅 ID（CosmeticShowcase.id, slot_kind=2; 0=默认，纯视觉零数值）。
+  uint32 entrance_victory_skin_id = 36;
 }
 
 // ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
@@ -208,6 +212,8 @@ message BattleActorState {
   string pet_cosmetic_art_key = 46; // 仅灵宠有效：生效幻化外观客户端资源键（空串 = 原形，缺图回退原形）。
   map<uint32, uint32> equipped_skill_vfx = 47; // 仅玩家有效：生效技能特效外观映射（skill_table_id -> SkillVfxCosmetic.id）。
   uint32 win_streak = 48; // 正式排位开局前本季连胜数（>=3 时展示「连胜势 ×N」并供终局破势终结判定，非排位/未达 3 为 0）。
+  uint32 formation_skin_id = 49;        // 仅玩家有效：权威脚底五行阵纹外观 ID（0=默认，敌我与观战可见，零数值）。
+  uint32 entrance_victory_skin_id = 50; // 仅玩家有效：权威入场与胜利演出横幅 ID（0=默认，零数值）。
 }
 
 // 法宝按物品实例记录次数；死亡不刷新已用次数，仅清除待用补偿。

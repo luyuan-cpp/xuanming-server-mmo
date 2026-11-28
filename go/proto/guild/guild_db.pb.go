@@ -104,6 +104,7 @@ const (
 	GuildAssetOpKind_GUILD_ASSET_OP_KIND_WAR_REWARD    GuildAssetOpKind = 5 // 帮战 V2 奖励:GUILD_CREDIT 流(银两/周宝箱/灵脉分红)
 	GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_ESCROW GuildAssetOpKind = 6 // 追杀令预扣:GUILD_DEBIT 流扣发布者银两
 	GuildAssetOpKind_GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT GuildAssetOpKind = 7 // 追杀令结单/反杀/过期退本:GUILD_CREDIT 流
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK GuildAssetOpKind = 8 // 帮主自愿个人真实灵石买断帮会徽记:GUILD_DEBIT 流(绝不扣帮会资金)
 )
 
 // Enum value maps for GuildAssetOpKind.
@@ -116,6 +117,7 @@ var (
 		5: "GUILD_ASSET_OP_KIND_WAR_REWARD",
 		6: "GUILD_ASSET_OP_KIND_BOUNTY_ESCROW",
 		7: "GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT",
+		8: "GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK",
 	}
 	GuildAssetOpKind_value = map[string]int32{
 		"GUILD_ASSET_OP_KIND_UNSPECIFIED":     0,
@@ -125,6 +127,7 @@ var (
 		"GUILD_ASSET_OP_KIND_WAR_REWARD":      5,
 		"GUILD_ASSET_OP_KIND_BOUNTY_ESCROW":   6,
 		"GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT":   7,
+		"GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK":   8,
 	}
 )
 
@@ -344,9 +347,13 @@ type GuildRecord struct {
 	// 只接受不比已记版本旧的分数,所以写榜不用抢全服锁(docs/design/guild_ranking_architecture_zh.md §3)。
 	ScoreVersion uint64 `protobuf:"varint,12,opt,name=score_version,json=scoreVersion,proto3" json:"score_version,omitempty"`
 	// 上一次帮会改名成功的时刻 Unix 毫秒(0 = 从未改过名;冷却判定以此为准)。
-	RenamedMs     uint64 `protobuf:"varint,13,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"` // 追加区:从 14 起。
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	RenamedMs uint64 `protobuf:"varint,13,opt,name=renamed_ms,json=renamedMs,proto3" json:"renamed_ms,omitempty"`
+	// 帮会当前佩戴的定制徽记款式 ID（0 = 默认免费帮徽，1..6 = 帮主个人真实灵石买断款式，零数值加成）。
+	EmblemSkinId uint32 `protobuf:"varint,14,opt,name=emblem_skin_id,json=emblemSkinId,proto3" json:"emblem_skin_id,omitempty"`
+	// 本帮永久已解锁定制徽记位图（bit (emblem_id - 1)，仅增不减）。
+	UnlockedEmblemBits uint64 `protobuf:"varint,15,opt,name=unlocked_emblem_bits,json=unlockedEmblemBits,proto3" json:"unlocked_emblem_bits,omitempty"` // 追加区:从 16 起。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GuildRecord) Reset() {
@@ -466,6 +473,20 @@ func (x *GuildRecord) GetScoreVersion() uint64 {
 func (x *GuildRecord) GetRenamedMs() uint64 {
 	if x != nil {
 		return x.RenamedMs
+	}
+	return 0
+}
+
+func (x *GuildRecord) GetEmblemSkinId() uint32 {
+	if x != nil {
+		return x.EmblemSkinId
+	}
+	return 0
+}
+
+func (x *GuildRecord) GetUnlockedEmblemBits() uint64 {
+	if x != nil {
+		return x.UnlockedEmblemBits
 	}
 	return 0
 }
@@ -4049,7 +4070,7 @@ var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\n" +
-	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xcc\x03\n" +
+	"\x1aproto/guild/guild_db.proto\x12\aguildpb\x1a\x1bproto/db/proto_option.proto\"\xa4\x04\n" +
 	"\vGuildRecord\x12\x19\n" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
@@ -4066,7 +4087,9 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\tname_norm\x18\v \x01(\tR\bnameNorm\x12#\n" +
 	"\rscore_version\x18\f \x01(\x04R\fscoreVersion\x12\x1d\n" +
 	"\n" +
-	"renamed_ms\x18\r \x01(\x04R\trenamedMs:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
+	"renamed_ms\x18\r \x01(\x04R\trenamedMs\x12$\n" +
+	"\x0eemblem_skin_id\x18\x0e \x01(\rR\femblemSkinId\x120\n" +
+	"\x14unlocked_emblem_bits\x18\x0f \x01(\x04R\x12unlockedEmblemBits:J\x8a\x92\xf4\x01\x05guild\x92\x92\xf4\x01\bguild_idڒ\xf4\x01\x11zone_id;leader_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x8a\x01\n" +
 	"\x16GuildPlayerStateRecord\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -4481,7 +4504,7 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\x1eGUILD_ASSET_OP_STATUS_REJECTED\x10\x03\x12!\n" +
 	"\x1dGUILD_ASSET_OP_STATUS_ABORTED\x10\x04\x12)\n" +
 	"%GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL\x10\x05\x12#\n" +
-	"\x1fGUILD_ASSET_OP_STATUS_ABANDONED\x10\x06*\x90\x02\n" +
+	"\x1fGUILD_ASSET_OP_STATUS_ABANDONED\x10\x06*\xb7\x02\n" +
 	"\x10GuildAssetOpKind\x12#\n" +
 	"\x1fGUILD_ASSET_OP_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aGUILD_ASSET_OP_KIND_DONATE\x10\x01\x12\x1c\n" +
@@ -4489,7 +4512,8 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"#GUILD_ASSET_OP_KIND_ACTIVITY_REWARD\x10\x03\x12\"\n" +
 	"\x1eGUILD_ASSET_OP_KIND_WAR_REWARD\x10\x05\x12%\n" +
 	"!GUILD_ASSET_OP_KIND_BOUNTY_ESCROW\x10\x06\x12%\n" +
-	"!GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT\x10\a*\x90\x02\n" +
+	"!GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT\x10\a\x12%\n" +
+	"!GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK\x10\b*\x90\x02\n" +
 	"\x15GuildDailyCounterKind\x12(\n" +
 	"$GUILD_DAILY_COUNTER_KIND_UNSPECIFIED\x10\x00\x12#\n" +
 	"\x1fGUILD_DAILY_COUNTER_KIND_DONATE\x10\x01\x12!\n" +

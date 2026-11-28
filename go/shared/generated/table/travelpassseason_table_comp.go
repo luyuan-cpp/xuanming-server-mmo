@@ -73,6 +73,14 @@ type TravelPassSeasonConfig_revisionComp struct {
     Value uint32
 }
 
+type TravelPassSeasonSort_orderComp struct {
+    Value uint32
+}
+
+type TravelPassSeasonIs_archivedComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -136,5 +144,13 @@ func MakeTravelPassSeasonPremium_priceComp(row *pb.TravelPassSeasonTable) Travel
 
 func MakeTravelPassSeasonConfig_revisionComp(row *pb.TravelPassSeasonTable) TravelPassSeasonConfig_revisionComp {
     return TravelPassSeasonConfig_revisionComp{Value: row.ConfigRevision}
+}
+
+func MakeTravelPassSeasonSort_orderComp(row *pb.TravelPassSeasonTable) TravelPassSeasonSort_orderComp {
+    return TravelPassSeasonSort_orderComp{Value: row.SortOrder}
+}
+
+func MakeTravelPassSeasonIs_archivedComp(row *pb.TravelPassSeasonTable) TravelPassSeasonIs_archivedComp {
+    return TravelPassSeasonIs_archivedComp{Value: row.IsArchived}
 }
 

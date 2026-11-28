@@ -207,3 +207,11 @@ func (s *GuildServer) GetGuildRankByGuild(ctx context.Context, req *pb.GetGuildR
 func (s *GuildServer) GetGuildJianghuGrudgeWall(ctx context.Context, req *pb.GetGuildJianghuGrudgeWallRequest) (*pb.GetGuildJianghuGrudgeWallResponse, error) {
 	return s.logic.GetGuildJianghuGrudgeWall(ctx, req)
 }
+
+func (s *GuildServer) UnlockGuildEmblem(ctx context.Context, req *pb.UnlockGuildEmblemRequest) (*pb.UnlockGuildEmblemResponse, error) {
+	return s.logic.UnlockGuildEmblem(ctx, req)
+}
+
+func (s *GuildServer) EquipGuildEmblem(ctx context.Context, req *pb.EquipGuildEmblemRequest) (*pb.EquipGuildEmblemResponse, error) {
+	return s.logic.EquipGuildEmblem(ctx, req)
+}

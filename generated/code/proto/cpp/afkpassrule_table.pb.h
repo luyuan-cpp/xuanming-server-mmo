@@ -229,12 +229,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassRuleTable final : public ::g
   // accessors -------------------------------------------------------
   enum : int {
     kDescFieldNumber = 7,
+    kBonusFrameKeyFieldNumber = 10,
+    kPlanNameFieldNumber = 11,
+    kIconKeyFieldNumber = 12,
     kIdFieldNumber = 1,
     kPeriodDaysFieldNumber = 2,
     kPriceFieldNumber = 4,
     kPriceCurrencyTypeFieldNumber = 3,
     kMaxRemainingDaysFieldNumber = 5,
     kRemindBeforeHoursFieldNumber = 6,
+    kBonusItemIdFieldNumber = 8,
+    kBonusItemCountFieldNumber = 9,
   };
   // string desc = 7;
   void clear_desc() ;
@@ -249,6 +254,51 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassRuleTable final : public ::g
   const ::std::string& _internal_desc() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_desc(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_desc();
+
+  public:
+  // string bonus_frame_key = 10;
+  void clear_bonus_frame_key() ;
+  [[nodiscard]] const ::std::string& bonus_frame_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_bonus_frame_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_bonus_frame_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_bonus_frame_key();
+  void set_allocated_bonus_frame_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_bonus_frame_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_bonus_frame_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_bonus_frame_key();
+
+  public:
+  // string plan_name = 11;
+  void clear_plan_name() ;
+  [[nodiscard]] const ::std::string& plan_name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_plan_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_plan_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_plan_name();
+  void set_allocated_plan_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_plan_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_plan_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_plan_name();
+
+  public:
+  // string icon_key = 12;
+  void clear_icon_key() ;
+  [[nodiscard]] const ::std::string& icon_key() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_icon_key(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_icon_key();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_icon_key();
+  void set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_icon_key() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_icon_key(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_icon_key();
 
   public:
   // uint32 id = 1;
@@ -311,12 +361,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassRuleTable final : public ::g
   void _internal_set_remind_before_hours(::uint32_t value);
 
   public:
+  // uint32 bonus_item_id = 8;
+  void clear_bonus_item_id() ;
+  [[nodiscard]] ::uint32_t bonus_item_id() const;
+  void set_bonus_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bonus_item_id() const;
+  void _internal_set_bonus_item_id(::uint32_t value);
+
+  public:
+  // uint32 bonus_item_count = 9;
+  void clear_bonus_item_count() ;
+  [[nodiscard]] ::uint32_t bonus_item_count() const;
+  void set_bonus_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_bonus_item_count() const;
+  void _internal_set_bonus_item_count(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AfkPassRuleTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          0, 29,
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 69,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -345,12 +415,17 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassRuleTable final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr desc_;
+    ::google::protobuf::internal::ArenaStringPtr bonus_frame_key_;
+    ::google::protobuf::internal::ArenaStringPtr plan_name_;
+    ::google::protobuf::internal::ArenaStringPtr icon_key_;
     ::uint32_t id_;
     ::uint32_t period_days_;
     ::uint64_t price_;
     ::uint32_t price_currency_type_;
     ::uint32_t max_remaining_days_;
     ::uint32_t remind_before_hours_;
+    ::uint32_t bonus_item_id_;
+    ::uint32_t bonus_item_count_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -589,7 +664,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AfkPassRuleTableData final : public
 inline void AfkPassRuleTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t AfkPassRuleTable::id() const {
   // @@protoc_insertion_point(field_get:AfkPassRuleTable.id)
@@ -597,7 +672,7 @@ inline ::uint32_t AfkPassRuleTable::id() const {
 }
 inline void AfkPassRuleTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:AfkPassRuleTable.id)
 }
 inline ::uint32_t AfkPassRuleTable::_internal_id() const {
@@ -613,7 +688,7 @@ inline void AfkPassRuleTable::_internal_set_id(::uint32_t value) {
 inline void AfkPassRuleTable::clear_period_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.period_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t AfkPassRuleTable::period_days() const {
   // @@protoc_insertion_point(field_get:AfkPassRuleTable.period_days)
@@ -621,7 +696,7 @@ inline ::uint32_t AfkPassRuleTable::period_days() const {
 }
 inline void AfkPassRuleTable::set_period_days(::uint32_t value) {
   _internal_set_period_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:AfkPassRuleTable.period_days)
 }
 inline ::uint32_t AfkPassRuleTable::_internal_period_days() const {
@@ -637,7 +712,7 @@ inline void AfkPassRuleTable::_internal_set_period_days(::uint32_t value) {
 inline void AfkPassRuleTable::clear_price_currency_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.price_currency_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint32_t AfkPassRuleTable::price_currency_type() const {
   // @@protoc_insertion_point(field_get:AfkPassRuleTable.price_currency_type)
@@ -645,7 +720,7 @@ inline ::uint32_t AfkPassRuleTable::price_currency_type() const {
 }
 inline void AfkPassRuleTable::set_price_currency_type(::uint32_t value) {
   _internal_set_price_currency_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:AfkPassRuleTable.price_currency_type)
 }
 inline ::uint32_t AfkPassRuleTable::_internal_price_currency_type() const {
@@ -661,7 +736,7 @@ inline void AfkPassRuleTable::_internal_set_price_currency_type(::uint32_t value
 inline void AfkPassRuleTable::clear_price() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.price_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t AfkPassRuleTable::price() const {
   // @@protoc_insertion_point(field_get:AfkPassRuleTable.price)
@@ -669,7 +744,7 @@ inline ::uint64_t AfkPassRuleTable::price() const {
 }
 inline void AfkPassRuleTable::set_price(::uint64_t value) {
   _internal_set_price(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:AfkPassRuleTable.price)
 }
 inline ::uint64_t AfkPassRuleTable::_internal_price() const {
@@ -685,7 +760,7 @@ inline void AfkPassRuleTable::_internal_set_price(::uint64_t value) {
 inline void AfkPassRuleTable::clear_max_remaining_days() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_remaining_days_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t AfkPassRuleTable::max_remaining_days() const {
   // @@protoc_insertion_point(field_get:AfkPassRuleTable.max_remaining_days)
@@ -693,7 +768,7 @@ inline ::uint32_t AfkPassRuleTable::max_remaining_days() const {
 }
 inline void AfkPassRuleTable::set_max_remaining_days(::uint32_t value) {
   _internal_set_max_remaining_days(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:AfkPassRuleTable.max_remaining_days)
 }
 inline ::uint32_t AfkPassRuleTable::_internal_max_remaining_days() const {
@@ -709,7 +784,7 @@ inline void AfkPassRuleTable::_internal_set_max_remaining_days(::uint32_t value)
 inline void AfkPassRuleTable::clear_remind_before_hours() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.remind_before_hours_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t AfkPassRuleTable::remind_before_hours() const {
   // @@protoc_insertion_point(field_get:AfkPassRuleTable.remind_before_hours)
@@ -717,7 +792,7 @@ inline ::uint32_t AfkPassRuleTable::remind_before_hours() const {
 }
 inline void AfkPassRuleTable::set_remind_before_hours(::uint32_t value) {
   _internal_set_remind_before_hours(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:AfkPassRuleTable.remind_before_hours)
 }
 inline ::uint32_t AfkPassRuleTable::_internal_remind_before_hours() const {
@@ -791,6 +866,246 @@ inline void AfkPassRuleTable::set_allocated_desc(::std::string* PROTOBUF_NULLABL
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:AfkPassRuleTable.desc)
+}
+
+// uint32 bonus_item_id = 8;
+inline void AfkPassRuleTable::clear_bonus_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t AfkPassRuleTable::bonus_item_id() const {
+  // @@protoc_insertion_point(field_get:AfkPassRuleTable.bonus_item_id)
+  return _internal_bonus_item_id();
+}
+inline void AfkPassRuleTable::set_bonus_item_id(::uint32_t value) {
+  _internal_set_bonus_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:AfkPassRuleTable.bonus_item_id)
+}
+inline ::uint32_t AfkPassRuleTable::_internal_bonus_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bonus_item_id_;
+}
+inline void AfkPassRuleTable::_internal_set_bonus_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_item_id_ = value;
+}
+
+// uint32 bonus_item_count = 9;
+inline void AfkPassRuleTable::clear_bonus_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t AfkPassRuleTable::bonus_item_count() const {
+  // @@protoc_insertion_point(field_get:AfkPassRuleTable.bonus_item_count)
+  return _internal_bonus_item_count();
+}
+inline void AfkPassRuleTable::set_bonus_item_count(::uint32_t value) {
+  _internal_set_bonus_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:AfkPassRuleTable.bonus_item_count)
+}
+inline ::uint32_t AfkPassRuleTable::_internal_bonus_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bonus_item_count_;
+}
+inline void AfkPassRuleTable::_internal_set_bonus_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_item_count_ = value;
+}
+
+// string bonus_frame_key = 10;
+inline void AfkPassRuleTable::clear_bonus_frame_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_frame_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& AfkPassRuleTable::bonus_frame_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AfkPassRuleTable.bonus_frame_key)
+  return _internal_bonus_frame_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AfkPassRuleTable::set_bonus_frame_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.bonus_frame_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:AfkPassRuleTable.bonus_frame_key)
+}
+inline ::std::string* PROTOBUF_NONNULL AfkPassRuleTable::mutable_bonus_frame_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_bonus_frame_key();
+  // @@protoc_insertion_point(field_mutable:AfkPassRuleTable.bonus_frame_key)
+  return _s;
+}
+inline const ::std::string& AfkPassRuleTable::_internal_bonus_frame_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.bonus_frame_key_.Get();
+}
+inline void AfkPassRuleTable::_internal_set_bonus_frame_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.bonus_frame_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AfkPassRuleTable::_internal_mutable_bonus_frame_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.bonus_frame_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AfkPassRuleTable::release_bonus_frame_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AfkPassRuleTable.bonus_frame_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.bonus_frame_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.bonus_frame_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AfkPassRuleTable::set_allocated_bonus_frame_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.bonus_frame_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.bonus_frame_key_.IsDefault()) {
+    _impl_.bonus_frame_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:AfkPassRuleTable.bonus_frame_key)
+}
+
+// string plan_name = 11;
+inline void AfkPassRuleTable::clear_plan_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.plan_name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& AfkPassRuleTable::plan_name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AfkPassRuleTable.plan_name)
+  return _internal_plan_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AfkPassRuleTable::set_plan_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.plan_name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:AfkPassRuleTable.plan_name)
+}
+inline ::std::string* PROTOBUF_NONNULL AfkPassRuleTable::mutable_plan_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_plan_name();
+  // @@protoc_insertion_point(field_mutable:AfkPassRuleTable.plan_name)
+  return _s;
+}
+inline const ::std::string& AfkPassRuleTable::_internal_plan_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.plan_name_.Get();
+}
+inline void AfkPassRuleTable::_internal_set_plan_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.plan_name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AfkPassRuleTable::_internal_mutable_plan_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.plan_name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AfkPassRuleTable::release_plan_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AfkPassRuleTable.plan_name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.plan_name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.plan_name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AfkPassRuleTable::set_allocated_plan_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.plan_name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.plan_name_.IsDefault()) {
+    _impl_.plan_name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:AfkPassRuleTable.plan_name)
+}
+
+// string icon_key = 12;
+inline void AfkPassRuleTable::clear_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline const ::std::string& AfkPassRuleTable::icon_key() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:AfkPassRuleTable.icon_key)
+  return _internal_icon_key();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AfkPassRuleTable::set_icon_key(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  _impl_.icon_key_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:AfkPassRuleTable.icon_key)
+}
+inline ::std::string* PROTOBUF_NONNULL AfkPassRuleTable::mutable_icon_key()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::std::string* _s = _internal_mutable_icon_key();
+  // @@protoc_insertion_point(field_mutable:AfkPassRuleTable.icon_key)
+  return _s;
+}
+inline const ::std::string& AfkPassRuleTable::_internal_icon_key() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.icon_key_.Get();
+}
+inline void AfkPassRuleTable::_internal_set_icon_key(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.icon_key_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AfkPassRuleTable::_internal_mutable_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.icon_key_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AfkPassRuleTable::release_icon_key() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:AfkPassRuleTable.icon_key)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000008U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  auto* released = _impl_.icon_key_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AfkPassRuleTable::set_allocated_icon_key(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  _impl_.icon_key_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.icon_key_.IsDefault()) {
+    _impl_.icon_key_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:AfkPassRuleTable.icon_key)
 }
 
 // -------------------------------------------------------------------

@@ -276,6 +276,8 @@ service ClientPlayerFriend {
 message BatchCheckSocialRelationsRequest {
   repeated uint64 side_a_player_ids = 1;
   repeated uint64 side_b_player_ids = 2;
+  // 可选：要求双方互为好友的最低持续时长（毫秒；0 = 不限，仅校验当前互为好友；好友外观赠礼传 7 天 = 604800000）。
+  int64 min_friend_duration_ms = 3;
 }
 
 message BatchCheckSocialRelationsResponse {

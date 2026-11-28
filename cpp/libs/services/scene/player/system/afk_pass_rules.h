@@ -5,6 +5,8 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
 
 #include "modules/currency/constants/currency.h" // IsKnownCurrencyType
 
@@ -17,11 +19,13 @@ namespace afk_pass
 	inline constexpr uint64_t kMaxPrice = 1'000'000'000;
 	inline constexpr uint32_t kMaxRemainingDaysCap = 3660;
 	inline constexpr uint32_t kMaxRemindBeforeHours = 720;
+	inline constexpr uint32_t kMaxBonusItemCount = 99;
+	inline constexpr std::size_t kMaxBonusFrameKeyLength = 64;
 
 	// GM 设定剩余时长的上限(GmSetAfkPassRequest.remaining_seconds):366 天。
 	inline constexpr uint32_t kGmMaxRemainingSeconds = 366u * 86400u;
 
-	// 规则表第一行里本功能用到的列,按值拷出来:表行指针不出函数(热更时旧快照当场析构,data/AGENTS.md)。
+	// 规则表单套餐行里本功能用到的列,按值拷出来:表行指针不出函数(热更时旧快照当场析构,data/AGENTS.md)。
 	struct Rule
 	{
 		uint32_t periodDays{0};
@@ -29,11 +33,28 @@ namespace afk_pass
 		uint64_t price{0};
 		uint32_t maxRemainingDays{0};
 		uint32_t remindBeforeHours{0};
+		uint32_t planId{1};
+		uint32_t bonusItemId{0};
+		uint32_t bonusItemCount{0};
+		std::string bonusFrameKey;
+		std::string planName;
+		std::string iconKey;
+		std::string desc;
 	};
 
-	// 不合法时返回原因(只进日志),合法返回 nullptr。不合法的规则一律不能开通(kAfkPassUnavailable)。
-	constexpr const char *RuleProblem(const Rule &rule)
+	inline bool IsValidBonusFrameKey(std::string_view key)
 	{
+		return key.empty() ||
+			   (key.size() > 6 && key.size() <= kMaxBonusFrameKeyLength && key.substr(0, 6) == "frame_");
+	}
+
+	// 不合法时返回原因(只进日志),合法返回 nullptr。不合法的规则一律不能开通(kAfkPassUnavailable)。
+	inline const char *RuleProblem(const Rule &rule)
+	{
+		if (rule.planId == 0)
+		{
+			return "id must be non-zero";
+		}
 		if (rule.periodDays == 0 || rule.periodDays > kMaxPeriodDays)
 		{
 			return "period_days is not in 1..366";
@@ -53,6 +74,18 @@ namespace afk_pass
 		if (rule.remindBeforeHours > kMaxRemindBeforeHours)
 		{
 			return "remind_before_hours is not in 0..720";
+		}
+		if (rule.bonusItemId != 0 && (rule.bonusItemCount == 0 || rule.bonusItemCount > kMaxBonusItemCount))
+		{
+			return "bonus_item_count is not in 1..99";
+		}
+		if (rule.bonusItemId == 0 && rule.bonusItemCount != 0)
+		{
+			return "bonus_item_count requires bonus_item_id";
+		}
+		if (!IsValidBonusFrameKey(rule.bonusFrameKey))
+		{
+			return "bonus_frame_key must be empty or start with frame_";
 		}
 		return nullptr;
 	}
@@ -98,5 +131,27 @@ namespace afk_pass
 	constexpr uint32_t UnlockedLoadoutSlots(bool active)
 	{
 		return active ? kLightCardLoadoutSlots : kBaseLoadoutSlots;
+	}
+
+	// 仙途轻享卡前期体感与市场便利权益（零每日打卡、零战力加成）。
+	inline constexpr uint32_t kBaseMarketListingLimit = 10;
+	inline constexpr uint32_t kLightCardMarketListingLimit = 20;
+	inline constexpr uint32_t kBaseStallDurationHours = 48;
+	inline constexpr uint32_t kLightCardStallDurationHours = 96;
+	inline constexpr uint32_t kLightCardWeeklyFreeTrialQuota = 3;
+
+	constexpr uint32_t MarketListingLimit(bool active)
+	{
+		return active ? kLightCardMarketListingLimit : kBaseMarketListingLimit;
+	}
+
+	constexpr uint32_t StallDurationHours(bool active)
+	{
+		return active ? kLightCardStallDurationHours : kBaseStallDurationHours;
+	}
+
+	constexpr uint32_t WeeklyFreeTrialQuota(bool active)
+	{
+		return active ? kLightCardWeeklyFreeTrialQuota : 0u;
 	}
 } // namespace afk_pass

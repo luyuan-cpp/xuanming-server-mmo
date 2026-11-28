@@ -4,6 +4,7 @@
 // 线程：只在 scene 主 EventLoop 线程调用，无全局可变状态，不新增线程。
 
 #include <cstdint>
+#include <string_view>
 
 #include "entt/src/entt/entity/entity.hpp"
 
@@ -14,6 +15,8 @@ class EquipTravelPassCosmeticRequest;
 class EquipTravelPassCosmeticResponse;
 class GetActivityListResponse;
 class PlayerTravelPassComp;
+class SelectActiveTravelPassRequest;
+class SelectActiveTravelPassResponse;
 class TravelPassSnapshot;
 class UnlockTravelPassPremiumRequest;
 class UnlockTravelPassPremiumResponse;
@@ -55,6 +58,21 @@ public:
 								  uint64_t nowMs,
 								  const ::EquipTravelPassCosmeticRequest &request,
 								  ::EquipTravelPassCosmeticResponse &response);
+
+	// 零消耗切换当前在研手记期次（永不绝版书架制，战斗结算点数自动注入唯一在研期次）。
+	static uint32_t SelectActivePass(entt::entity player,
+									 uint64_t nowMs,
+									 const ::SelectActiveTravelPassRequest &request,
+									 ::SelectActiveTravelPassResponse &response);
+
+	// 服务端内部原子授形入口（如轻享卡/季享卡一次性直赠纪念头像框）：不独立触发存盘，随调用方事务落盘；重复授形幂等跳过。
+	static bool GrantBonusCosmetic(entt::entity player, std::string_view cosmeticKey);
+
+	// 好友赠礼内部入口：检查/授予指定期次游历手记典藏权（已解锁返回 alreadyOwned=true）。
+	static bool HasPremiumUnlocked(entt::entity player, uint32_t passId);
+	static uint32_t GrantPremiumFromGift(entt::entity player, uint32_t passId, uint64_t nowMs, bool *alreadyOwned = nullptr);
+	// 渠道退款连坐回收：撤销由赠礼授予的手记典藏态（幂等）。
+	static bool RevokePremiumFromChargeback(entt::entity player, uint32_t passId, uint64_t nowMs);
 
 	// 向 GetActivityList 目录追加「青云游历手记」「留灯风物 · 免费试穿」「灵石百宝阁 · 轻便利」卡片。
 	// 纯只读，仅在对应组件与有效表均就绪时追加，不破坏只测任务的旧单测夹具。

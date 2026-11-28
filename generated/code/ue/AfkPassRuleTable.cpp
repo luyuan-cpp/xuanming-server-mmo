@@ -113,6 +113,8 @@ static void AfkPassRuleTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowO
 	AfkPassRuleTableCheckNarrowedField(RowObject, TEXT("price"), TEXT("price"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	AfkPassRuleTableCheckNarrowedField(RowObject, TEXT("max_remaining_days"), TEXT("max_remaining_days"), RowIndex, 2147483647.0, TEXT("uint32"));
 	AfkPassRuleTableCheckNarrowedField(RowObject, TEXT("remind_before_hours"), TEXT("remind_before_hours"), RowIndex, 2147483647.0, TEXT("uint32"));
+	AfkPassRuleTableCheckNarrowedField(RowObject, TEXT("bonus_item_id"), TEXT("bonus_item_id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	AfkPassRuleTableCheckNarrowedField(RowObject, TEXT("bonus_item_count"), TEXT("bonus_item_count"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UAfkPassRuleTable::LoadFromJson(const FString& JsonText, FString& OutError)

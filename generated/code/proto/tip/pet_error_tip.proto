@@ -57,4 +57,10 @@ enum pet_error {
 
   kPetEntryPresetInvalid = 26023;
 
+  kPetSquadSlotLocked = 26024;
+
+  kPetSquadMaxSlotsReached = 26025;
+
+  kPetSquadPriceChanged = 26026;
+
 };

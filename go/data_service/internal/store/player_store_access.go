@@ -361,6 +361,47 @@ func readPlayerDisplaysIn(ctx context.Context, db *sql.DB, players []uint64) (ma
 	return out, nil
 }
 
+// ReadPlayerChatShowcaseSkins 从玩家持久 PROFILE 组只读提取已穿戴且非空拥有位图的聊天气泡(slot=3)与分享卡底纹(slot=4)。
+// 展示外观属 fail-open 装饰，读不到返回 (0, 0, nil) 不阻断聊天发送。
+func (s *AccountDirectoryStore) ReadPlayerChatShowcaseSkins(ctx context.Context, playerID uint64) (uint32, uint32, error) {
+	if s == nil || playerID == 0 {
+		return 0, 0, nil
+	}
+	routes, err := s.readDisplayRoutes(ctx, []uint64{playerID})
+	if err != nil {
+		return 0, 0, err
+	}
+	route, ok := routes[playerID]
+	if !ok || !route.HasPlacement() || !s.steps.storageAllowed(route.StorageID) {
+		return 0, 0, nil
+	}
+	db, release, err := s.stores.ReadDB(ctx, route.StorageID)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer release()
+	var payload []byte
+	err = db.QueryRowContext(ctx,
+		"SELECT payload FROM player_store WHERE player_id=? AND kind=?",
+		playerID, playerStoreProfileKind).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, nil
+	}
+	if err != nil {
+		return 0, 0, err
+	}
+	var row dbpb.PlayerDatabase
+	if err := proto.Unmarshal(payload, &row); err != nil {
+		return 0, 0, nil
+	}
+	prof := row.GetProfileComponent()
+	if prof == nil || len(prof.GetShowcaseCosmeticOwnedBits()) == 0 {
+		return 0, 0, nil
+	}
+	equipped := prof.GetEquippedShowcaseCosmetics()
+	return equipped[3], equipped[4], nil
+}
+
 // ReleaseDeadPlayerStoreHolder 只按代次释放写权:存档库的一个事务里抬代次、清持有者、置 released=1。
 // 旧持有者恢复之后的写因 E<Er 被挡住,所以放弃、退款之后不会再有账本提交(规格 §6「判死放弃要改」)。
 // LeaveScene 判死释放不走这里,走 ReleaseDeadPlayerStoreHolderIfUnchanged(还要比持有者与 claim_seq);

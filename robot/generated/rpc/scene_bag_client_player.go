@@ -445,3 +445,26 @@ func (sceneBagClientPlayerRpc) decodeUnlockEquipLoadout(reply *base.MessageConte
 	}
 	return resp, nil
 }
+
+// ExpandBagCapacity 异步调用 SceneBagClientPlayer.ExpandBagCapacity(REQUEST),done 的契约见 SceneBagClientPlayer。
+func (r sceneBagClientPlayerRpc) ExpandBagCapacity(c *pkg.GameClient, req *scene.ExpandBagCapacityRequest, timeout time.Duration, done func(*scene.ExpandBagCapacityResponse, error)) {
+	c.Call(game.SceneBagClientPlayerExpandBagCapacityMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeExpandBagCapacity(reply, err))
+	})
+}
+
+// ExpandBagCapacitySync 同步调用 SceneBagClientPlayer.ExpandBagCapacity(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneBagClientPlayerRpc) ExpandBagCapacitySync(ctx context.Context, c *pkg.GameClient, req *scene.ExpandBagCapacityRequest, timeout time.Duration) (*scene.ExpandBagCapacityResponse, error) {
+	return r.decodeExpandBagCapacity(c.CallSync(ctx, game.SceneBagClientPlayerExpandBagCapacityMessageId, req, timeout))
+}
+
+func (sceneBagClientPlayerRpc) decodeExpandBagCapacity(reply *base.MessageContent, err error) (*scene.ExpandBagCapacityResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.ExpandBagCapacityResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneBagClientPlayer.ExpandBagCapacity reply: %w", err)
+	}
+	return resp, nil
+}

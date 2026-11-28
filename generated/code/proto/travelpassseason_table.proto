@@ -24,6 +24,8 @@ message TravelPassSeasonTable {
 	uint32 premium_currency_type = 13;
 	uint64 premium_price = 14;
 	uint32 config_revision = 15;
+	uint32 sort_order = 16;
+	uint32 is_archived = 17;
 }
 
 message TravelPassSeasonTableData {

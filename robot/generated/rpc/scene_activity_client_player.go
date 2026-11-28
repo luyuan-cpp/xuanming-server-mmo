@@ -238,3 +238,26 @@ func (sceneActivityClientPlayerRpc) decodeEquipTravelPassCosmetic(reply *base.Me
 	}
 	return resp, nil
 }
+
+// SelectActiveTravelPass 异步调用 SceneActivityClientPlayer.SelectActiveTravelPass(REQUEST),done 的契约见 SceneActivityClientPlayer。
+func (r sceneActivityClientPlayerRpc) SelectActiveTravelPass(c *pkg.GameClient, req *scene.SelectActiveTravelPassRequest, timeout time.Duration, done func(*scene.SelectActiveTravelPassResponse, error)) {
+	c.Call(game.SceneActivityClientPlayerSelectActiveTravelPassMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSelectActiveTravelPass(reply, err))
+	})
+}
+
+// SelectActiveTravelPassSync 同步调用 SceneActivityClientPlayer.SelectActiveTravelPass(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r sceneActivityClientPlayerRpc) SelectActiveTravelPassSync(ctx context.Context, c *pkg.GameClient, req *scene.SelectActiveTravelPassRequest, timeout time.Duration) (*scene.SelectActiveTravelPassResponse, error) {
+	return r.decodeSelectActiveTravelPass(c.CallSync(ctx, game.SceneActivityClientPlayerSelectActiveTravelPassMessageId, req, timeout))
+}
+
+func (sceneActivityClientPlayerRpc) decodeSelectActiveTravelPass(reply *base.MessageContent, err error) (*scene.SelectActiveTravelPassResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SelectActiveTravelPassResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode SceneActivityClientPlayer.SelectActiveTravelPass reply: %w", err)
+	}
+	return resp, nil
+}

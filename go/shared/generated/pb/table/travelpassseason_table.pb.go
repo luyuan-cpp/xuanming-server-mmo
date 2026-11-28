@@ -38,6 +38,8 @@ type TravelPassSeasonTable struct {
 	PremiumCurrencyType     uint32                 `protobuf:"varint,13,opt,name=premium_currency_type,json=premiumCurrencyType,proto3" json:"premium_currency_type,omitempty"`
 	PremiumPrice            uint64                 `protobuf:"varint,14,opt,name=premium_price,json=premiumPrice,proto3" json:"premium_price,omitempty"`
 	ConfigRevision          uint32                 `protobuf:"varint,15,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	SortOrder               uint32                 `protobuf:"varint,16,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
+	IsArchived              uint32                 `protobuf:"varint,17,opt,name=is_archived,json=isArchived,proto3" json:"is_archived,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -177,6 +179,20 @@ func (x *TravelPassSeasonTable) GetConfigRevision() uint32 {
 	return 0
 }
 
+func (x *TravelPassSeasonTable) GetSortOrder() uint32 {
+	if x != nil {
+		return x.SortOrder
+	}
+	return 0
+}
+
+func (x *TravelPassSeasonTable) GetIsArchived() uint32 {
+	if x != nil {
+		return x.IsArchived
+	}
+	return 0
+}
+
 type TravelPassSeasonTableData struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Data          []*TravelPassSeasonTable `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -225,7 +241,7 @@ var File_travelpassseason_table_proto protoreflect.FileDescriptor
 
 const file_travelpassseason_table_proto_rawDesc = "" +
 	"\n" +
-	"\x1ctravelpassseason_table.proto\"\xb4\x04\n" +
+	"\x1ctravelpassseason_table.proto\"\xf4\x04\n" +
 	"\x15TravelPassSeasonTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\rR\aenabled\x12\x12\n" +
@@ -245,7 +261,11 @@ const file_travelpassseason_table_proto_rawDesc = "" +
 	"\x1apvp_qualified_other_points\x18\f \x01(\rR\x17pvpQualifiedOtherPoints\x122\n" +
 	"\x15premium_currency_type\x18\r \x01(\rR\x13premiumCurrencyType\x12#\n" +
 	"\rpremium_price\x18\x0e \x01(\x04R\fpremiumPrice\x12'\n" +
-	"\x0fconfig_revision\x18\x0f \x01(\rR\x0econfigRevision\"G\n" +
+	"\x0fconfig_revision\x18\x0f \x01(\rR\x0econfigRevision\x12\x1d\n" +
+	"\n" +
+	"sort_order\x18\x10 \x01(\rR\tsortOrder\x12\x1f\n" +
+	"\vis_archived\x18\x11 \x01(\rR\n" +
+	"isArchived\"G\n" +
 	"\x19TravelPassSeasonTableData\x12*\n" +
 	"\x04data\x18\x01 \x03(\v2\x16.TravelPassSeasonTableR\x04dataBG\n" +
 	"\x0ecom.game.tableB\x1fTravelPassSeasonTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

@@ -115,6 +115,10 @@ func tipCodes() map[string]uint32 {
 		"ErrWarFeudAlreadyActive":        ErrWarFeudAlreadyActive,
 		"ErrWarFeudNotFound":             ErrWarFeudNotFound,
 		"ErrWarFeudInvalidTarget":        ErrWarFeudInvalidTarget,
+		"ErrEmblemInvalid":               ErrEmblemInvalid,
+		"ErrEmblemAlreadyUnlocked":       ErrEmblemAlreadyUnlocked,
+		"ErrEmblemNotUnlocked":           ErrEmblemNotUnlocked,
+		"ErrEmblemPriceChanged":          ErrEmblemPriceChanged,
 	}
 }
 

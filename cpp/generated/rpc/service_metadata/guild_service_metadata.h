@@ -174,3 +174,11 @@ constexpr uint32_t GuildServiceRespondGuildWarFeudIndex = 41;
 constexpr uint32_t GuildServiceGetGuildJianghuGrudgeWallMessageId = 547;
 constexpr uint32_t GuildServiceGetGuildJianghuGrudgeWallIndex = 42;
 #define GuildServiceGetGuildJianghuGrudgeWallMethod  ::GuildService_Stub::descriptor()->method(42)
+
+constexpr uint32_t GuildServiceUnlockGuildEmblemMessageId = 598;
+constexpr uint32_t GuildServiceUnlockGuildEmblemIndex = 43;
+#define GuildServiceUnlockGuildEmblemMethod  ::GuildService_Stub::descriptor()->method(43)
+
+constexpr uint32_t GuildServiceEquipGuildEmblemMessageId = 599;
+constexpr uint32_t GuildServiceEquipGuildEmblemIndex = 44;
+#define GuildServiceEquipGuildEmblemMethod  ::GuildService_Stub::descriptor()->method(44)

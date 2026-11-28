@@ -110,6 +110,8 @@ static void AppearanceSeriesTableCheckNarrowedRow(const TSharedPtr<FJsonObject>&
 	AppearanceSeriesTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	AppearanceSeriesTableCheckNarrowedField(RowObject, TEXT("sort_order"), TEXT("sort_order"), RowIndex, 2147483647.0, TEXT("uint32"));
 	AppearanceSeriesTableCheckNarrowedField(RowObject, TEXT("enabled"), TEXT("enabled"), RowIndex, 2147483647.0, TEXT("uint32"));
+	AppearanceSeriesTableCheckNarrowedField(RowObject, TEXT("bundle_discount_bps"), TEXT("bundle_discount_bps"), RowIndex, 2147483647.0, TEXT("uint32"));
+	AppearanceSeriesTableCheckNarrowedField(RowObject, TEXT("unit_price_diamond"), TEXT("unit_price_diamond"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UAppearanceSeriesTable::LoadFromJson(const FString& JsonText, FString& OutError)

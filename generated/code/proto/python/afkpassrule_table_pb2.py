@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17\x61\x66kpassrule_table.proto\"\xa6\x01\n\x10\x41\x66kPassRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x13\n\x0bperiod_days\x18\x02 \x01(\r\x12\x1b\n\x13price_currency_type\x18\x03 \x01(\r\x12\r\n\x05price\x18\x04 \x01(\x04\x12\x1a\n\x12max_remaining_days\x18\x05 \x01(\r\x12\x1b\n\x13remind_before_hours\x18\x06 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x07 \x01(\t\"7\n\x14\x41\x66kPassRuleTableData\x12\x1f\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x11.AfkPassRuleTableBB\n\x0e\x63om.game.tableB\x1a\x41\x66kPassRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17\x61\x66kpassrule_table.proto\"\x95\x02\n\x10\x41\x66kPassRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x13\n\x0bperiod_days\x18\x02 \x01(\r\x12\x1b\n\x13price_currency_type\x18\x03 \x01(\r\x12\r\n\x05price\x18\x04 \x01(\x04\x12\x1a\n\x12max_remaining_days\x18\x05 \x01(\r\x12\x1b\n\x13remind_before_hours\x18\x06 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\x07 \x01(\t\x12\x15\n\rbonus_item_id\x18\x08 \x01(\r\x12\x18\n\x10\x62onus_item_count\x18\t \x01(\r\x12\x17\n\x0f\x62onus_frame_key\x18\n \x01(\t\x12\x11\n\tplan_name\x18\x0b \x01(\t\x12\x10\n\x08icon_key\x18\x0c \x01(\t\"7\n\x14\x41\x66kPassRuleTableData\x12\x1f\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x11.AfkPassRuleTableBB\n\x0e\x63om.game.tableB\x1a\x41\x66kPassRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\032AfkPassRuleTableOuterClassP\001Z\022generated/pb/table'
   _globals['_AFKPASSRULETABLE']._serialized_start=28
-  _globals['_AFKPASSRULETABLE']._serialized_end=194
-  _globals['_AFKPASSRULETABLEDATA']._serialized_start=196
-  _globals['_AFKPASSRULETABLEDATA']._serialized_end=251
+  _globals['_AFKPASSRULETABLE']._serialized_end=305
+  _globals['_AFKPASSRULETABLEDATA']._serialized_start=307
+  _globals['_AFKPASSRULETABLEDATA']._serialized_end=362
 # @@protoc_insertion_point(module_scope)

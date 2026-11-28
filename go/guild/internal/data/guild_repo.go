@@ -93,6 +93,10 @@ var (
 	ErrGuildRenameCooldown = errors.New("guild rename is in cooldown")
 	// ErrGuildRenameSameName:新帮会名规范化后与当前帮会名一致。
 	ErrGuildRenameSameName = errors.New("guild rename target equals current name")
+	// ErrGuildEmblemAlreadyUnlocked:本帮已解锁该定制徽记款式。
+	ErrGuildEmblemAlreadyUnlocked = errors.New("guild emblem already unlocked")
+	// ErrGuildEmblemNotUnlocked:本帮尚未解锁该定制徽记款式。
+	ErrGuildEmblemNotUnlocked = errors.New("guild emblem not unlocked")
 )
 
 // GuildData is the persistence-layer representation of a guild (stored in Redis + MySQL).
@@ -111,8 +115,12 @@ type GuildData struct {
 	// Funds 是帮会资金(捐献累加、升级消耗);B1 恒为 0,B5 起写入。
 	Funds uint64 `json:"funds"`
 	// RenamedMs 是上一次帮会改名成功的 Unix 毫秒时刻(0 = 未改过名)。
-	RenamedMs uint64       `json:"renamed_ms"`
-	Members   []MemberData `json:"members"`
+	RenamedMs uint64 `json:"renamed_ms"`
+	// EmblemSkinID 当前佩戴的定制帮徽 ID（0 = 默认免费，1..6 = 定制款，零数值）。
+	EmblemSkinID uint32 `json:"emblem_skin_id"`
+	// UnlockedEmblemBits 本帮永久已解锁的定制帮徽位图（bit (id - 1)）。
+	UnlockedEmblemBits uint64       `json:"unlocked_emblem_bits"`
+	Members            []MemberData `json:"members"`
 }
 
 type MemberData struct {
@@ -586,12 +594,12 @@ func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*Gu
 // 公会行不存在返回 (nil, nil);调用方按各自语义决定这是 ErrGuildGone 还是"未入帮"。
 func loadGuild(ctx context.Context, q queryer, guildID uint64) (*GuildData, error) {
 	row := q.QueryRowContext(ctx,
-		"SELECT guild_id, name, leader_id, level, COALESCE(announcement, ''), create_time_ms, max_members, zone_id, score, funds, renamed_ms FROM guild WHERE guild_id = ?",
+		"SELECT guild_id, name, leader_id, level, COALESCE(announcement, ''), create_time_ms, max_members, zone_id, score, funds, renamed_ms, emblem_skin_id, unlocked_emblem_bits FROM guild WHERE guild_id = ?",
 		guildID)
 
 	var guild GuildData
 	err := row.Scan(&guild.GuildID, &guild.Name, &guild.LeaderID, &guild.Level,
-		&guild.Announcement, &guild.CreateTimeMs, &guild.MaxMembers, &guild.ZoneID, &guild.Score, &guild.Funds, &guild.RenamedMs)
+		&guild.Announcement, &guild.CreateTimeMs, &guild.MaxMembers, &guild.ZoneID, &guild.Score, &guild.Funds, &guild.RenamedMs, &guild.EmblemSkinID, &guild.UnlockedEmblemBits)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

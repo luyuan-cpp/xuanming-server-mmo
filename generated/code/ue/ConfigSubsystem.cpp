@@ -54,6 +54,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ClassTable = NewObject<UClassTable>(this);
 	ConditionTable = NewObject<UConditionTable>(this);
 	CooldownTable = NewObject<UCooldownTable>(this);
+	CosmeticShowcaseTable = NewObject<UCosmeticShowcaseTable>(this);
 	DungeonTable = NewObject<UDungeonTable>(this);
 	EquipAffixPoolTable = NewObject<UEquipAffixPoolTable>(this);
 	EquipAffixQualityTable = NewObject<UEquipAffixQualityTable>(this);
@@ -141,6 +142,7 @@ void UConfigSubsystem::Deinitialize()
 	ClassTable = nullptr;
 	ConditionTable = nullptr;
 	CooldownTable = nullptr;
+	CosmeticShowcaseTable = nullptr;
 	DungeonTable = nullptr;
 	EquipAffixPoolTable = nullptr;
 	EquipAffixQualityTable = nullptr;
@@ -233,6 +235,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UClassTable::FileName(),
 		UConditionTable::FileName(),
 		UCooldownTable::FileName(),
+		UCosmeticShowcaseTable::FileName(),
 		UDungeonTable::FileName(),
 		UEquipAffixPoolTable::FileName(),
 		UEquipAffixQualityTable::FileName(),
@@ -592,6 +595,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!CooldownTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (CosmeticShowcaseTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[CosmeticShowcase] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!CosmeticShowcaseTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1913,6 +1930,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!CooldownTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (CosmeticShowcaseTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[CosmeticShowcase] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UCosmeticShowcaseTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[CosmeticShowcase] 取不到 %s"), UCosmeticShowcaseTable::FileName());
+		bAllOk = false;
+	}
+	else if (!CosmeticShowcaseTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

@@ -1,6 +1,7 @@
 package commerce
 
 import (
+	"context"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	assetpb "proto/common/asset"
@@ -46,4 +47,18 @@ func TestTransferConvertsDebitSelectionToCreditWithoutChangingOriginalInstances(
 	s.Pet.PetId = 89
 	_, err = Transfer(b, s)
 	require.Error(t, err)
+}
+
+func TestMarketListingLimitScalesWithLightCard(t *testing.T) {
+	ctx := context.Background()
+	baseEngine := &Engine{}
+	require.Equal(t, BaseMarketListingLimit, baseEngine.MarketListingLimit(ctx, 1001))
+
+	cardEngine := &Engine{
+		AfkPassActive: func(_ context.Context, playerID uint64) bool {
+			return playerID == 1002
+		},
+	}
+	require.Equal(t, BaseMarketListingLimit, cardEngine.MarketListingLimit(ctx, 1001))
+	require.Equal(t, LightCardMarketListingLimit, cardEngine.MarketListingLimit(ctx, 1002))
 }

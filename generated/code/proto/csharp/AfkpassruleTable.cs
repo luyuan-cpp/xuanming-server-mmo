@@ -22,18 +22,20 @@ public static partial class AfkpassruleTableReflection {
   static AfkpassruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChdhZmtwYXNzcnVsZV90YWJsZS5wcm90byKmAQoQQWZrUGFzc1J1bGVUYWJs",
+          "ChdhZmtwYXNzcnVsZV90YWJsZS5wcm90byKVAgoQQWZrUGFzc1J1bGVUYWJs",
           "ZRIKCgJpZBgBIAEoDRITCgtwZXJpb2RfZGF5cxgCIAEoDRIbChNwcmljZV9j",
           "dXJyZW5jeV90eXBlGAMgASgNEg0KBXByaWNlGAQgASgEEhoKEm1heF9yZW1h",
           "aW5pbmdfZGF5cxgFIAEoDRIbChNyZW1pbmRfYmVmb3JlX2hvdXJzGAYgASgN",
-          "EgwKBGRlc2MYByABKAkiNwoUQWZrUGFzc1J1bGVUYWJsZURhdGESHwoEZGF0",
-          "YRgBIAMoCzIRLkFma1Bhc3NSdWxlVGFibGVCQgoOY29tLmdhbWUudGFibGVC",
-          "GkFma1Bhc3NSdWxlVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90",
-          "YWJsZWIGcHJvdG8z"));
+          "EgwKBGRlc2MYByABKAkSFQoNYm9udXNfaXRlbV9pZBgIIAEoDRIYChBib251",
+          "c19pdGVtX2NvdW50GAkgASgNEhcKD2JvbnVzX2ZyYW1lX2tleRgKIAEoCRIR",
+          "CglwbGFuX25hbWUYCyABKAkSEAoIaWNvbl9rZXkYDCABKAkiNwoUQWZrUGFz",
+          "c1J1bGVUYWJsZURhdGESHwoEZGF0YRgBIAMoCzIRLkFma1Bhc3NSdWxlVGFi",
+          "bGVCQgoOY29tLmdhbWUudGFibGVCGkFma1Bhc3NSdWxlVGFibGVPdXRlckNs",
+          "YXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::AfkPassRuleTable), global::AfkPassRuleTable.Parser, new[]{ "Id", "PeriodDays", "PriceCurrencyType", "Price", "MaxRemainingDays", "RemindBeforeHours", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::AfkPassRuleTable), global::AfkPassRuleTable.Parser, new[]{ "Id", "PeriodDays", "PriceCurrencyType", "Price", "MaxRemainingDays", "RemindBeforeHours", "Desc", "BonusItemId", "BonusItemCount", "BonusFrameKey", "PlanName", "IconKey" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::AfkPassRuleTableData), global::AfkPassRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -83,6 +85,11 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
     maxRemainingDays_ = other.maxRemainingDays_;
     remindBeforeHours_ = other.remindBeforeHours_;
     desc_ = other.desc_;
+    bonusItemId_ = other.bonusItemId_;
+    bonusItemCount_ = other.bonusItemCount_;
+    bonusFrameKey_ = other.bonusFrameKey_;
+    planName_ = other.planName_;
+    iconKey_ = other.iconKey_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -176,6 +183,66 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
     }
   }
 
+  /// <summary>Field number for the "bonus_item_id" field.</summary>
+  public const int BonusItemIdFieldNumber = 8;
+  private uint bonusItemId_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BonusItemId {
+    get { return bonusItemId_; }
+    set {
+      bonusItemId_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "bonus_item_count" field.</summary>
+  public const int BonusItemCountFieldNumber = 9;
+  private uint bonusItemCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BonusItemCount {
+    get { return bonusItemCount_; }
+    set {
+      bonusItemCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "bonus_frame_key" field.</summary>
+  public const int BonusFrameKeyFieldNumber = 10;
+  private string bonusFrameKey_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string BonusFrameKey {
+    get { return bonusFrameKey_; }
+    set {
+      bonusFrameKey_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "plan_name" field.</summary>
+  public const int PlanNameFieldNumber = 11;
+  private string planName_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string PlanName {
+    get { return planName_; }
+    set {
+      planName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
+  /// <summary>Field number for the "icon_key" field.</summary>
+  public const int IconKeyFieldNumber = 12;
+  private string iconKey_ = "";
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public string IconKey {
+    get { return iconKey_; }
+    set {
+      iconKey_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -198,6 +265,11 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
     if (MaxRemainingDays != other.MaxRemainingDays) return false;
     if (RemindBeforeHours != other.RemindBeforeHours) return false;
     if (Desc != other.Desc) return false;
+    if (BonusItemId != other.BonusItemId) return false;
+    if (BonusItemCount != other.BonusItemCount) return false;
+    if (BonusFrameKey != other.BonusFrameKey) return false;
+    if (PlanName != other.PlanName) return false;
+    if (IconKey != other.IconKey) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -212,6 +284,11 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
     if (MaxRemainingDays != 0) hash ^= MaxRemainingDays.GetHashCode();
     if (RemindBeforeHours != 0) hash ^= RemindBeforeHours.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (BonusItemId != 0) hash ^= BonusItemId.GetHashCode();
+    if (BonusItemCount != 0) hash ^= BonusItemCount.GetHashCode();
+    if (BonusFrameKey.Length != 0) hash ^= BonusFrameKey.GetHashCode();
+    if (PlanName.Length != 0) hash ^= PlanName.GetHashCode();
+    if (IconKey.Length != 0) hash ^= IconKey.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -258,6 +335,26 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
       output.WriteRawTag(58);
       output.WriteString(Desc);
     }
+    if (BonusItemId != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(BonusItemId);
+    }
+    if (BonusItemCount != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(BonusItemCount);
+    }
+    if (BonusFrameKey.Length != 0) {
+      output.WriteRawTag(82);
+      output.WriteString(BonusFrameKey);
+    }
+    if (PlanName.Length != 0) {
+      output.WriteRawTag(90);
+      output.WriteString(PlanName);
+    }
+    if (IconKey.Length != 0) {
+      output.WriteRawTag(98);
+      output.WriteString(IconKey);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -296,6 +393,26 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
       output.WriteRawTag(58);
       output.WriteString(Desc);
     }
+    if (BonusItemId != 0) {
+      output.WriteRawTag(64);
+      output.WriteUInt32(BonusItemId);
+    }
+    if (BonusItemCount != 0) {
+      output.WriteRawTag(72);
+      output.WriteUInt32(BonusItemCount);
+    }
+    if (BonusFrameKey.Length != 0) {
+      output.WriteRawTag(82);
+      output.WriteString(BonusFrameKey);
+    }
+    if (PlanName.Length != 0) {
+      output.WriteRawTag(90);
+      output.WriteString(PlanName);
+    }
+    if (IconKey.Length != 0) {
+      output.WriteRawTag(98);
+      output.WriteString(IconKey);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -326,6 +443,21 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (BonusItemId != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(BonusItemId);
+    }
+    if (BonusItemCount != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(BonusItemCount);
+    }
+    if (BonusFrameKey.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(BonusFrameKey);
+    }
+    if (PlanName.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(PlanName);
+    }
+    if (IconKey.Length != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeStringSize(IconKey);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -359,6 +491,21 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.BonusItemId != 0) {
+      BonusItemId = other.BonusItemId;
+    }
+    if (other.BonusItemCount != 0) {
+      BonusItemCount = other.BonusItemCount;
+    }
+    if (other.BonusFrameKey.Length != 0) {
+      BonusFrameKey = other.BonusFrameKey;
+    }
+    if (other.PlanName.Length != 0) {
+      PlanName = other.PlanName;
+    }
+    if (other.IconKey.Length != 0) {
+      IconKey = other.IconKey;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -407,6 +554,26 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
           Desc = input.ReadString();
           break;
         }
+        case 64: {
+          BonusItemId = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          BonusItemCount = input.ReadUInt32();
+          break;
+        }
+        case 82: {
+          BonusFrameKey = input.ReadString();
+          break;
+        }
+        case 90: {
+          PlanName = input.ReadString();
+          break;
+        }
+        case 98: {
+          IconKey = input.ReadString();
+          break;
+        }
       }
     }
   #endif
@@ -452,6 +619,26 @@ public sealed partial class AfkPassRuleTable : pb::IMessage<AfkPassRuleTable>
         }
         case 58: {
           Desc = input.ReadString();
+          break;
+        }
+        case 64: {
+          BonusItemId = input.ReadUInt32();
+          break;
+        }
+        case 72: {
+          BonusItemCount = input.ReadUInt32();
+          break;
+        }
+        case 82: {
+          BonusFrameKey = input.ReadString();
+          break;
+        }
+        case 90: {
+          PlanName = input.ReadString();
+          break;
+        }
+        case 98: {
+          IconKey = input.ReadString();
           break;
         }
       }

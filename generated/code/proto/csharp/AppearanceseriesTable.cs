@@ -22,19 +22,20 @@ public static partial class AppearanceseriesTableReflection {
   static AppearanceseriesTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChxhcHBlYXJhbmNlc2VyaWVzX3RhYmxlLnByb3RvIsYBChVBcHBlYXJhbmNl",
+          "ChxhcHBlYXJhbmNlc2VyaWVzX3RhYmxlLnByb3RvIv8BChVBcHBlYXJhbmNl",
           "U2VyaWVzVGFibGUSCgoCaWQYASABKA0SEgoKc2VyaWVzX2tleRgCIAEoCRIM",
           "CgRuYW1lGAMgASgJEhIKCnNvcnRfb3JkZXIYBCABKA0SDwoHZW5hYmxlZBgF",
           "IAEoDRIMCgRkZXNjGAYgASgJEh0KFWNvbXBsZXRpb25fYmFkZ2VfbmFtZRgH",
           "IAEoCRIWCg5lcGlsb2d1ZV90aXRsZRgIIAEoCRIVCg1lcGlsb2d1ZV9ib2R5",
-          "GAkgASgJIkEKGUFwcGVhcmFuY2VTZXJpZXNUYWJsZURhdGESJAoEZGF0YRgB",
-          "IAMoCzIWLkFwcGVhcmFuY2VTZXJpZXNUYWJsZUJHCg5jb20uZ2FtZS50YWJs",
-          "ZUIfQXBwZWFyYW5jZVNlcmllc1RhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0",
-          "ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "GAkgASgJEhsKE2J1bmRsZV9kaXNjb3VudF9icHMYCiABKA0SGgoSdW5pdF9w",
+          "cmljZV9kaWFtb25kGAsgASgNIkEKGUFwcGVhcmFuY2VTZXJpZXNUYWJsZURh",
+          "dGESJAoEZGF0YRgBIAMoCzIWLkFwcGVhcmFuY2VTZXJpZXNUYWJsZUJHCg5j",
+          "b20uZ2FtZS50YWJsZUIfQXBwZWFyYW5jZVNlcmllc1RhYmxlT3V0ZXJDbGFz",
+          "c1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::AppearanceSeriesTable), global::AppearanceSeriesTable.Parser, new[]{ "Id", "SeriesKey", "Name", "SortOrder", "Enabled", "Desc", "CompletionBadgeName", "EpilogueTitle", "EpilogueBody" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::AppearanceSeriesTable), global::AppearanceSeriesTable.Parser, new[]{ "Id", "SeriesKey", "Name", "SortOrder", "Enabled", "Desc", "CompletionBadgeName", "EpilogueTitle", "EpilogueBody", "BundleDiscountBps", "UnitPriceDiamond" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::AppearanceSeriesTableData), global::AppearanceSeriesTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -86,6 +87,8 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
     completionBadgeName_ = other.completionBadgeName_;
     epilogueTitle_ = other.epilogueTitle_;
     epilogueBody_ = other.epilogueBody_;
+    bundleDiscountBps_ = other.bundleDiscountBps_;
+    unitPriceDiamond_ = other.unitPriceDiamond_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -203,6 +206,30 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
     }
   }
 
+  /// <summary>Field number for the "bundle_discount_bps" field.</summary>
+  public const int BundleDiscountBpsFieldNumber = 10;
+  private uint bundleDiscountBps_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BundleDiscountBps {
+    get { return bundleDiscountBps_; }
+    set {
+      bundleDiscountBps_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "unit_price_diamond" field.</summary>
+  public const int UnitPriceDiamondFieldNumber = 11;
+  private uint unitPriceDiamond_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint UnitPriceDiamond {
+    get { return unitPriceDiamond_; }
+    set {
+      unitPriceDiamond_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -227,6 +254,8 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
     if (CompletionBadgeName != other.CompletionBadgeName) return false;
     if (EpilogueTitle != other.EpilogueTitle) return false;
     if (EpilogueBody != other.EpilogueBody) return false;
+    if (BundleDiscountBps != other.BundleDiscountBps) return false;
+    if (UnitPriceDiamond != other.UnitPriceDiamond) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -243,6 +272,8 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
     if (CompletionBadgeName.Length != 0) hash ^= CompletionBadgeName.GetHashCode();
     if (EpilogueTitle.Length != 0) hash ^= EpilogueTitle.GetHashCode();
     if (EpilogueBody.Length != 0) hash ^= EpilogueBody.GetHashCode();
+    if (BundleDiscountBps != 0) hash ^= BundleDiscountBps.GetHashCode();
+    if (UnitPriceDiamond != 0) hash ^= UnitPriceDiamond.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -297,6 +328,14 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
       output.WriteRawTag(74);
       output.WriteString(EpilogueBody);
     }
+    if (BundleDiscountBps != 0) {
+      output.WriteRawTag(80);
+      output.WriteUInt32(BundleDiscountBps);
+    }
+    if (UnitPriceDiamond != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(UnitPriceDiamond);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -343,6 +382,14 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
       output.WriteRawTag(74);
       output.WriteString(EpilogueBody);
     }
+    if (BundleDiscountBps != 0) {
+      output.WriteRawTag(80);
+      output.WriteUInt32(BundleDiscountBps);
+    }
+    if (UnitPriceDiamond != 0) {
+      output.WriteRawTag(88);
+      output.WriteUInt32(UnitPriceDiamond);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -379,6 +426,12 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
     }
     if (EpilogueBody.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(EpilogueBody);
+    }
+    if (BundleDiscountBps != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(BundleDiscountBps);
+    }
+    if (UnitPriceDiamond != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(UnitPriceDiamond);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -418,6 +471,12 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
     }
     if (other.EpilogueBody.Length != 0) {
       EpilogueBody = other.EpilogueBody;
+    }
+    if (other.BundleDiscountBps != 0) {
+      BundleDiscountBps = other.BundleDiscountBps;
+    }
+    if (other.UnitPriceDiamond != 0) {
+      UnitPriceDiamond = other.UnitPriceDiamond;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -474,6 +533,14 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
           EpilogueBody = input.ReadString();
           break;
         }
+        case 80: {
+          BundleDiscountBps = input.ReadUInt32();
+          break;
+        }
+        case 88: {
+          UnitPriceDiamond = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -527,6 +594,14 @@ public sealed partial class AppearanceSeriesTable : pb::IMessage<AppearanceSerie
         }
         case 74: {
           EpilogueBody = input.ReadString();
+          break;
+        }
+        case 80: {
+          BundleDiscountBps = input.ReadUInt32();
+          break;
+        }
+        case 88: {
+          UnitPriceDiamond = input.ReadUInt32();
           break;
         }
       }

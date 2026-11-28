@@ -77,7 +77,8 @@ type fakeFriendStore struct {
 	// 是为了让"这次要让哪个方法失败"在用例里只占一行。
 	errs map[string]error
 
-	friends []data.FriendEntry
+	friends                 []data.FriendEntry
+	lastMinFriendDurationMs int64
 	pending []data.FriendRequestEntry
 	blocks  []data.BlockEntry
 	mutual  []data.RecommendCandidate
@@ -198,7 +199,8 @@ func (f *fakeFriendStore) ListBlocks(_ context.Context, _ uint64) ([]data.BlockE
 	return f.blocks, nil
 }
 
-func (f *fakeFriendStore) BatchCheckSocialRelations(_ context.Context, _, _ []uint64) (bool, bool, error) {
+func (f *fakeFriendStore) BatchCheckSocialRelations(_ context.Context, _, _ []uint64, minDurationMs int64) (bool, bool, error) {
+	f.lastMinFriendDurationMs = minDurationMs
 	if err := f.take("BatchCheckSocialRelations"); err != nil {
 		return false, false, err
 	}

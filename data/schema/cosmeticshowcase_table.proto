@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+// CosmeticShowcase 表的权威 schema。源表 data/CosmeticShowcase.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 战斗排面与社交外观统一目录表（零战力、零属性、纯视觉表现）：
+//   - id 列带 (cfg_bit_index) = true,由导表器经 cosmeticshowcase_mapping.json 分配永不复用的紧凑位序,
+//     供 PlayerProfileComp.showcase_cosmetic_owned_bits(永久拥有位图)使用。
+//   - 表级 (cfg_ids_permanent) = true:上线后禁止物理删行或复用旧 ID,下架外观请将 enabled 置 0。
+//   - slot_kind 语义：
+//       1 = 五行阵法脚底阵纹（进战全场展示）
+//       2 = 擂台/会武入场与胜利演出横幅
+//       3 = 聊天气泡样式
+//       4 = 战报/残局分享卡片底纹
+//       5 = 个人名片底纹
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message CosmeticShowcaseTable {
+  option (cfg_sheet)         = "CosmeticShowcase";
+  option (cfg_source_file)   = "CosmeticShowcase.xlsx";
+  option (cfg_primary_key)   = "id";
+  option (cfg_ids_permanent) = true;
+
+  // 永久表主键 ID(1 起只增不删,经 cfg_bit_index 映射到拥有位图下标)
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // 稳定外观标识键(全表唯一非空,如 "formation_skin_metal")
+  string cosmetic_key = 2;
+  // 槽位种类:1=脚底阵纹,2=入场与胜利演出,3=聊天气泡,4=分享卡底纹,5=个人名片底纹
+  uint32 slot_kind = 3;
+  // 中文展示名
+  string name = 4;
+  // 客户端主视觉资源键(Assets/Resources/<asset_key>.png)
+  string asset_key = 5;
+  // 可选次级视觉资源键(如胜利态/高亮态图,空串表示复用主资源)
+  string secondary_asset_key = 6;
+  // 未拥有时允许消耗的永久解锁券道具 ID(0 = 仅活动/手记/支持者包专属;默认 3417 排面装饰券)
+  uint32 card_item_id = 7;
+  // 每次解锁消耗券张数(card_item_id > 0 时 >= 1,默认 1)
+  uint32 card_item_count = 8;
+  // 灵石百宝阁快捷跳转商品 ID(0 = 非百宝阁直售;默认 307)
+  uint32 spirit_shop_goods_id = 9;
+  // 是否启用:1 = 开放展示与穿戴,0 = 下架(不物理删行)
+  uint32 enabled = 10;
+  // 界面展示排序(升序)
+  uint32 sort_order = 11;
+  // 未拥有且非直售时展示的取得说明文案
+  string acquire_hint = 12;
+  // 外观简介(纯外观描述,零数值)
+  string desc = 13;
+}

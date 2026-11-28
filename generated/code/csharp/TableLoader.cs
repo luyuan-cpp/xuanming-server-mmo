@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class TableLoader
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 83;
+        public const int TableCount = 84;
 
         private static Action s_loadSuccessCallback;
 
@@ -59,6 +59,7 @@ namespace MmorpgClient.Table
                 ClassTableManager.FileName(useBinary),
                 ConditionTableManager.FileName(useBinary),
                 CooldownTableManager.FileName(useBinary),
+                CosmeticShowcaseTableManager.FileName(useBinary),
                 DungeonTableManager.FileName(useBinary),
                 EquipAffixPoolTableManager.FileName(useBinary),
                 EquipAffixQualityTableManager.FileName(useBinary),
@@ -149,6 +150,7 @@ namespace MmorpgClient.Table
             ClassTableManager.Instance.Load(configDir, useBinary);
             ConditionTableManager.Instance.Load(configDir, useBinary);
             CooldownTableManager.Instance.Load(configDir, useBinary);
+            CosmeticShowcaseTableManager.Instance.Load(configDir, useBinary);
             DungeonTableManager.Instance.Load(configDir, useBinary);
             EquipAffixPoolTableManager.Instance.Load(configDir, useBinary);
             EquipAffixQualityTableManager.Instance.Load(configDir, useBinary);
@@ -277,6 +279,8 @@ namespace MmorpgClient.Table
                 ConditionTableManager.Instance.LoadFromBytes, ConditionTableManager.Instance.LoadFromJson);
             LoadOne(CooldownTableManager.FileName(useBinary), byteProvider, useBinary,
                 CooldownTableManager.Instance.LoadFromBytes, CooldownTableManager.Instance.LoadFromJson);
+            LoadOne(CosmeticShowcaseTableManager.FileName(useBinary), byteProvider, useBinary,
+                CosmeticShowcaseTableManager.Instance.LoadFromBytes, CosmeticShowcaseTableManager.Instance.LoadFromJson);
             LoadOne(DungeonTableManager.FileName(useBinary), byteProvider, useBinary,
                 DungeonTableManager.Instance.LoadFromBytes, DungeonTableManager.Instance.LoadFromJson);
             LoadOne(EquipAffixPoolTableManager.FileName(useBinary), byteProvider, useBinary,

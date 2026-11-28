@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_pet_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023pet_error_tip.proto*\222\005\n\tpet_error\022\020\n\014k"
+    "\n\023pet_error_tip.proto*\352\005\n\tpet_error\022\020\n\014k"
     "Pet_errorOK\020\000\022\022\n\014kPetNotFound\020\220\313\001\022\031\n\023kPe"
     "tTableRowMissing\020\221\313\001\022\022\n\014kPetSlotFull\020\222\313\001"
     "\022\035\n\027kPetOwnerLevelNotEnough\020\223\313\001\022\027\n\021kPetA"
@@ -52,14 +52,16 @@ const char descriptor_table_protodef_pet_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_
     "ed\020\243\313\001\022\025\n\017kPetTierChanged\020\244\313\001\022\034\n\026kPetTie"
     "rLevelNotEnough\020\245\313\001\022\037\n\031kPetTierMaterialN"
     "otEnough\020\246\313\001\022\034\n\026kPetEntryPresetInvalid\020\247"
-    "\313\001B$\n\016com.game.tableZ\022generated/pb/table"
-    "b\006proto3"
+    "\313\001\022\031\n\023kPetSquadSlotLocked\020\250\313\001\022\036\n\030kPetSqu"
+    "adMaxSlotsReached\020\251\313\001\022\033\n\025kPetSquadPriceC"
+    "hanged\020\252\313\001B$\n\016com.game.tableZ\022generated/"
+    "pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_pet_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_pet_5ferror_5ftip_2eproto = {
     false,
     false,
-    728,
+    816,
     descriptor_table_protodef_pet_5ferror_5ftip_2eproto,
     "pet_error_tip.proto",
     &descriptor_table_pet_5ferror_5ftip_2eproto_once,
@@ -78,7 +80,7 @@ pet_error_descriptor() {
   return file_level_enum_descriptors_pet_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t pet_error_internal_data_[] = {
-    65536u, 1572864u, 26015u, 26007u, 26020u, 26003u, 26011u, 26018u, 26022u, 26001u, 26005u, 26009u, 26013u, 26017u, 26019u, 26021u, 26023u, 26000u, 26002u, 26004u, 26006u, 26008u, 26010u, 26012u, 26014u, 26016u, };
+    65536u, 1769472u, 26015u, 26007u, 26023u, 26003u, 26011u, 26019u, 26025u, 26001u, 26005u, 26009u, 26013u, 26017u, 26021u, 26024u, 26026u, 26000u, 26002u, 26004u, 26006u, 26008u, 26010u, 26012u, 26014u, 26016u, 26018u, 26020u, 26022u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

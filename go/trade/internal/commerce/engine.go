@@ -54,7 +54,14 @@ var (
 	ErrBid         = Rejection(table.TradeError_kTradeBidTooLow)
 	ErrEnded       = Rejection(table.TradeError_kTradeAuctionEnded)
 	// ErrBuyerFull 是买家账号的角色名额满了。文案和建角满位同一条。
-	ErrBuyerFull = Rejection(table.LoginError_kLoginAccountPlayerFull)
+	ErrBuyerFull  = Rejection(table.LoginError_kLoginAccountPlayerFull)
+	ErrOrderLimit = Rejection(table.TradeError_kTradeOrderLimit)
+)
+
+const (
+	// 集市同时在售挂单上限：普通玩家 10 单，仙途轻享卡生效期扩容至 20 单（纯便利零战力）。
+	BaseMarketListingLimit      = 10
+	LightCardMarketListingLimit = 20
 )
 
 type IDs interface {
@@ -136,6 +143,8 @@ type Engine struct {
 	// WantedSkills 查悬赏求书能求哪些技能(wanted_skill_book.go)。nil = 本部署没开求购单(Commerce.WantedSkillBook.Enabled=false):
 	// 发榜、揭榜回「功能未开放」;已有的求购单照常推进、照常可撤。
 	WantedSkills WantedSkillCatalog
+	// AfkPassActive 查玩家域 Redis 投影 player:afk_pass:{id} 判定仙途轻享卡是否生效；nil 或查询失败时 fail-safe 返回 false（按基础 10 单）。
+	AfkPassActive func(ctx context.Context, playerID uint64) bool
 	// Owns 判本副本是否负责一片后台工作(合同推进、收据 ACK,见 schedule.go)。装配层启动时写一次(生产是
 	// svc 的 workshard.Membership.Owns),之后只读;nil(单测、单副本)= 全部片归本副本,行为与分工前相同。
 	Owns func(key string) bool
@@ -340,6 +349,28 @@ func (e *Engine) CreatePlayerTrade(ctx context.Context, me uint64, in *tradepb.C
 func validPrice(p uint64, c uint32, policy Policy) bool {
 	return p > 0 && p <= math.MaxInt64 && !currencytype.IsBound(c) && contains(policy.Currencies, c)
 }
+func (e *Engine) MarketListingLimit(ctx context.Context, playerID uint64) int {
+	if e != nil && e.AfkPassActive != nil && e.AfkPassActive(ctx, playerID) {
+		return LightCardMarketListingLimit
+	}
+	return BaseMarketListingLimit
+}
+
+func countActiveSellerListings(ctx context.Context, tx *sql.Tx, seller uint64, limit int) (int, error) {
+	rows, err := tx.QueryContext(ctx,
+		"SELECT commerce_id FROM trade_commerce WHERE seller_player_id=? AND kind IN (3,4) AND parent_id=0 AND status NOT IN (?,?) ORDER BY commerce_id LIMIT ? FOR UPDATE",
+		seller, Cancelled, Settled, limit)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	n := 0
+	for rows.Next() {
+		n++
+	}
+	return n, rows.Err()
+}
+
 func (e *Engine) CreateConsignment(ctx context.Context, me uint64, in *tradepb.CreateConsignmentRequest) (*tradepb.TradeCommerceRecord, error) {
 	if err := e.Policy.Selection(in.GetAssets()); err != nil {
 		return nil, err
@@ -350,7 +381,17 @@ func (e *Engine) CreateConsignment(ctx context.Context, me uint64, in *tradepb.C
 	if in.GetDesignatedBuyerPlayerId() == me {
 		return nil, ErrSelf
 	}
-	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 3, Status: Escrowing, SellerPlayerId: me, UnitPrice: in.Price, CurrencyType: in.CurrencyType, ExpiresMs: e.now() + in.DurationMs}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.Assets, Stage: "escrow", DesignatedBuyerPlayerId: in.GetDesignatedBuyerPlayerId()})
+	maxListings := e.MarketListingLimit(ctx, me)
+	return e.createLocked(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 3, Status: Escrowing, SellerPlayerId: me, UnitPrice: in.Price, CurrencyType: in.CurrencyType, ExpiresMs: e.now() + in.DurationMs}, &tradepb.TradeCommerceWorkflow{SellerAssets: in.Assets, Stage: "escrow", DesignatedBuyerPlayerId: in.GetDesignatedBuyerPlayerId()}, func(ctx context.Context, tx *sql.Tx) error {
+		active, err := countActiveSellerListings(ctx, tx, me, maxListings)
+		if err != nil {
+			return err
+		}
+		if active >= maxListings {
+			return ErrOrderLimit
+		}
+		return nil
+	})
 }
 func (e *Engine) CreateLot(ctx context.Context, me uint64, in *tradepb.CreateAuctionLotRequest) (*tradepb.TradeCommerceRecord, error) {
 	if err := e.Policy.Selection(in.GetAssets()); err != nil {
@@ -372,7 +413,17 @@ func (e *Engine) PlaceMarket(ctx context.Context, me uint64, in *tradepb.PlaceMa
 	} else {
 		sel.Items = map[uint32]uint32{in.ItemConfigId: in.Quantity}
 	}
-	return e.Create(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 4, Status: Escrowing, SellerPlayerId: me, MarketId: in.MarketId, ItemConfigId: in.ItemConfigId, Side: uint32(in.Side), UnitPrice: in.UnitPrice, Quantity: in.Quantity, CurrencyType: in.CurrencyType}, &tradepb.TradeCommerceWorkflow{SellerAssets: sel, Stage: "escrow"})
+	maxListings := e.MarketListingLimit(ctx, me)
+	return e.createLocked(ctx, me, in.ClientRequestId, in, &tradepb.TradeCommerceRecord{Kind: 4, Status: Escrowing, SellerPlayerId: me, MarketId: in.MarketId, ItemConfigId: in.ItemConfigId, Side: uint32(in.Side), UnitPrice: in.UnitPrice, Quantity: in.Quantity, CurrencyType: in.CurrencyType}, &tradepb.TradeCommerceWorkflow{SellerAssets: sel, Stage: "escrow"}, func(ctx context.Context, tx *sql.Tx) error {
+		active, err := countActiveSellerListings(ctx, tx, me, maxListings)
+		if err != nil {
+			return err
+		}
+		if active >= maxListings {
+			return ErrOrderLimit
+		}
+		return nil
+	})
 }
 func (e *Engine) Mutate(ctx context.Context, me, id uint64, action string, requestID ...string) (*tradepb.TradeCommerceRecord, error) {
 	return e.mutate(ctx, me, id, action, 0, requestID...)

@@ -50,6 +50,7 @@
 #include "ClassTable.h"
 #include "ConditionTable.h"
 #include "CooldownTable.h"
+#include "CosmeticShowcaseTable.h"
 #include "DungeonTable.h"
 #include "EquipAffixPoolTable.h"
 #include "EquipAffixQualityTable.h"
@@ -150,7 +151,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 83;
+	static constexpr int32 TableCount = 84;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -263,6 +264,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UCooldownTable* GetCooldownTable() const { return CooldownTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UCosmeticShowcaseTable* GetCosmeticShowcaseTable() const { return CosmeticShowcaseTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UDungeonTable* GetDungeonTable() const { return DungeonTable; }
@@ -493,6 +497,8 @@ private:
 	TObjectPtr<UConditionTable> ConditionTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UCooldownTable> CooldownTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UCosmeticShowcaseTable> CosmeticShowcaseTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UDungeonTable> DungeonTable;
 	UPROPERTY(Transient)

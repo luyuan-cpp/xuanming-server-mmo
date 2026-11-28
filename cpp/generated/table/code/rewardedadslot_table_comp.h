@@ -58,6 +58,10 @@ struct RewardedAdSlotPlatform_maskComp {
     uint32_t value;
 };
 
+struct RewardedAdSlotReward_kindComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -95,4 +99,7 @@ inline RewardedAdSlotRequire_ssvComp MakeRewardedAdSlotRequire_ssvComp(const Rew
 }
 inline RewardedAdSlotPlatform_maskComp MakeRewardedAdSlotPlatform_maskComp(const RewardedAdSlotTable& row) {
     return { row.platform_mask() };
+}
+inline RewardedAdSlotReward_kindComp MakeRewardedAdSlotReward_kindComp(const RewardedAdSlotTable& row) {
+    return { row.reward_kind() };
 }

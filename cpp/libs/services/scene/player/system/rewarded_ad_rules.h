@@ -21,6 +21,19 @@ inline constexpr uint32_t kMaxSessionTtlSec = 3600u;
 inline constexpr uint64_t kMaxRewardAmount = 100000ULL;
 inline constexpr uint32_t kAllPlatformMask = 0x0Fu; // bits 0..3: 微信小游戏/抖音小游戏/iOS/Android
 
+enum RewardKind : uint32_t
+{
+	kRewardBindGold = 1u,
+	kRewardTowerBoonReroll = 2u,
+	kRewardWardrobe1hTrial = 3u,
+	kRewardMerchantPersonalRefresh = 4u,
+};
+
+inline uint32_t NormalizeRewardKind(uint32_t rawKind)
+{
+	return rawKind == 0u ? kRewardBindGold : rawKind;
+}
+
 struct SlotConfig
 {
 	uint32_t slotId{0};
@@ -34,6 +47,7 @@ struct SlotConfig
 	uint64_t rewardAmount{0};
 	bool requireSsv{false};
 	uint32_t platformMask{0};
+	uint32_t rewardKind{kRewardBindGold};
 };
 
 enum class SessionVerdict : uint8_t
@@ -111,15 +125,38 @@ inline bool ValidateSlotConfig(const SlotConfig &cfg, const char *&reasonOut)
 		reasonOut = "invalid min_watch_sec or session_ttl_sec";
 		return false;
 	}
-	if (cfg.currencyType != static_cast<uint32_t>(common::base::CURRENCY_TYPE_BIND_GOLD))
+	const uint32_t kind = NormalizeRewardKind(cfg.rewardKind);
+	if (kind < kRewardBindGold || kind > kRewardMerchantPersonalRefresh)
 	{
-		reasonOut = "rewarded ad slot must grant CURRENCY_TYPE_BIND_GOLD (3) only";
+		reasonOut = "reward_kind out of range 1..4";
 		return false;
 	}
-	if (cfg.rewardAmount == 0u || cfg.rewardAmount > kMaxRewardAmount)
+	if (kind == kRewardBindGold)
 	{
-		reasonOut = "reward_amount out of range 1..100000";
-		return false;
+		if (cfg.currencyType != static_cast<uint32_t>(common::base::CURRENCY_TYPE_BIND_GOLD))
+		{
+			reasonOut = "rewarded ad slot must grant CURRENCY_TYPE_BIND_GOLD (3) only";
+			return false;
+		}
+		if (cfg.rewardAmount == 0u || cfg.rewardAmount > kMaxRewardAmount)
+		{
+			reasonOut = "reward_amount out of range 1..100000";
+			return false;
+		}
+	}
+	else
+	{
+		// 非货币类槽位（幻境重随/衣柜续试穿/商人个人换货）严禁附带任何货币产出。
+		if (cfg.rewardAmount != 0u)
+		{
+			reasonOut = "non-currency rewarded ad slot must have reward_amount == 0";
+			return false;
+		}
+		if (cfg.currencyType != 0u && cfg.currencyType != static_cast<uint32_t>(common::base::CURRENCY_TYPE_BIND_GOLD))
+		{
+			reasonOut = "rewarded ad slot must not reference tradable currency";
+			return false;
+		}
 	}
 	if ((cfg.platformMask & ~kAllPlatformMask) != 0u)
 	{
@@ -130,7 +167,7 @@ inline bool ValidateSlotConfig(const SlotConfig &cfg, const char *&reasonOut)
 	return true;
 }
 
-// 抗时钟回拨的今日已领次数查询:只有当 currentDayStartMs 严格前进才视为新的一天。
+// 抗时钟回拨的本周期已领次数查询(旧单槽入口，兼容单测)。
 inline uint32_t EffectiveClaimedToday(const RewardedAdLedger &ledger, uint64_t currentDayStartMs)
 {
 	if (currentDayStartMs > ledger.day_starts_at_ms())
@@ -140,13 +177,45 @@ inline uint32_t EffectiveClaimedToday(const RewardedAdLedger &ledger, uint64_t c
 	return ledger.claimed_today();
 }
 
-// 推进日账本(仅前进不清倒退)。
+// 抗时钟回拨的按槽位本周已领次数查询（slot 1 兼容旧 claimed_today 字段）。
+inline uint32_t EffectiveSlotClaimed(const RewardedAdLedger &ledger, uint32_t slotId, uint64_t currentWeekStartMs)
+{
+	if (currentWeekStartMs > ledger.day_starts_at_ms())
+	{
+		return 0u;
+	}
+	uint32_t count = 0u;
+	const auto it = ledger.slot_claimed_this_week().find(slotId);
+	if (it != ledger.slot_claimed_this_week().end())
+	{
+		count = it->second;
+	}
+	if (slotId == 1u && ledger.claimed_today() > count)
+	{
+		count = ledger.claimed_today();
+	}
+	return count;
+}
+
+// 推进周账本(仅前进不清倒退)。
 inline void AdvanceDayIfNeeded(RewardedAdLedger &ledger, uint64_t currentDayStartMs)
 {
 	if (currentDayStartMs > ledger.day_starts_at_ms())
 	{
 		ledger.set_day_starts_at_ms(currentDayStartMs);
 		ledger.set_claimed_today(0u);
+		ledger.clear_slot_claimed_this_week();
+	}
+}
+
+inline void IncrementSlotClaimed(RewardedAdLedger &ledger, uint32_t slotId)
+{
+	const uint32_t prev = EffectiveSlotClaimed(ledger, slotId, ledger.day_starts_at_ms());
+	const uint32_t next = prev < std::numeric_limits<uint32_t>::max() ? (prev + 1u) : prev;
+	(*ledger.mutable_slot_claimed_this_week())[slotId] = next;
+	if (slotId == 1u)
+	{
+		ledger.set_claimed_today(next);
 	}
 }
 

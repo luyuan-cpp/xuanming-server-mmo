@@ -79,6 +79,14 @@ enum class ClientRequestKind : uint8_t
 	kRetiredWantedOrderFulfill = 28,
 	kClearJianghuDefeatMark = 29,     // SceneJianghuClientPlayer.ClearJianghuDefeatMark:银两或清风洗尘符幂等清除30分钟战败印记
 	kRentSkillLoadoutSlots = 30,      // SceneSkillClientPlayer.RentSkillLoadoutSlots:7套非永久流派方案槽位按月灵石租用/扩容/续期
+	kBuyAppearanceSeriesBundle = 31,  // SceneAppearanceClientPlayer.BuyAppearanceSeriesBundle:衣柜系列8.5折按缺口补齐包
+	kEquipShowcaseCosmetic = 32,      // SceneAppearanceClientPlayer.EquipShowcaseCosmetic:耗券解锁或穿戴排面外观
+	kCastCityCelebration = 33,        // SceneAppearanceClientPlayer.CastCityCelebration:主城施放全城同乐社交耗材
+	kClaimCityCelebrationGift = 34,   // SceneAppearanceClientPlayer.ClaimCityCelebrationGift:领取全城同乐绑定银两
+	kSendCosmeticGift = 35,           // SceneAppearanceClientPlayer.SendCosmeticGift:好友纯外观/手记典藏真实灵石赠礼
+	kExpandBagCapacity = 36,          // SceneBagClientPlayer.ExpandBagCapacity:仓库容量真实灵石扩容
+	kUnlockPetSquadPresetSlot = 37,   // ScenePetClientPlayer.UnlockPetSquadPresetSlot:灵宠编队快捷预设永久槽位解锁
+	kExpandSavedBuildSlots = 38,      // SceneSeasonClientPlayer.ExpandSavedBuildSlots:战报配装收藏夹真实灵石扩容
 	kCount
 };
 
@@ -107,7 +115,11 @@ inline constexpr const char *kClientRequestKindNames[] = {"unspecified", "enhanc
 														  "claim_scroll_milestone", "batch_dismantle_skill_books",
 														  "post_wanted_order", "cancel_wanted_order",
 														  "fulfill_wanted_order", "clear_jianghu_defeat_mark",
-														  "rent_skill_loadout_slots"};
+														  "rent_skill_loadout_slots", "buy_appearance_series_bundle",
+														  "equip_showcase_cosmetic", "cast_city_celebration",
+														  "claim_city_celebration_gift", "send_cosmetic_gift",
+														  "expand_bag_capacity", "unlock_pet_squad_preset_slot",
+														  "expand_saved_build_slots"};
 static_assert(std::size(kClientRequestKindNames) == static_cast<std::size_t>(ClientRequestKind::kCount),
 			  "kClientRequestKindNames is out of sync with ClientRequestKind");
 
@@ -170,6 +182,18 @@ struct ClientRequestResult
 	uint32_t skillLoadoutRentedSlots{0};
 	uint64_t skillLoadoutRentExpiresAtSec{0};
 	uint64_t skillLoadoutRentSpentDiamond{0};
+	uint32_t appearanceBundleUnlockedCount{0};
+	uint64_t appearanceBundleSpentDiamond{0};
+	uint64_t cityCelebrationId{0};
+	uint32_t cityCelebrationBindGold{0};
+	uint64_t cosmeticGiftOrderId{0};
+	uint64_t cosmeticGiftSpentDiamond{0};
+	uint32_t bagExpandNewCapacity{0};
+	uint64_t bagExpandSpentDiamond{0};
+	uint32_t petSquadUnlockedSlots{0};
+	uint64_t petSquadSpentDiamond{0};
+	uint32_t buildBookmarkNewCapacity{0};
+	uint64_t buildBookmarkSpentDiamond{0};
 };
 
 // 参数指纹 = 请求清掉 client_request_id 之后做确定性序列化,取 SHA-256 的前 16 字节。

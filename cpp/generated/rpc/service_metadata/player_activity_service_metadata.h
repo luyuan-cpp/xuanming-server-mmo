@@ -38,3 +38,7 @@ constexpr uint32_t SceneActivityClientPlayerClaimTravelPassRewardIndex = 7;
 constexpr uint32_t SceneActivityClientPlayerEquipTravelPassCosmeticMessageId = 529;
 constexpr uint32_t SceneActivityClientPlayerEquipTravelPassCosmeticIndex = 8;
 #define SceneActivityClientPlayerEquipTravelPassCosmeticMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(8)
+
+constexpr uint32_t SceneActivityClientPlayerSelectActiveTravelPassMessageId = 591;
+constexpr uint32_t SceneActivityClientPlayerSelectActiveTravelPassIndex = 9;
+#define SceneActivityClientPlayerSelectActiveTravelPassMethod  ::SceneActivityClientPlayer_Stub::descriptor()->method(9)

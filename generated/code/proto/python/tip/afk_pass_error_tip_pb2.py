@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1ctip/afk_pass_error_tip.proto*\xaf\x01\n\x0e\x61\x66k_pass_error\x12\x15\n\x11kAfk_pass_errorOK\x10\x00\x12\x1a\n\x14kAfkPassPriceChanged\x10\x80\xfa\x01\x12\x1f\n\x19kAfkPassCurrencyNotEnough\x10\x81\xfa\x01\x12\x18\n\x12kAfkPassStackLimit\x10\x82\xfa\x01\x12\x14\n\x0ekAfkPassFrozen\x10\x83\xfa\x01\x12\x19\n\x13kAfkPassUnavailable\x10\x84\xfa\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1ctip/afk_pass_error_tip.proto*\xe1\x01\n\x0e\x61\x66k_pass_error\x12\x15\n\x11kAfk_pass_errorOK\x10\x00\x12\x1a\n\x14kAfkPassPriceChanged\x10\x80\xfa\x01\x12\x1f\n\x19kAfkPassCurrencyNotEnough\x10\x81\xfa\x01\x12\x18\n\x12kAfkPassStackLimit\x10\x82\xfa\x01\x12\x14\n\x0ekAfkPassFrozen\x10\x83\xfa\x01\x12\x19\n\x13kAfkPassUnavailable\x10\x84\xfa\x01\x12\x15\n\x0fkAfkPassBagFull\x10\x85\xfa\x01\x12\x19\n\x13kAfkPassPlanInvalid\x10\x86\xfa\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,5 +33,5 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_AFK_PASS_ERROR']._serialized_start=33
-  _globals['_AFK_PASS_ERROR']._serialized_end=208
+  _globals['_AFK_PASS_ERROR']._serialized_end=258
 # @@protoc_insertion_point(module_scope)

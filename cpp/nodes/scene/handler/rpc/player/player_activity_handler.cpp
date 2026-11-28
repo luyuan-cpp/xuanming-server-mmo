@@ -109,3 +109,14 @@ void SceneActivityClientPlayerHandler::EquipTravelPassCosmetic(entt::entity play
 ///<<< END WRITING YOUR CODE
 
 }
+
+void SceneActivityClientPlayerHandler::SelectActiveTravelPass(entt::entity player,const ::SelectActiveTravelPassRequest* request,
+	::SelectActiveTravelPassResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    const auto nowMs = static_cast<uint64_t>(muduo::Timestamp::now().microSecondsSinceEpoch() / 1000);
+    const auto result = PlayerTravelPassSystem::SelectActivePass(player, nowMs, *request, *response);
+    if (result != kSuccess) response->mutable_error_message()->set_id(result);
+///<<< END WRITING YOUR CODE
+
+}

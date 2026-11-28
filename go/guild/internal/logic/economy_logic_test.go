@@ -637,12 +637,13 @@ func (s *resolveScriptedMySQL) answer(query string, args []driver.Value) (driver
 	case strings.Contains(query, resolveScriptedSQLGuildRow):
 		s.guildRowReads++
 		rows := &resolveScriptedRows{cols: []string{
-			"guild_id", "name", "leader_id", "level", "announcement", "create_time_ms", "max_members", "zone_id", "score", "funds", "renamed_ms",
+			"guild_id", "name", "leader_id", "level", "announcement", "create_time_ms", "max_members", "zone_id", "score", "funds", "renamed_ms", "emblem_skin_id", "unlocked_emblem_bits",
 		}}
 		if g, ok := s.guilds[id]; ok {
 			rows.data = [][]driver.Value{{
 				int64(id), g.Name, int64(g.LeaderID), int64(g.Level), g.Announcement,
 				int64(g.CreateTimeMs), int64(g.MaxMembers), int64(g.ZoneID), g.Score, int64(g.Funds), int64(g.RenamedMs),
+				int64(g.EmblemSkinID), int64(g.UnlockedEmblemBits),
 			}}
 		}
 		return rows, nil

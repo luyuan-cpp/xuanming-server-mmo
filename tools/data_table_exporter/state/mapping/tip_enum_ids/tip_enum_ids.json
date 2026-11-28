@@ -203,7 +203,9 @@
         "BagInsufficientBagSpace": 6014,
         "BagTemporaryItemNotFound": 6015,
         "BagTemporaryRetrieveBagFull": 6016,
-        "BagTemporaryRetrieveBusy": 6017
+        "BagTemporaryRetrieveBusy": 6017,
+        "BagExpandMaxReached": 6018,
+        "BagExpandPriceChanged": 6019
       }
     },
     "skill_error": {
@@ -373,7 +375,11 @@
         "GuildWarFeudCooldown": 14072,
         "GuildWarFeudAlreadyActive": 14073,
         "GuildWarFeudNotFound": 14074,
-        "GuildWarFeudInvalidTarget": 14075
+        "GuildWarFeudInvalidTarget": 14075,
+        "GuildEmblemInvalid": 14076,
+        "GuildEmblemAlreadyUnlocked": 14077,
+        "GuildEmblemNotUnlocked": 14078,
+        "GuildEmblemPriceChanged": 14079
       }
     },
     "friend_error": {
@@ -525,7 +531,10 @@
         "PetTierChanged": 26020,
         "PetTierLevelNotEnough": 26021,
         "PetTierMaterialNotEnough": 26022,
-        "PetEntryPresetInvalid": 26023
+        "PetEntryPresetInvalid": 26023,
+        "PetSquadSlotLocked": 26024,
+        "PetSquadMaxSlotsReached": 26025,
+        "PetSquadPriceChanged": 26026
       }
     },
     "trade_error": {
@@ -708,7 +717,9 @@
         "AfkPassCurrencyNotEnough": 32001,
         "AfkPassStackLimit": 32002,
         "AfkPassFrozen": 32003,
-        "AfkPassUnavailable": 32004
+        "AfkPassUnavailable": 32004,
+        "AfkPassBagFull": 32005,
+        "AfkPassPlanInvalid": 32006
       }
     },
     "chat_error": {
@@ -737,7 +748,25 @@
         "AppearanceUnavailable": 33006,
         "AppearanceNotCardUnlockable": 33007,
         "AppearanceAlreadyOwned": 33008,
-        "AppearanceNotOwned": 33009
+        "AppearanceNotOwned": 33009,
+        "AppearanceSeriesBundleUnavailable": 33010,
+        "AppearanceSeriesAlreadyCompleted": 33011,
+        "AppearanceSeriesBundlePriceChanged": 33012,
+        "AppearanceSeriesBundleCurrencyNotEnough": 33013,
+        "CityCelebrationNotSafeCity": 33014,
+        "CityCelebrationChannelFull": 33015,
+        "CityCelebrationNoItem": 33016,
+        "CityCelebrationNotFound": 33017,
+        "CityCelebrationAlreadyClaimed": 33018,
+        "CityCelebrationLevelTooLow": 33019,
+        "CityCelebrationWeeklyCapReached": 33020,
+        "CosmeticGiftNotFriend7Days": 33021,
+        "CosmeticGiftTargetAlreadyOwned": 33022,
+        "CosmeticGiftWeeklyLimitReached": 33023,
+        "CosmeticGiftInvalidTarget": 33024,
+        "CosmeticGiftCurrencyNotEnough": 33025,
+        "CosmeticGiftPriceChanged": 33026,
+        "CosmeticGiftServiceUnavailable": 33027
       }
     },
     "season_error": {
@@ -757,7 +786,9 @@
         "SeasonSkillNoUpgrade": 34010,
         "SeasonUnavailable": 34011,
         "SeasonHonorAlreadyUnlocked": 34012,
-        "SeasonHonorTargetInvalid": 34013
+        "SeasonHonorTargetInvalid": 34013,
+        "SeasonBuildBookmarkMaxExpanded": 34014,
+        "SeasonBuildBookmarkPriceChanged": 34015
       }
     },
     "trial_journal_error": {

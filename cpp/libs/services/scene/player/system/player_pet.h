@@ -19,6 +19,10 @@ class SwitchPetEntryPresetRequest;
 class SwitchPetEntryPresetResponse;
 class AscendPetTierRequest;
 class AscendPetTierResponse;
+class SavePetSquadPresetRequest;
+class SavePetSquadPresetResponse;
+class UnlockPetSquadPresetSlotRequest;
+class UnlockPetSquadPresetSlotResponse;
 class PetInstance;
 class BattlePetSnapshot;
 class BattlePetSettlementData;
@@ -63,6 +67,14 @@ public:
     static void SaveEntries(entt::entity player, const SavePetEntriesRequest& request, SavePetEntriesResponse& response);
     static void SwitchEntryPreset(entt::entity player, const SwitchPetEntryPresetRequest& request, SwitchPetEntryPresetResponse& response);
     static void AscendTier(entt::entity player, const AscendPetTierRequest& request, AscendPetTierResponse& response);
+
+    static constexpr uint32_t kFreeSquadPresetSlots = 2u;
+    static constexpr uint32_t kMaxSquadPresetSlots = 5u;
+    static constexpr uint32_t kMaxPetsPerSquadPreset = 3u;
+    static constexpr uint32_t kMaxSquadPresetTag = 3u;
+    static constexpr uint64_t kSquadPresetSlotPriceDiamond = 60ULL;
+    static void SaveSquadPreset(entt::entity player, const SavePetSquadPresetRequest& request, SavePetSquadPresetResponse& response);
+    static void UnlockSquadPresetSlot(entt::entity player, const UnlockPetSquadPresetSlotRequest& request, UnlockPetSquadPresetSlotResponse& response);
 	// 从 DB 加载 / 首登后调用:清理已失效引用、同步等级、按上限夹当前 HP/MP。
 	// 已分配点原样携带,不清理、不返还:本版本宝宝池之外的键是未知键(不生效、计入已用),超额的加点整池按 0 生效
 	// (加点统一规则,attribute_allocation_rules.h;docs/design/mixed-version-persist-field-protection.md §12.1 D3 / D4)。

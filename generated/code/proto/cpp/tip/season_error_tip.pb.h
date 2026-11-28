@@ -77,6 +77,8 @@ enum season_error : int {
   kSeasonUnavailable = 34011,
   kSeasonHonorAlreadyUnlocked = 34012,
   kSeasonHonorTargetInvalid = 34013,
+  kSeasonBuildBookmarkMaxExpanded = 34014,
+  kSeasonBuildBookmarkPriceChanged = 34015,
   season_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   season_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -87,11 +89,11 @@ extern const uint32_t season_error_internal_data_[];
 inline constexpr season_error season_error_MIN =
     static_cast<season_error>(0);
 inline constexpr season_error season_error_MAX =
-    static_cast<season_error>(34013);
+    static_cast<season_error>(34015);
 [[nodiscard]] inline bool season_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, season_error_internal_data_);
 }
-inline constexpr int season_error_ARRAYSIZE = 34013 + 1;
+inline constexpr int season_error_ARRAYSIZE = 34015 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 season_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(season_error) {

@@ -6510,6 +6510,9 @@ type GetPlayerChannelIdentityResponse struct {
 	AccountCreatedMs uint64                 `protobuf:"varint,5,opt,name=account_created_ms,json=accountCreatedMs,proto3" json:"account_created_ms,omitempty"`
 	PlayerLevel      uint32                 `protobuf:"varint,6,opt,name=player_level,json=playerLevel,proto3" json:"player_level,omitempty"`
 	Retry            bool                   `protobuf:"varint,7,opt,name=retry,proto3" json:"retry,omitempty"`
+	// 玩家权威穿戴的聊天气泡与分享卡底纹 ID（CosmeticShowcase.id；供 chat 权威覆写防伪造）。
+	ChatBubbleSkinId uint32 `protobuf:"varint,8,opt,name=chat_bubble_skin_id,json=chatBubbleSkinId,proto3" json:"chat_bubble_skin_id,omitempty"`
+	ShareCardSkinId  uint32 `protobuf:"varint,9,opt,name=share_card_skin_id,json=shareCardSkinId,proto3" json:"share_card_skin_id,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -6593,14 +6596,32 @@ func (x *GetPlayerChannelIdentityResponse) GetRetry() bool {
 	return false
 }
 
+func (x *GetPlayerChannelIdentityResponse) GetChatBubbleSkinId() uint32 {
+	if x != nil {
+		return x.ChatBubbleSkinId
+	}
+	return 0
+}
+
+func (x *GetPlayerChannelIdentityResponse) GetShareCardSkinId() uint32 {
+	if x != nil {
+		return x.ShareCardSkinId
+	}
+	return 0
+}
+
 // ── 角色永久外观同步(docs/design/character-appearance-switch.md)──
 type UpdateRoleAppearanceRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	AppearanceId  string                 `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
-	Auth          *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId     uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	AppearanceId string                 `protobuf:"bytes,2,opt,name=appearance_id,json=appearanceId,proto3" json:"appearance_id,omitempty"`
+	Auth         *base.ServiceCallAuth  `protobuf:"bytes,3,opt,name=auth,proto3" json:"auth,omitempty"`
+	// sync_showcase_skins = true 时同步更新聊天气泡与分享卡底纹（appearance_id 可空）。
+	ChatBubbleSkinId  uint32 `protobuf:"varint,4,opt,name=chat_bubble_skin_id,json=chatBubbleSkinId,proto3" json:"chat_bubble_skin_id,omitempty"`
+	ShareCardSkinId   uint32 `protobuf:"varint,5,opt,name=share_card_skin_id,json=shareCardSkinId,proto3" json:"share_card_skin_id,omitempty"`
+	SyncShowcaseSkins bool   `protobuf:"varint,6,opt,name=sync_showcase_skins,json=syncShowcaseSkins,proto3" json:"sync_showcase_skins,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *UpdateRoleAppearanceRequest) Reset() {
@@ -6652,6 +6673,27 @@ func (x *UpdateRoleAppearanceRequest) GetAuth() *base.ServiceCallAuth {
 		return x.Auth
 	}
 	return nil
+}
+
+func (x *UpdateRoleAppearanceRequest) GetChatBubbleSkinId() uint32 {
+	if x != nil {
+		return x.ChatBubbleSkinId
+	}
+	return 0
+}
+
+func (x *UpdateRoleAppearanceRequest) GetShareCardSkinId() uint32 {
+	if x != nil {
+		return x.ShareCardSkinId
+	}
+	return 0
+}
+
+func (x *UpdateRoleAppearanceRequest) GetSyncShowcaseSkins() bool {
+	if x != nil {
+		return x.SyncShowcaseSkins
+	}
+	return false
 }
 
 type UpdateRoleAppearanceResponse struct {
@@ -7311,7 +7353,7 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x1fGetPlayerChannelIdentityRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x120\n" +
-	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xec\x01\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"\xc8\x02\n" +
 	" GetPlayerChannelIdentityResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x18\n" +
 	"\aaccount\x18\x02 \x01(\tR\aaccount\x12\x18\n" +
@@ -7319,11 +7361,16 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\aopen_id\x18\x04 \x01(\tR\x06openId\x12,\n" +
 	"\x12account_created_ms\x18\x05 \x01(\x04R\x10accountCreatedMs\x12!\n" +
 	"\fplayer_level\x18\x06 \x01(\rR\vplayerLevel\x12\x14\n" +
-	"\x05retry\x18\a \x01(\bR\x05retry\"\x91\x01\n" +
+	"\x05retry\x18\a \x01(\bR\x05retry\x12-\n" +
+	"\x13chat_bubble_skin_id\x18\b \x01(\rR\x10chatBubbleSkinId\x12+\n" +
+	"\x12share_card_skin_id\x18\t \x01(\rR\x0fshareCardSkinId\"\x9d\x02\n" +
 	"\x1bUpdateRoleAppearanceRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12#\n" +
 	"\rappearance_id\x18\x02 \x01(\tR\fappearanceId\x120\n" +
-	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\"8\n" +
+	"\x04auth\x18\x03 \x01(\v2\x1c.common.base.ServiceCallAuthR\x04auth\x12-\n" +
+	"\x13chat_bubble_skin_id\x18\x04 \x01(\rR\x10chatBubbleSkinId\x12+\n" +
+	"\x12share_card_skin_id\x18\x05 \x01(\rR\x0fshareCardSkinId\x12.\n" +
+	"\x13sync_showcase_skins\x18\x06 \x01(\bR\x11syncShowcaseSkins\"8\n" +
 	"\x1cUpdateRoleAppearanceResponse\x12\x18\n" +
 	"\aupdated\x18\x01 \x01(\bR\aupdated\"\x9f\x01\n" +
 	" SyncAccountStage1TradableRequest\x12\x1b\n" +

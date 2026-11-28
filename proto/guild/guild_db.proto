@@ -45,7 +45,11 @@ message GuildRecord {
   uint64 score_version = 12;
   // 上一次帮会改名成功的时刻 Unix 毫秒(0 = 从未改过名;冷却判定以此为准)。
   uint64 renamed_ms = 13;
-  // 追加区:从 14 起。
+  // 帮会当前佩戴的定制徽记款式 ID（0 = 默认免费帮徽，1..6 = 帮主个人真实灵石买断款式，零数值加成）。
+  uint32 emblem_skin_id = 14;
+  // 本帮永久已解锁定制徽记位图（bit (emblem_id - 1)，仅增不减）。
+  uint64 unlocked_emblem_bits = 15;
+  // 追加区:从 16 起。
 }
 
 message GuildPlayerStateRecord {
@@ -131,6 +135,7 @@ enum GuildAssetOpKind {
   GUILD_ASSET_OP_KIND_WAR_REWARD = 5;       // 帮战 V2 奖励:GUILD_CREDIT 流(银两/周宝箱/灵脉分红)
   GUILD_ASSET_OP_KIND_BOUNTY_ESCROW = 6;    // 追杀令预扣:GUILD_DEBIT 流扣发布者银两
   GUILD_ASSET_OP_KIND_BOUNTY_PAYOUT = 7;    // 追杀令结单/反杀/过期退本:GUILD_CREDIT 流
+  GUILD_ASSET_OP_KIND_EMBLEM_UNLOCK = 8;    // 帮主自愿个人真实灵石买断帮会徽记:GUILD_DEBIT 流(绝不扣帮会资金)
 }
 
 enum GuildDailyCounterKind {

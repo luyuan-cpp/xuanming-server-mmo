@@ -8224,6 +8224,371 @@
     1
    ],
    "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 1,
+   "attack_multiplier": 1.15,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 1,
+   "damage": "2*level",
+   "damage_type": 1,
+   "description": "单体物理斩击并驱散目标 1 项增益状态，克制厚盾与护阵体系。",
+   "effect": [
+    160010,
+    160011
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16001",
+   "id": 16001,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "断盾剑气",
+   "pet_max_targets": 1,
+   "prototype_code": "H01",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.95,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "2*level",
+   "damage_type": 0,
+   "description": "法术攻击至多 2 名敌方并降低目标 15% 速度（持续 3 回合），扰乱敌方先手节奏。",
+   "effect": [
+    160020,
+    160021
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16002",
+   "id": 16002,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "破咒焚心",
+   "pet_max_targets": 1,
+   "prototype_code": "H02",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 4,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "为至多 2 名友方回复适量气血并恢复 15% 法力，支撑拉锯战续航。",
+   "effect": [
+    160030,
+    160031
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16003",
+   "id": 16003,
+   "mana_percent": 0.08,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "灵犀共济",
+   "pet_max_targets": 1,
+   "prototype_code": "H03",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "为至多 3 名友方驱散 1 项减益状态（人物与灵宠均可研习），反制毒火与控制队。",
+   "effect": [
+    160040
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16004",
+   "id": 16004,
+   "mana_percent": 0.09,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "清流洗尘",
+   "pet_max_targets": 2,
+   "prototype_code": "H04",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "为至多 3 名友方施加持续 2 回合的联防护盾，化解敌方多目标爆发。",
+   "effect": [
+    160050
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16005",
+   "id": 16005,
+   "mana_percent": 0.1,
+   "max_rank": 10,
+   "max_targets": 3,
+   "name": "守御联璧",
+   "pet_max_targets": 1,
+   "prototype_code": "H05",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 2,
+   "attack_multiplier": 0.9,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "damage": "2*level",
+   "damage_type": 0,
+   "description": "法术打击单体目标，并立即结算其身上 1 项中毒或灼烧的剩余持续伤害，协同毒火流派。",
+   "effect": [
+    160060,
+    160061
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16006",
+   "id": 16006,
+   "mana_percent": 0.09,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "引火毒爆",
+   "pet_max_targets": 1,
+   "prototype_code": "H06",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 1,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 1,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "主动",
+   "cooldown_rounds": 2,
+   "description": "为至多 2 名友方施加 2 回合 20% 物理反震，专门反制高频率物理连击流派。",
+   "effect": [
+    160070
+   ],
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16007",
+   "id": 16007,
+   "mana_percent": 0.09,
+   "max_rank": 10,
+   "max_targets": 2,
+   "name": "借势反震",
+   "pet_max_targets": 1,
+   "prototype_code": "H07",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "skill_type": [
+    1
+   ],
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 3,
+   "action_tags": 1,
+   "battle_model": 1,
+   "caster_mask": 3,
+   "category": "追击",
+   "cooldown_rounds": 0,
+   "description": "追击战法（人物/灵宠共用）：普通攻击命中后每回合至多 1 次使目标防御降低 12%（持续 2 回合），为队友集火铺路。",
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16008",
+   "id": 16008,
+   "init_effect": [
+    160080
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "伏兵协击",
+   "pet_max_targets": 1,
+   "prototype_code": "H08",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "被动战法：每回合首次承受直接伤害时回复 4% 法力，有效反制吸蓝耗竭打法。",
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16009",
+   "id": 16009,
+   "init_effect": [
+    160090
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "灵脉回响",
+   "pet_max_targets": 1,
+   "prototype_code": "H09",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 2,
+   "action_tags": 1,
+   "battle_model": 1,
+   "caster_mask": 2,
+   "category": "被动",
+   "cooldown_rounds": 0,
+   "description": "灵宠专属被动：承受敌方物理直接伤害时有 22% 概率反击（每回合限 1 次），丰富防御反击型灵宠构筑。",
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16010",
+   "id": 16010,
+   "init_effect": [
+    160100
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 1,
+   "name": "护主灵契",
+   "pet_max_targets": 1,
+   "prototype_code": "H10",
+   "rarity_tier": 0,
+   "require_target": 1,
+   "scroll_id": 8,
+   "season_id": 0,
+   "target_team": 3,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
+  },
+  {
+   "ability_kind": 4,
+   "action_tags": 8,
+   "battle_model": 1,
+   "caster_mask": 1,
+   "category": "开场",
+   "cooldown_rounds": 0,
+   "description": "开场绝学（稀世）：开场为友方至多 5 名目标展开持续 3 回合的星阵护盾并降低 8% 所受伤害，稳固全队前期阵脚。",
+   "forbid_copy": 0,
+   "icon_key": "UI/Skills/16011",
+   "id": 16011,
+   "init_effect": [
+    160110,
+    160111
+   ],
+   "mana_percent": 0.0,
+   "max_rank": 10,
+   "max_targets": 5,
+   "name": "合纵星阵",
+   "pet_max_targets": 1,
+   "prototype_code": "H11",
+   "rarity_tier": 1,
+   "require_target": 1,
+   "scroll_id": 9,
+   "season_id": 0,
+   "target_team": 2,
+   "targeting_mode": [
+    1
+   ],
+   "unlock_level": 1
   }
  ]
 }

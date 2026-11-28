@@ -706,6 +706,8 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
                 (*actor.mutable_equipped_skill_vfx())[skillId] = vfxId;
             }
         }
+        actor.set_formation_skin_id(snapshot.formation_skin_id());
+        actor.set_entrance_victory_skin_id(snapshot.entrance_victory_skin_id());
         if (IsRankedBattle()) {
             const auto& streaks = createRequest.ranked_context().member_win_streaks();
             if (const auto stIt = streaks.find(snapshot.player_id());

@@ -245,11 +245,11 @@ constexpr PlayerTravelPassComp::ParseTableT_ PlayerTravelPassComp::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      6,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -259,33 +259,47 @@ constexpr PlayerTravelPassComp::ParseTableT_ PlayerTravelPassComp::InternalGener
       ::_pbi::TcParser::GetTable<::PlayerTravelPassComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // string equipped_title_key = 4;
-      {::_pbi::TcParser::FastUS1,
-       {34, 2, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_title_key_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // repeated .TravelPassSeasonProgress seasons = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
         PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.seasons_)}},
       // uint64 pass_revision = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerTravelPassComp, _impl_.pass_revision_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerTravelPassComp, _impl_.pass_revision_), 4>(),
+       {16, 4, 0,
         PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.pass_revision_)}},
       // string equipped_frame_key = 3;
       {::_pbi::TcParser::FastUS1,
-       {26, 1, 0,
+       {26, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_frame_key_)}},
+      // string equipped_title_key = 4;
+      {::_pbi::TcParser::FastUS1,
+       {34, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_title_key_)}},
+      // uint32 active_pass_id = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerTravelPassComp, _impl_.active_pass_id_), 5>(),
+       {40, 5, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.active_pass_id_)}},
+      // repeated string bonus_cosmetic_keys = 6;
+      {::_pbi::TcParser::FastUR1,
+       {50, 1, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.bonus_cosmetic_keys_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // repeated .TravelPassSeasonProgress seasons = 1;
       {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.seasons_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // uint64 pass_revision = 2;
-      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.pass_revision_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.pass_revision_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string equipped_frame_key = 3;
-      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_frame_key_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_frame_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // string equipped_title_key = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_title_key_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.equipped_title_key_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 active_pass_id = 5;
+      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.active_pass_id_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated string bonus_cosmetic_keys = 6;
+      {PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.bonus_cosmetic_keys_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -295,10 +309,11 @@ constexpr PlayerTravelPassComp::ParseTableT_ PlayerTravelPassComp::InternalGener
         #endif
     }},
     {{
-      "\24\0\0\22\22\0\0\0"
+      "\24\0\0\22\22\0\23\0"
       "PlayerTravelPassComp"
       "equipped_frame_key"
       "equipped_title_key"
+      "bonus_cosmetic_keys"
     }},
   };
 }
@@ -313,13 +328,19 @@ inline constexpr PlayerTravelPassComp::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.seasons_)>()
          }
         ,
+        bonus_cosmetic_keys_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerTravelPassComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.bonus_cosmetic_keys_)>()
+         }
+        ,
         equipped_frame_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         equipped_title_key_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
-        pass_revision_{::uint64_t{0u}} {}
+        pass_revision_{::uint64_t{0u}},
+        active_pass_id_{0u} {}
 
 template <typename>
 constexpr PlayerTravelPassComp::PlayerTravelPassComp(::_pbi::ConstantInitialized,
@@ -441,15 +462,19 @@ const ::uint32_t
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_._has_bits_),
-        7, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.seasons_),
         PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.pass_revision_),
         PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.equipped_frame_key_),
         PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.equipped_title_key_),
+        PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.active_pass_id_),
+        PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.bonus_cosmetic_keys_),
         0,
-        3,
-        1,
+        4,
         2,
+        3,
+        5,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -471,17 +496,19 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5ftrave
     "um_unlocked_at_ms\030\004 \001(\004\022\031\n\021free_claimed_"
     "mask\030\005 \001(\004\022\034\n\024premium_claimed_mask\030\006 \001(\004"
     "\022\036\n\026unlocked_cosmetic_keys\030\007 \003(\t\022\032\n\022last"
-    "_updated_at_ms\030\010 \001(\004\"\221\001\n\024PlayerTravelPas"
+    "_updated_at_ms\030\010 \001(\004\"\306\001\n\024PlayerTravelPas"
     "sComp\022*\n\007seasons\030\001 \003(\0132\031.TravelPassSeaso"
     "nProgress\022\025\n\rpass_revision\030\002 \001(\004\022\032\n\022equi"
     "pped_frame_key\030\003 \001(\t\022\032\n\022equipped_title_k"
-    "ey\030\004 \001(\tB\022Z\020common/componentb\006proto3"
+    "ey\030\004 \001(\t\022\026\n\016active_pass_id\030\005 \001(\r\022\033\n\023bonu"
+    "s_cosmetic_keys\030\006 \003(\tB\022Z\020common/componen"
+    "tb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5ftravel_5fpass_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5ftravel_5fpass_5fcomp_2eproto = {
     false,
     false,
-    476,
+    529,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5ftravel_5fpass_5fcomp_2eproto,
     "proto/common/component/player_travel_pass_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5ftravel_5fpass_5fcomp_2eproto_once,
@@ -911,6 +938,13 @@ PROTOBUF_NDEBUG_INLINE PlayerTravelPassComp::Impl_::Impl_(
           , from.seasons_
         }
         ,
+        bonus_cosmetic_keys_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::PlayerTravelPassComp,
+              PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.bonus_cosmetic_keys_)>()
+          , from.bonus_cosmetic_keys_
+        }
+        ,
         equipped_frame_key_(arena, from.equipped_frame_key_),
         equipped_title_key_(arena, from.equipped_title_key_) {}
 
@@ -928,7 +962,13 @@ PlayerTravelPassComp::PlayerTravelPassComp(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.pass_revision_ = from._impl_.pass_revision_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pass_revision_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, pass_revision_),
+           offsetof(Impl_, active_pass_id_) -
+               offsetof(Impl_, pass_revision_) +
+               sizeof(Impl_::active_pass_id_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerTravelPassComp)
 }
@@ -941,12 +981,22 @@ PROTOBUF_NDEBUG_INLINE PlayerTravelPassComp::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.seasons_)>()
          }
         ,
+        bonus_cosmetic_keys_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::PlayerTravelPassComp,
+            PROTOBUF_FIELD_OFFSET(::PlayerTravelPassComp, _impl_.bonus_cosmetic_keys_)>()
+         }
+        ,
         equipped_frame_key_(arena),
         equipped_title_key_(arena) {}
 
 inline void PlayerTravelPassComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.pass_revision_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, pass_revision_),
+           0,
+           offsetof(Impl_, active_pass_id_) -
+               offsetof(Impl_, pass_revision_) +
+               sizeof(Impl_::active_pass_id_));
 }
 PlayerTravelPassComp::~PlayerTravelPassComp() {
   // @@protoc_insertion_point(destructor:PlayerTravelPassComp)
@@ -998,18 +1048,25 @@ PROTOBUF_NOINLINE void PlayerTravelPassComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.seasons_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      _impl_.equipped_frame_key_.ClearNonDefaultToEmpty();
+      _impl_.bonus_cosmetic_keys_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      _impl_.equipped_frame_key_.ClearNonDefaultToEmpty();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       _impl_.equipped_title_key_.ClearNonDefaultToEmpty();
     }
   }
-  _impl_.pass_revision_ = ::uint64_t{0u};
+  if (BatchCheckHasBit(cached_has_bits, 0x00000030U)) {
+    ::memset(&_impl_.pass_revision_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.active_pass_id_) -
+        reinterpret_cast<char*>(&_impl_.pass_revision_)) + sizeof(_impl_.active_pass_id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1047,7 +1104,7 @@ PROTOBUF_NOINLINE void PlayerTravelPassComp::Clear() {
   }
 
   // uint64 pass_revision = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_pass_revision() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -1056,7 +1113,7 @@ PROTOBUF_NOINLINE void PlayerTravelPassComp::Clear() {
   }
 
   // string equipped_frame_key = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (!this_._internal_equipped_frame_key().empty()) {
       const ::std::string& _s = this_._internal_equipped_frame_key();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -1066,12 +1123,31 @@ PROTOBUF_NOINLINE void PlayerTravelPassComp::Clear() {
   }
 
   // string equipped_title_key = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (!this_._internal_equipped_title_key().empty()) {
       const ::std::string& _s = this_._internal_equipped_title_key();
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerTravelPassComp.equipped_title_key");
       target = stream->WriteStringMaybeAliased(4, _s, target);
+    }
+  }
+
+  // uint32 active_pass_id = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_active_pass_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          5, this_._internal_active_pass_id(), target);
+    }
+  }
+
+  // repeated string bonus_cosmetic_keys = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    for (int i = 0, n = this_._internal_bonus_cosmetic_keys_size(); i < n; ++i) {
+      const auto& s = this_._internal_bonus_cosmetic_keys().Get(i);
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          s.data(), static_cast<int>(s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerTravelPassComp.bonus_cosmetic_keys");
+      target = stream->WriteString(6, s, target);
     }
   }
 
@@ -1100,7 +1176,7 @@ PROTOBUF_NOINLINE void PlayerTravelPassComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // repeated .TravelPassSeasonProgress seasons = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_seasons_size();
@@ -1108,25 +1184,41 @@ PROTOBUF_NOINLINE void PlayerTravelPassComp::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // string equipped_frame_key = 3;
+    // repeated string bonus_cosmetic_keys = 6;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          1 * ::google::protobuf::internal::FromIntSize(this_._internal_bonus_cosmetic_keys().size());
+      for (int i = 0, n = this_._internal_bonus_cosmetic_keys().size(); i < n; ++i) {
+        total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
+            this_._internal_bonus_cosmetic_keys().Get(i));
+      }
+    }
+    // string equipped_frame_key = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!this_._internal_equipped_frame_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_equipped_frame_key());
       }
     }
     // string equipped_title_key = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!this_._internal_equipped_title_key().empty()) {
         total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                         this_._internal_equipped_title_key());
       }
     }
     // uint64 pass_revision = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_pass_revision() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_pass_revision());
+      }
+    }
+    // uint32 active_pass_id = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_active_pass_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_active_pass_id());
       }
     }
   }
@@ -1148,13 +1240,18 @@ void PlayerTravelPassComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_seasons()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_seasons());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_bonus_cosmetic_keys()->InternalMergeFromWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), arena,
+          from._internal_bonus_cosmetic_keys());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (!from._internal_equipped_frame_key().empty()) {
         _this->_internal_set_equipped_frame_key(from._internal_equipped_frame_key());
       } else {
@@ -1163,7 +1260,7 @@ void PlayerTravelPassComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (!from._internal_equipped_title_key().empty()) {
         _this->_internal_set_equipped_title_key(from._internal_equipped_title_key());
       } else {
@@ -1172,9 +1269,14 @@ void PlayerTravelPassComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
         }
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_pass_revision() != 0) {
         _this->_impl_.pass_revision_ = from._impl_.pass_revision_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_active_pass_id() != 0) {
+        _this->_impl_.active_pass_id_ = from._impl_.active_pass_id_;
       }
     }
   }
@@ -1198,9 +1300,15 @@ void PlayerTravelPassComp::InternalSwap(PlayerTravelPassComp* PROTOBUF_RESTRICT 
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.seasons_.InternalSwap(&other->_impl_.seasons_);
+  _impl_.bonus_cosmetic_keys_.InternalSwap(&other->_impl_.bonus_cosmetic_keys_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.equipped_frame_key_, &other->_impl_.equipped_frame_key_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.equipped_title_key_, &other->_impl_.equipped_title_key_, arena);
-  swap(_impl_.pass_revision_, other->_impl_.pass_revision_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.active_pass_id_)
+      + sizeof(PlayerTravelPassComp::_impl_.active_pass_id_)
+      - PROTOBUF_FIELD_OFFSET(PlayerTravelPassComp, _impl_.pass_revision_)>(
+          reinterpret_cast<char*>(&_impl_.pass_revision_),
+          reinterpret_cast<char*>(&other->_impl_.pass_revision_));
 }
 
 ::google::protobuf::Metadata PlayerTravelPassComp::GetMetadata() const {

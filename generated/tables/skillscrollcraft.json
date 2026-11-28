@@ -125,6 +125,42 @@
    "rarity_tier": 0,
    "targeted_fragment_count": 40,
    "targeted_gold_cost": 100
+  },
+  {
+   "description": "横向协作与反制常规战法卷宗（10 项：断盾/降速/回蓝/群净/联防/毒爆/反震/破防追击/承伤回蓝/灵宠反击），0 纯倍率上位替代、不稀释老卷宗，支持随机拓印与定向保底。",
+   "dismantle_fragment_count": 16,
+   "enabled": 1,
+   "fragment_item_id": 3406,
+   "id": 8,
+   "name": "五行合纵卷",
+   "random_fragment_count": 20,
+   "random_gold_cost": 50,
+   "rare_gold_cost": 0,
+   "rare_ink_count": 0,
+   "rare_ink_item_id": 0,
+   "rare_scroll_count": 0,
+   "rare_scroll_item_id": 0,
+   "rarity_tier": 0,
+   "targeted_fragment_count": 40,
+   "targeted_gold_cost": 100
+  },
+  {
+   "description": "横向合纵开场稀世绝学卷宗（合纵星阵，本批稀世占比 9.1% <= 10%），消耗玩法绝学残卷与绑定天工秘墨 100% 定向合成。",
+   "dismantle_fragment_count": 0,
+   "enabled": 1,
+   "fragment_item_id": 3406,
+   "id": 9,
+   "name": "合纵绝学卷",
+   "random_fragment_count": 0,
+   "random_gold_cost": 0,
+   "rare_gold_cost": 100,
+   "rare_ink_count": 1,
+   "rare_ink_item_id": 3408,
+   "rare_scroll_count": 1,
+   "rare_scroll_item_id": 3407,
+   "rarity_tier": 1,
+   "targeted_fragment_count": 0,
+   "targeted_gold_cost": 0
   }
  ]
 }

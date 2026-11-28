@@ -35,6 +35,7 @@
 #include "table/code/seasonseal_table.h"
 #include "table/code/skill_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/rewarded_ad_error_tip.pb.h"
 #include "table/proto/tip/season_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
@@ -358,6 +359,14 @@ void CopyBookmarkToView(const SavedBattleBuildBookmark& src, SavedBattleBuildBoo
         dst.add_wuxing_sigil_ids(id);
     }
     dst.set_saved_at_ms(src.saved_at_ms());
+    dst.set_pin_replay(src.pin_replay());
+}
+
+uint32_t EffectiveSavedBuildCapacity(const PlayerSeasonComp& comp) {
+    const uint32_t extra = std::min(comp.extra_saved_build_slots(),
+                                    PlayerSeasonSystem::kMaxSavedBuildCapacity - PlayerSeasonSystem::kBaseSavedBuildCapacity);
+    return std::min(PlayerSeasonSystem::kMaxSavedBuildCapacity,
+                    PlayerSeasonSystem::kBaseSavedBuildCapacity + extra);
 }
 
 seasonrules::RuleParams ToParams(const SeasonRuleTable& row) {
@@ -693,6 +702,13 @@ uint32_t FillState(entt::entity player, uint64_t nowMs, SeasonStateSnapshot& out
     for (const auto& bm : seasonComp->saved_builds()) {
         CopyBookmarkToView(bm, *out.add_saved_builds());
     }
+    const uint32_t savedCap = EffectiveSavedBuildCapacity(*seasonComp);
+    out.set_saved_build_capacity(savedCap);
+    out.set_max_saved_build_capacity(PlayerSeasonSystem::kMaxSavedBuildCapacity);
+    out.set_next_saved_build_expand_price_diamond(
+        savedCap < PlayerSeasonSystem::kMaxSavedBuildCapacity
+            ? PlayerSeasonSystem::kSavedBuildExpandPriceDiamond
+            : 0ULL);
     const auto active = ResolveCurrentSeason(nowMs);
     const auto* rule = active.Rule();
     bool retroExplicit = false;
@@ -2040,7 +2056,7 @@ void PlayerSeasonSystem::SaveBattleBuildBookmark(entt::entity player, uint64_t n
         }
     }
     if (target == nullptr) {
-        if (static_cast<uint32_t>(seasonComp->saved_builds_size()) >= turnbattle::wuxing::kMaxSavedBuildBookmarks) {
+        if (static_cast<uint32_t>(seasonComp->saved_builds_size()) >= EffectiveSavedBuildCapacity(*seasonComp)) {
             response.mutable_error_message()->set_id(kInvalidParameter);
             for (const auto& bm : seasonComp->saved_builds()) {
                 CopyBookmarkToView(bm, *response.add_all_bookmarks());
@@ -2071,6 +2087,7 @@ void PlayerSeasonSystem::SaveBattleBuildBookmark(entt::entity player, uint64_t n
         }
     }
     target->set_saved_at_ms(nowMs);
+    target->set_pin_replay(src.pin_replay() && src.source_battle_id() != 0u);
 
     (void)gSeasonPersistFn(player);
     CopyBookmarkToView(*target, *response.mutable_saved());
@@ -2116,8 +2133,153 @@ void PlayerSeasonSystem::DeleteBattleBuildBookmark(entt::entity player, uint64_t
     }
 }
 
+void PlayerSeasonSystem::ExpandSavedBuildSlots(entt::entity player, uint64_t nowMs,
+                                               const ExpandSavedBuildSlotsRequest& request,
+                                               ExpandSavedBuildSlotsResponse& response) {
+    response.Clear();
+    response.set_max_capacity(kMaxSavedBuildCapacity);
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        response.mutable_error_message()->set_id(kEntityIsNull);
+        return;
+    }
+    const uint64_t clientRequestId = request.client_request_id();
+    if (clientRequestId == 0u) {
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+    const std::string fingerprint = ClientRequestFingerprint(request);
+    ClientRequestResult first;
+    const auto verdict = client_request_dedup::Check(
+        player, clientRequestId, ClientRequestKind::kExpandSavedBuildSlots, fingerprint, first);
+    if (verdict == ClientRequestVerdict::kMismatch) {
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kUnavailable) {
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+    if (verdict == ClientRequestVerdict::kReplay) {
+        response.set_replayed(true);
+        response.set_new_capacity(first.buildBookmarkNewCapacity);
+        response.set_spent_diamond(first.buildBookmarkSpentDiamond);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        GetSeasonStateResponse stateResp;
+        if (GetState(player, nowMs, stateResp) == kSuccess) {
+            *response.mutable_state() = std::move(*stateResp.mutable_state());
+        }
+        return;
+    }
+    auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+    if (seasonComp == nullptr) {
+        response.mutable_error_message()->set_id(kSeasonUnavailable);
+        return;
+    }
+    if (const uint32_t writableErr = CheckWritable(player); writableErr != kSuccess) {
+        response.mutable_error_message()->set_id(writableErr);
+        return;
+    }
+    const uint32_t curCap = EffectiveSavedBuildCapacity(*seasonComp);
+    if (curCap >= kMaxSavedBuildCapacity) {
+        response.mutable_error_message()->set_id(kSeasonBuildBookmarkMaxExpanded);
+        response.set_new_capacity(curCap);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        return;
+    }
+    if (request.expected_capacity() != curCap ||
+        request.expected_price_diamond() != kSavedBuildExpandPriceDiamond) {
+        response.mutable_error_message()->set_id(kSeasonBuildBookmarkPriceChanged);
+        response.set_new_capacity(curCap);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        return;
+    }
+    if (const uint32_t err = CurrencySystem::DeductCurrency(
+            player, kCurrencyDiamond, kSavedBuildExpandPriceDiamond, TX_BUILD_BOOKMARK_EXPAND, clientRequestId);
+        err != kSuccess) {
+        response.mutable_error_message()->set_id(err);
+        response.set_new_capacity(curCap);
+        response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+        return;
+    }
+    const uint32_t nextCap = std::min(kMaxSavedBuildCapacity, curCap + kSavedBuildExpandStep);
+    seasonComp->set_extra_saved_build_slots(nextCap - kBaseSavedBuildCapacity);
+    ClientRequestResult rec;
+    rec.buildBookmarkNewCapacity = nextCap;
+    rec.buildBookmarkSpentDiamond = kSavedBuildExpandPriceDiamond;
+    client_request_dedup::Remember(player, clientRequestId, ClientRequestKind::kExpandSavedBuildSlots, fingerprint, rec);
+    (void)gSeasonPersistFn(player);
+    LOG_INFO << "[PlayerSeason] metric=saved_build_slots_expanded player_id=" << tlsEcs.GetPlayerId(player)
+             << " before=" << curCap << " after=" << nextCap
+             << " spent_diamond=" << kSavedBuildExpandPriceDiamond
+             << " client_request_id=" << clientRequestId;
+    response.set_new_capacity(nextCap);
+    response.set_spent_diamond(kSavedBuildExpandPriceDiamond);
+    response.set_diamond_balance(CurrencySystem::GetBalance(player, kCurrencyDiamond));
+    GetSeasonStateResponse stateResp;
+    if (GetState(player, nowMs, stateResp) == kSuccess) {
+        *response.mutable_state() = std::move(*stateResp.mutable_state());
+    }
+}
+
 void PlayerSeasonSystem::SetPersistForTest(PersistFn fn) {
     gSeasonPersistFn = fn == nullptr ? &PlayerLifecycleSystem::SavePlayerForAssetCommit : fn;
+}
+
+uint32_t PlayerSeasonSystem::RerollWuxingTowerOffersByAd(entt::entity player, uint32_t expectedRunIdLow32,
+                                                         uint64_t nowMs, std::vector<uint32_t>& outOffers,
+                                                         bool dryRun) {
+    outOffers.clear();
+    if (!tlsEcs.actorRegistry.valid(player)) {
+        return kEntityIsNull;
+    }
+    auto* seasonComp = tlsEcs.actorRegistry.try_get<PlayerSeasonComp>(player);
+    if (seasonComp == nullptr) {
+        return kSeasonUnavailable;
+    }
+    auto* tower = seasonComp->mutable_wuxing_tower();
+    if (!tower->run_active() || tower->run_id() == 0u || tower->pending_offer_sigil_ids_size() == 0) {
+        return kInvalidParameter;
+    }
+    if (expectedRunIdLow32 != 0u && static_cast<uint32_t>(tower->run_id()) != expectedRunIdLow32) {
+        return kInvalidParameter;
+    }
+    // M-7 硬闸：每局幻境（按 run_id）最多允许激励视频重随 1 次，杜绝反复 SL。
+    if (tower->ad_reroll_used_run_id() == tower->run_id()) {
+        return kRewardedAdDailyLimitReached;
+    }
+    std::vector<uint32_t> owned;
+    owned.reserve(static_cast<size_t>(tower->active_sigil_ids_size()));
+    for (const uint32_t id : tower->active_sigil_ids()) {
+        owned.push_back(id);
+    }
+    const uint32_t runWeekKey = tower->run_week_key() != 0u
+        ? tower->run_week_key()
+        : (tower->week_key() != 0u ? tower->week_key() : ComputeWuxingTowerWeekKey(nowMs));
+    const uint32_t nextSalt = tower->event_reroll_count() + 1u;
+    const uint32_t floor = tower->current_floor() == 0u ? 1u : tower->current_floor();
+    const uint32_t nodeKind = tower->current_node_kind() != 0u
+        ? tower->current_node_kind()
+        : turnbattle::wuxing::RealmNodeDefaultKind(floor);
+    const auto offers = turnbattle::wuxing::RollRealmBoonOffer(
+        runWeekKey, tower->run_id(), floor, nodeKind, nextSalt, owned);
+    if (offers.empty()) {
+        return kSeasonUnavailable;
+    }
+    outOffers = offers;
+    if (dryRun) {
+        return kSuccess;
+    }
+    tower->set_event_reroll_count(nextSalt);
+    tower->set_ad_reroll_used_run_id(tower->run_id());
+    tower->clear_pending_offer_sigil_ids();
+    for (const uint32_t id : offers) {
+        tower->add_pending_offer_sigil_ids(id);
+    }
+    if (tower->revision() < std::numeric_limits<uint64_t>::max()) {
+        tower->set_revision(tower->revision() + 1u);
+    }
+    (void)gSeasonPersistFn(player);
+    return kSuccess;
 }
 
 void PlayerSeasonSystem::ResetTowerLeaderboardForTest() {

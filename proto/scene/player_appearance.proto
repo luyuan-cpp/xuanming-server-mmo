@@ -46,6 +46,11 @@ message CharacterAppearanceSeriesProgress
 	string completion_badge_name = 8;        // 集齐印章/铭牌展示名(纯装饰,无数值)
 	string epilogue_title = 9;               // 集齐解锁合篇故事篇名(正文由客户端查 AppearanceSeries 本地配表)
 	repeated string member_appearance_ids = 10; // 该系列当前启用的成员 appearance_id(按 sort_order 升序)
+	uint32 missing_unlockable_count = 11;       // 该系列中当前缺失且可卡换解锁的成员数
+	uint64 bundle_original_diamond = 12;        // 补齐缺失成员折前原价(真实灵石)
+	uint64 bundle_discount_diamond = 13;        // Steam 式按缺口补齐折后总价(真实灵石，向上取整防 0 元)
+	uint32 bundle_discount_bps = 14;            // 补齐折扣万分比（如 8500 = 8.5 折；0 = 不支持补齐）
+	repeated string missing_appearance_ids = 15;// 当前缺失且可补齐的 appearance_id（排序去重，客户端下单原样回传做报价防呆）
 }
 
 message PlayerAppearanceInfo
@@ -71,6 +76,36 @@ message PlayerAppearanceInfo
 	bytes skill_vfx_owned_bits = 19;                  // 已永久拥有的技能特效位图(低位在前,与 SkillVfxCosmetic bit_index 对应)
 	repeated SkillVfxCosmeticEntry skill_vfx_cosmetics = 20; // 当前开放的技能特效目录(按 sort_order 升序,纯画面零数值)
 	map<uint32, uint32> equipped_skill_vfx = 21;      // 当前实际生效的技能特效映射(skill_table_id -> SkillVfxCosmetic.id)
+	uint32 light_card_trial_quota = 22;               // 仙途轻享卡本周额外随心试穿额度（未生效 0 / 生效 3）
+	uint32 light_card_trial_used = 23;                // 仙途轻享卡本周已用随心试穿次数
+	uint64 diamond_balance = 24;                      // 玩家当前真实充值灵石余额（系列补齐包仅扣真实灵石）
+	uint64 bind_diamond_balance = 25;                 // 玩家当前绑定灵石余额（只供展示，不可抵扣系列补齐包）
+	bytes showcase_cosmetic_owned_bits = 26;          // 已永久拥有的排面外观位图（CosmeticShowcase bit_index）
+	repeated ShowcaseCosmeticEntry showcase_cosmetics = 27; // 当前开放的排面装饰目录（阵纹/入场/气泡/分享卡，纯视觉零数值）
+	map<uint32, uint32> equipped_showcase_cosmetics = 28;   // 当前穿戴的排面装饰（slot_kind -> CosmeticShowcase.id）
+	uint32 celebration_bind_gold_claimed = 29;        // 本周全城同乐已领绑定银两（上限 3000）
+	uint32 celebration_bind_gold_weekly_cap = 30;     // 本周全城同乐绑定银两周上限（3000）
+	uint32 cosmetic_gift_sent_this_week = 31;         // 本周已送出的好友纯外观/手记赠礼笔数
+	uint32 cosmetic_gift_weekly_limit = 32;           // 每周好友赠礼上限（5）
+}
+
+// 战斗排面与社交外观目录项（阵纹/入场横幅/聊天气泡/分享卡底纹，纯视觉零数值）。
+message ShowcaseCosmeticEntry
+{
+	uint32 config_id = 1;             // CosmeticShowcase.id
+	string cosmetic_key = 2;
+	uint32 slot_kind = 3;             // 1=脚底阵纹 2=入场/胜利横幅 3=聊天气泡 4=分享卡底纹 5=名片底纹
+	string name = 4;
+	string asset_key = 5;
+	string secondary_asset_key = 6;
+	uint32 sort_order = 7;
+	bool owned = 8;
+	uint32 card_item_id = 9;          // 3417 排面装饰券；0=仅专属获取
+	uint32 card_item_count = 10;
+	uint32 owned_card_count = 11;
+	uint32 spirit_shop_goods_id = 12; // 默认 305
+	string acquire_hint = 13;
+	string desc = 14;
 }
 
 // 灵宠幻化目录项（纯外观表现，零战斗/成长属性）。
@@ -221,6 +256,126 @@ message AppearanceStateNotify
 	bool trial_expired = 2; // true = 因 1 小时试用到期自动还原
 }
 
+// Steam 式按缺口 8.5 折一键补齐收藏系列缺失角色（仅扣真实充值灵石，强制幂等键与报价防呆）。
+message BuyAppearanceSeriesBundleRequest
+{
+	uint64 client_request_id = 1;                  // 必须非 0
+	uint32 series_id = 2;                          // AppearanceSeries.id
+	repeated string expected_missing_appearance_ids = 3; // 客户端预览的缺失角色 ID 列表（防并发已获导致多扣）
+	uint64 expected_price_diamond = 4;             // 客户端预览的折后灵石总价
+}
+
+message BuyAppearanceSeriesBundleResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	bool replayed = 3;
+	uint32 unlocked_count = 4;
+	uint64 spent_diamond = 5;
+}
+
+// 为指定排面槽位穿戴或卸下外观（cosmetic_id=0 恢复默认；未拥有且 expect_free_equip=false 且允许券换时原子耗券解锁并穿戴）。
+message EquipShowcaseCosmeticRequest
+{
+	uint64 client_request_id = 1; // 必须非 0
+	uint32 slot_kind = 2;         // 1..5
+	uint32 cosmetic_id = 3;       // 目标 CosmeticShowcase.id；0 = 卸下恢复默认
+	bool expect_free_equip = 4;   // true = 仅限已拥有免费切换，绝不误扣券
+}
+
+message EquipShowcaseCosmeticResponse
+{
+	TipInfoMessage error_message = 1;
+	PlayerAppearanceInfo info = 2;
+	uint32 slot_kind = 3;
+	uint32 equipped_cosmetic_id = 4;
+	bool replayed = 5;
+}
+
+// 主城和平分线施放「全城同乐」社交气氛耗材（3418 天墉灵灯 / 3419 庆功烟花 / 3420 仙茶同乐席）。
+message CastCityCelebrationRequest
+{
+	uint64 client_request_id = 1; // 必须非 0
+	uint32 item_config_id = 2;    // 3418 / 3419 / 3420
+}
+
+message CityCelebrationView
+{
+	uint64 celebration_id = 1;
+	uint64 caster_player_id = 2;
+	string caster_name = 3;
+	uint32 item_config_id = 4;
+	uint32 bind_gold_reward = 5;
+	uint64 started_at_sec = 6;
+	uint64 expires_at_sec = 7;
+	uint32 scene_config_id = 8;
+	bool claimed_by_me = 9;
+}
+
+message CastCityCelebrationResponse
+{
+	TipInfoMessage error_message = 1;
+	CityCelebrationView celebration = 2;
+	bool replayed = 3;
+}
+
+// 同分线 >= 10 级玩家点击正在进行的全城同乐演出领取绑定银两（CURRENCY_TYPE_BIND_GOLD=3，每场限 1 次，周上限 3000）。
+message ClaimCityCelebrationGiftRequest
+{
+	uint64 client_request_id = 1; // 必须非 0
+	uint64 celebration_id = 2;
+}
+
+message ClaimCityCelebrationGiftResponse
+{
+	TipInfoMessage error_message = 1;
+	uint64 celebration_id = 2;
+	uint32 granted_bind_gold = 3;
+	uint32 weekly_claimed_total = 4;
+	uint32 weekly_cap = 5;
+	bool replayed = 6;
+}
+
+// 全城同乐分线内广播（纯演出与路人领礼入口，绝不阻塞战斗）。
+message CityCelebrationNotify
+{
+	CityCelebrationView celebration = 1;
+	uint32 active_count_in_scene = 2;
+}
+
+// 好友赠礼目标类别白名单（严格仅限永久绑定纯外观与手记典藏，永久禁止材料/银两/月卡）。
+enum CosmeticGiftTargetKind
+{
+	COSMETIC_GIFT_TARGET_UNSPECIFIED = 0;
+	COSMETIC_GIFT_TARGET_CHARACTER = 1;     // target_id_str = CharacterAppearance.appearance_id
+	COSMETIC_GIFT_TARGET_PET_COSMETIC = 2;  // target_id_u32 = PetCosmetic.id
+	COSMETIC_GIFT_TARGET_SKILL_VFX = 3;     // target_id_u32 = SkillVfxCosmetic.id
+	COSMETIC_GIFT_TARGET_TRAVEL_PASS = 4;   // target_id_u32 = TravelPassSeason.id
+	COSMETIC_GIFT_TARGET_SHOWCASE = 5;      // target_id_u32 = CosmeticShowcase.id
+}
+
+// 好友间真实灵石纯外观/手记典藏赠礼（仅扣真实充值灵石，强制 7 天好友无拉黑、周上限 5 笔与报价防呆）。
+message SendCosmeticGiftRequest
+{
+	uint64 client_request_id = 1;          // 必须非 0
+	uint64 target_player_id = 2;           // 受赠好友 player_id
+	CosmeticGiftTargetKind target_kind = 3;
+	uint32 target_id_u32 = 4;
+	string target_id_str = 5;
+	uint64 expected_price_diamond = 6;     // 报价防呆：与服务端实时标价不一致即拒
+}
+
+message SendCosmeticGiftResponse
+{
+	TipInfoMessage error_message = 1;
+	uint64 gift_order_id = 2;
+	uint64 spent_diamond = 3;
+	uint64 diamond_balance = 4;
+	uint32 sent_this_week = 5;
+	uint32 weekly_limit = 6;
+	bool replayed = 7;
+}
+
 service SceneAppearanceClientPlayer
 {
 	option (OptionIsPlayerService) = true;
@@ -235,4 +390,10 @@ service SceneAppearanceClientPlayer
 	// ── 以下只许在末尾追加:生成的 CallMethod 按 method index 分发 ──
 	rpc EquipPetCosmetic (EquipPetCosmeticRequest) returns (EquipPetCosmeticResponse);
 	rpc EquipSkillVfx (EquipSkillVfxRequest) returns (EquipSkillVfxResponse);
+	rpc BuyAppearanceSeriesBundle (BuyAppearanceSeriesBundleRequest) returns (BuyAppearanceSeriesBundleResponse);
+	rpc EquipShowcaseCosmetic (EquipShowcaseCosmeticRequest) returns (EquipShowcaseCosmeticResponse);
+	rpc CastCityCelebration (CastCityCelebrationRequest) returns (CastCityCelebrationResponse);
+	rpc ClaimCityCelebrationGift (ClaimCityCelebrationGiftRequest) returns (ClaimCityCelebrationGiftResponse);
+	rpc NotifyCityCelebration (CityCelebrationNotify) returns (Empty) { option (OptionClientRpcKind) = CLIENT_RPC_PUSH; }
+	rpc SendCosmeticGift (SendCosmeticGiftRequest) returns (SendCosmeticGiftResponse);
 }

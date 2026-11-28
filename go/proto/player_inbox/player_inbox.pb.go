@@ -77,6 +77,7 @@ const (
 	PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_UNSPECIFIED PlayerInboxProducerKind = 0
 	PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_GM          PlayerInboxProducerKind = 1 // PlayerInboxAdmin.GmSanctionPlayer
 	PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_MATCH       PlayerInboxProducerKind = 2 // Match SQL 永久终局来源，独立内部签名
+	PlayerInboxProducerKind_PLAYER_INBOX_PRODUCER_SCENE       PlayerInboxProducerKind = 3 // Scene 跨角色纯外观赠礼/退还内部投递
 )
 
 // Enum value maps for PlayerInboxProducerKind.
@@ -85,11 +86,13 @@ var (
 		0: "PLAYER_INBOX_PRODUCER_UNSPECIFIED",
 		1: "PLAYER_INBOX_PRODUCER_GM",
 		2: "PLAYER_INBOX_PRODUCER_MATCH",
+		3: "PLAYER_INBOX_PRODUCER_SCENE",
 	}
 	PlayerInboxProducerKind_value = map[string]int32{
 		"PLAYER_INBOX_PRODUCER_UNSPECIFIED": 0,
 		"PLAYER_INBOX_PRODUCER_GM":          1,
 		"PLAYER_INBOX_PRODUCER_MATCH":       2,
+		"PLAYER_INBOX_PRODUCER_SCENE":       3,
 	}
 )
 
@@ -128,6 +131,8 @@ const (
 	// GM 处置:由玩家当前 owner scene 在接管完成后严格按 seq 执行(封锁与解封的先后不能颠倒,设计 §2.2)。
 	PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION       PlayerInboxDomain = 1
 	PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT PlayerInboxDomain = 2
+	// 好友纯外观/手记典藏赠礼到账与竞态退还域（绝不双人直接改存档，遵守 Actor 边界）。
+	PlayerInboxDomain_PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT PlayerInboxDomain = 3
 )
 
 // Enum value maps for PlayerInboxDomain.
@@ -136,11 +141,13 @@ var (
 		0: "PLAYER_INBOX_DOMAIN_UNSPECIFIED",
 		1: "PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION",
 		2: "PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT",
+		3: "PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT",
 	}
 	PlayerInboxDomain_value = map[string]int32{
 		"PLAYER_INBOX_DOMAIN_UNSPECIFIED":             0,
 		"PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION":       1,
 		"PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT": 2,
+		"PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT":     3,
 	}
 )
 
@@ -189,6 +196,12 @@ const (
 	PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN PlayerInboxMessageType = 5
 	// 解除本玩家的物品获得封锁 → GainBlockService::UnblockPlayerItemGain(天然幂等)。
 	PlayerInboxMessageType_PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN PlayerInboxMessageType = 6
+	// 好友赠送的纯绑定外观/游历手记典藏到账（受赠方已拥有时自动生成退还单原路退给送礼方）。
+	PlayerInboxMessageType_PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT PlayerInboxMessageType = 7
+	// 好友赠礼因并发已拥有自动退还送礼方真实灵石（按 gift_id 幂等防双退）。
+	PlayerInboxMessageType_PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND PlayerInboxMessageType = 8
+	// 渠道退款/黑卡撤单连坐精准回收受赠外观位图或回退未领手记典藏态（归属 GM_SANCTION 严格顺序执行）。
+	PlayerInboxMessageType_PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE PlayerInboxMessageType = 9
 )
 
 // Enum value maps for PlayerInboxMessageType.
@@ -201,6 +214,9 @@ var (
 		4: "PLAYER_INBOX_MSG_BATTLE_SETTLEMENT",
 		5: "PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN",
 		6: "PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN",
+		7: "PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT",
+		8: "PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND",
+		9: "PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE",
 	}
 	PlayerInboxMessageType_value = map[string]int32{
 		"PLAYER_INBOX_MSG_UNSPECIFIED":              0,
@@ -210,6 +226,9 @@ var (
 		"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT":        4,
 		"PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN":       5,
 		"PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN":     6,
+		"PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT":     7,
+		"PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND":     8,
+		"PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE":     9,
 	}
 )
 
@@ -920,6 +939,253 @@ func (x *GmItemGainPayload) GetItemConfigId() uint32 {
 	return 0
 }
 
+// 好友纯绑定外观/手记典藏赠礼到账载荷（target_kind: 1=角色形象, 2=灵宠幻化, 3=技能特效, 4=游历手记典藏, 5=排面装饰）。
+type CosmeticGiftCreditPayload struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	GiftId         uint64                 `protobuf:"varint,1,opt,name=gift_id,json=giftId,proto3" json:"gift_id,omitempty"`
+	SenderPlayerId uint64                 `protobuf:"varint,2,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
+	SenderName     string                 `protobuf:"bytes,3,opt,name=sender_name,json=senderName,proto3" json:"sender_name,omitempty"`
+	TargetKind     uint32                 `protobuf:"varint,4,opt,name=target_kind,json=targetKind,proto3" json:"target_kind,omitempty"`
+	TargetIdU32    uint32                 `protobuf:"varint,5,opt,name=target_id_u32,json=targetIdU32,proto3" json:"target_id_u32,omitempty"`
+	TargetIdStr    string                 `protobuf:"bytes,6,opt,name=target_id_str,json=targetIdStr,proto3" json:"target_id_str,omitempty"`
+	PaidDiamond    uint64                 `protobuf:"varint,7,opt,name=paid_diamond,json=paidDiamond,proto3" json:"paid_diamond,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CosmeticGiftCreditPayload) Reset() {
+	*x = CosmeticGiftCreditPayload{}
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CosmeticGiftCreditPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CosmeticGiftCreditPayload) ProtoMessage() {}
+
+func (x *CosmeticGiftCreditPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CosmeticGiftCreditPayload.ProtoReflect.Descriptor instead.
+func (*CosmeticGiftCreditPayload) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CosmeticGiftCreditPayload) GetGiftId() uint64 {
+	if x != nil {
+		return x.GiftId
+	}
+	return 0
+}
+
+func (x *CosmeticGiftCreditPayload) GetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.SenderPlayerId
+	}
+	return 0
+}
+
+func (x *CosmeticGiftCreditPayload) GetSenderName() string {
+	if x != nil {
+		return x.SenderName
+	}
+	return ""
+}
+
+func (x *CosmeticGiftCreditPayload) GetTargetKind() uint32 {
+	if x != nil {
+		return x.TargetKind
+	}
+	return 0
+}
+
+func (x *CosmeticGiftCreditPayload) GetTargetIdU32() uint32 {
+	if x != nil {
+		return x.TargetIdU32
+	}
+	return 0
+}
+
+func (x *CosmeticGiftCreditPayload) GetTargetIdStr() string {
+	if x != nil {
+		return x.TargetIdStr
+	}
+	return ""
+}
+
+func (x *CosmeticGiftCreditPayload) GetPaidDiamond() uint64 {
+	if x != nil {
+		return x.PaidDiamond
+	}
+	return 0
+}
+
+// 好友赠礼因并发已拥有原路退还载荷。
+type CosmeticGiftRefundPayload struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	GiftId            uint64                 `protobuf:"varint,1,opt,name=gift_id,json=giftId,proto3" json:"gift_id,omitempty"`
+	RecipientPlayerId uint64                 `protobuf:"varint,2,opt,name=recipient_player_id,json=recipientPlayerId,proto3" json:"recipient_player_id,omitempty"`
+	RefundDiamond     uint64                 `protobuf:"varint,3,opt,name=refund_diamond,json=refundDiamond,proto3" json:"refund_diamond,omitempty"`
+	Reason            string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *CosmeticGiftRefundPayload) Reset() {
+	*x = CosmeticGiftRefundPayload{}
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CosmeticGiftRefundPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CosmeticGiftRefundPayload) ProtoMessage() {}
+
+func (x *CosmeticGiftRefundPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CosmeticGiftRefundPayload.ProtoReflect.Descriptor instead.
+func (*CosmeticGiftRefundPayload) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CosmeticGiftRefundPayload) GetGiftId() uint64 {
+	if x != nil {
+		return x.GiftId
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRefundPayload) GetRecipientPlayerId() uint64 {
+	if x != nil {
+		return x.RecipientPlayerId
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRefundPayload) GetRefundDiamond() uint64 {
+	if x != nil {
+		return x.RefundDiamond
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRefundPayload) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// 渠道支付撤单（TX_PAYMENT_REVERSAL）连坐精准回收受赠外观/手记典藏载荷。
+type CosmeticGiftRevokePayload struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	GiftId         uint64                 `protobuf:"varint,1,opt,name=gift_id,json=giftId,proto3" json:"gift_id,omitempty"`
+	SenderPlayerId uint64                 `protobuf:"varint,2,opt,name=sender_player_id,json=senderPlayerId,proto3" json:"sender_player_id,omitempty"`
+	TargetKind     uint32                 `protobuf:"varint,3,opt,name=target_kind,json=targetKind,proto3" json:"target_kind,omitempty"`
+	TargetIdU32    uint32                 `protobuf:"varint,4,opt,name=target_id_u32,json=targetIdU32,proto3" json:"target_id_u32,omitempty"`
+	TargetIdStr    string                 `protobuf:"bytes,5,opt,name=target_id_str,json=targetIdStr,proto3" json:"target_id_str,omitempty"`
+	Reason         string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CosmeticGiftRevokePayload) Reset() {
+	*x = CosmeticGiftRevokePayload{}
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CosmeticGiftRevokePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CosmeticGiftRevokePayload) ProtoMessage() {}
+
+func (x *CosmeticGiftRevokePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CosmeticGiftRevokePayload.ProtoReflect.Descriptor instead.
+func (*CosmeticGiftRevokePayload) Descriptor() ([]byte, []int) {
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CosmeticGiftRevokePayload) GetGiftId() uint64 {
+	if x != nil {
+		return x.GiftId
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRevokePayload) GetSenderPlayerId() uint64 {
+	if x != nil {
+		return x.SenderPlayerId
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRevokePayload) GetTargetKind() uint32 {
+	if x != nil {
+		return x.TargetKind
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRevokePayload) GetTargetIdU32() uint32 {
+	if x != nil {
+		return x.TargetIdU32
+	}
+	return 0
+}
+
+func (x *CosmeticGiftRevokePayload) GetTargetIdStr() string {
+	if x != nil {
+		return x.TargetIdStr
+	}
+	return ""
+}
+
+func (x *CosmeticGiftRevokePayload) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 // 固定原归属与签发时间；重投只能重签 auth，不得刷新正文或借当前目录补权。
 type BattleSettlementInboxRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
@@ -936,7 +1202,7 @@ type BattleSettlementInboxRequest struct {
 
 func (x *BattleSettlementInboxRequest) Reset() {
 	*x = BattleSettlementInboxRequest{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -948,7 +1214,7 @@ func (x *BattleSettlementInboxRequest) String() string {
 func (*BattleSettlementInboxRequest) ProtoMessage() {}
 
 func (x *BattleSettlementInboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[5]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -961,7 +1227,7 @@ func (x *BattleSettlementInboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleSettlementInboxRequest.ProtoReflect.Descriptor instead.
 func (*BattleSettlementInboxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{5}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BattleSettlementInboxRequest) GetPlayerId() uint64 {
@@ -1029,7 +1295,7 @@ type BattleSettlementInboxResponse struct {
 
 func (x *BattleSettlementInboxResponse) Reset() {
 	*x = BattleSettlementInboxResponse{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1307,7 @@ func (x *BattleSettlementInboxResponse) String() string {
 func (*BattleSettlementInboxResponse) ProtoMessage() {}
 
 func (x *BattleSettlementInboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[6]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1320,7 @@ func (x *BattleSettlementInboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleSettlementInboxResponse.ProtoReflect.Descriptor instead.
 func (*BattleSettlementInboxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{6}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *BattleSettlementInboxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1130,7 +1396,7 @@ type FetchPlayerInboxRequest struct {
 
 func (x *FetchPlayerInboxRequest) Reset() {
 	*x = FetchPlayerInboxRequest{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1142,7 +1408,7 @@ func (x *FetchPlayerInboxRequest) String() string {
 func (*FetchPlayerInboxRequest) ProtoMessage() {}
 
 func (x *FetchPlayerInboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[7]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1155,7 +1421,7 @@ func (x *FetchPlayerInboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchPlayerInboxRequest.ProtoReflect.Descriptor instead.
 func (*FetchPlayerInboxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{7}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *FetchPlayerInboxRequest) GetPlayerId() uint64 {
@@ -1237,7 +1503,7 @@ type PlayerInboxItem struct {
 
 func (x *PlayerInboxItem) Reset() {
 	*x = PlayerInboxItem{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1249,7 +1515,7 @@ func (x *PlayerInboxItem) String() string {
 func (*PlayerInboxItem) ProtoMessage() {}
 
 func (x *PlayerInboxItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[8]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1262,7 +1528,7 @@ func (x *PlayerInboxItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInboxItem.ProtoReflect.Descriptor instead.
 func (*PlayerInboxItem) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{8}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PlayerInboxItem) GetSeq() uint64 {
@@ -1336,7 +1602,7 @@ type FetchPlayerInboxResponse struct {
 
 func (x *FetchPlayerInboxResponse) Reset() {
 	*x = FetchPlayerInboxResponse{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1348,7 +1614,7 @@ func (x *FetchPlayerInboxResponse) String() string {
 func (*FetchPlayerInboxResponse) ProtoMessage() {}
 
 func (x *FetchPlayerInboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[9]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1361,7 +1627,7 @@ func (x *FetchPlayerInboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchPlayerInboxResponse.ProtoReflect.Descriptor instead.
 func (*FetchPlayerInboxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{9}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *FetchPlayerInboxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1425,7 +1691,7 @@ type PlayerInboxDecisionReport struct {
 
 func (x *PlayerInboxDecisionReport) Reset() {
 	*x = PlayerInboxDecisionReport{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1437,7 +1703,7 @@ func (x *PlayerInboxDecisionReport) String() string {
 func (*PlayerInboxDecisionReport) ProtoMessage() {}
 
 func (x *PlayerInboxDecisionReport) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[10]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1450,7 +1716,7 @@ func (x *PlayerInboxDecisionReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInboxDecisionReport.ProtoReflect.Descriptor instead.
 func (*PlayerInboxDecisionReport) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{10}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PlayerInboxDecisionReport) GetSeq() uint64 {
@@ -1499,7 +1765,7 @@ type AckPlayerInboxRequest struct {
 
 func (x *AckPlayerInboxRequest) Reset() {
 	*x = AckPlayerInboxRequest{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1511,7 +1777,7 @@ func (x *AckPlayerInboxRequest) String() string {
 func (*AckPlayerInboxRequest) ProtoMessage() {}
 
 func (x *AckPlayerInboxRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[11]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1524,7 +1790,7 @@ func (x *AckPlayerInboxRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckPlayerInboxRequest.ProtoReflect.Descriptor instead.
 func (*AckPlayerInboxRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{11}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AckPlayerInboxRequest) GetPlayerId() uint64 {
@@ -1594,7 +1860,7 @@ type PlayerInboxAckItem struct {
 
 func (x *PlayerInboxAckItem) Reset() {
 	*x = PlayerInboxAckItem{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1606,7 +1872,7 @@ func (x *PlayerInboxAckItem) String() string {
 func (*PlayerInboxAckItem) ProtoMessage() {}
 
 func (x *PlayerInboxAckItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[12]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1619,7 +1885,7 @@ func (x *PlayerInboxAckItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerInboxAckItem.ProtoReflect.Descriptor instead.
 func (*PlayerInboxAckItem) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{12}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PlayerInboxAckItem) GetSeq() uint64 {
@@ -1657,7 +1923,7 @@ type AckPlayerInboxResponse struct {
 
 func (x *AckPlayerInboxResponse) Reset() {
 	*x = AckPlayerInboxResponse{}
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[13]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1669,7 +1935,7 @@ func (x *AckPlayerInboxResponse) String() string {
 func (*AckPlayerInboxResponse) ProtoMessage() {}
 
 func (x *AckPlayerInboxResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[13]
+	mi := &file_proto_player_inbox_player_inbox_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1682,7 +1948,7 @@ func (x *AckPlayerInboxResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AckPlayerInboxResponse.ProtoReflect.Descriptor instead.
 func (*AckPlayerInboxResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{13}
+	return file_proto_player_inbox_player_inbox_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *AckPlayerInboxResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -1780,7 +2046,30 @@ const file_proto_player_inbox_player_inbox_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x05 \x01(\x04R\texpiresAt\"9\n" +
 	"\x11GmItemGainPayload\x12$\n" +
-	"\x0eitem_config_id\x18\x01 \x01(\rR\fitemConfigId\"\xc9\x02\n" +
+	"\x0eitem_config_id\x18\x01 \x01(\rR\fitemConfigId\"\x8b\x02\n" +
+	"\x19CosmeticGiftCreditPayload\x12\x17\n" +
+	"\agift_id\x18\x01 \x01(\x04R\x06giftId\x12(\n" +
+	"\x10sender_player_id\x18\x02 \x01(\x04R\x0esenderPlayerId\x12\x1f\n" +
+	"\vsender_name\x18\x03 \x01(\tR\n" +
+	"senderName\x12\x1f\n" +
+	"\vtarget_kind\x18\x04 \x01(\rR\n" +
+	"targetKind\x12\"\n" +
+	"\rtarget_id_u32\x18\x05 \x01(\rR\vtargetIdU32\x12\"\n" +
+	"\rtarget_id_str\x18\x06 \x01(\tR\vtargetIdStr\x12!\n" +
+	"\fpaid_diamond\x18\a \x01(\x04R\vpaidDiamond\"\xa3\x01\n" +
+	"\x19CosmeticGiftRefundPayload\x12\x17\n" +
+	"\agift_id\x18\x01 \x01(\x04R\x06giftId\x12.\n" +
+	"\x13recipient_player_id\x18\x02 \x01(\x04R\x11recipientPlayerId\x12%\n" +
+	"\x0erefund_diamond\x18\x03 \x01(\x04R\rrefundDiamond\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\xdf\x01\n" +
+	"\x19CosmeticGiftRevokePayload\x12\x17\n" +
+	"\agift_id\x18\x01 \x01(\x04R\x06giftId\x12(\n" +
+	"\x10sender_player_id\x18\x02 \x01(\x04R\x0esenderPlayerId\x12\x1f\n" +
+	"\vtarget_kind\x18\x03 \x01(\rR\n" +
+	"targetKind\x12\"\n" +
+	"\rtarget_id_u32\x18\x04 \x01(\rR\vtargetIdU32\x12\"\n" +
+	"\rtarget_id_str\x18\x05 \x01(\tR\vtargetIdStr\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\"\xc9\x02\n" +
 	"\x1cBattleSettlementInboxRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x124\n" +
@@ -1859,15 +2148,17 @@ const file_proto_player_inbox_player_inbox_proto_rawDesc = "" +
 	"\aresults\x18\x06 \x03(\v2 .player_inbox.PlayerInboxAckItemR\aresults*V\n" +
 	"\x10PlayerInboxClass\x12\"\n" +
 	"\x1ePLAYER_INBOX_CLASS_UNSPECIFIED\x10\x00\x12\x1e\n" +
-	"\x1aPLAYER_INBOX_CLASS_DURABLE\x10\x01*\x7f\n" +
+	"\x1aPLAYER_INBOX_CLASS_DURABLE\x10\x01*\xa0\x01\n" +
 	"\x17PlayerInboxProducerKind\x12%\n" +
 	"!PLAYER_INBOX_PRODUCER_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18PLAYER_INBOX_PRODUCER_GM\x10\x01\x12\x1f\n" +
-	"\x1bPLAYER_INBOX_PRODUCER_MATCH\x10\x02*\xa8\x01\n" +
+	"\x1bPLAYER_INBOX_PRODUCER_MATCH\x10\x02\x12\x1f\n" +
+	"\x1bPLAYER_INBOX_PRODUCER_SCENE\x10\x03*\xe0\x01\n" +
 	"\x11PlayerInboxDomain\x12#\n" +
 	"\x1fPLAYER_INBOX_DOMAIN_UNSPECIFIED\x10\x00\x124\n" +
 	"%PLAYER_INBOX_DOMAIN_SCENE_GM_SANCTION\x10\x01\x1a\t\x8a\x8a\xcd\x01\x04\b@\x10\x01\x128\n" +
-	"+PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT\x10\x02\x1a\a\x8a\x8a\xcd\x01\x02\b\x01*\xd3\x04\n" +
+	"+PLAYER_INBOX_DOMAIN_SCENE_BATTLE_SETTLEMENT\x10\x02\x1a\a\x8a\x8a\xcd\x01\x02\b\x01\x126\n" +
+	"'PLAYER_INBOX_DOMAIN_SCENE_COSMETIC_GIFT\x10\x03\x1a\t\x8a\x8a\xcd\x01\x04\b@\x10\x01*\xf6\x06\n" +
 	"\x16PlayerInboxMessageType\x12 \n" +
 	"\x1cPLAYER_INBOX_MSG_UNSPECIFIED\x10\x00\x12\\\n" +
 	"'PLAYER_INBOX_MSG_GM_BLOCK_CURRENCY_GAIN\x10\x01\x1a/\x92\x8a\xcd\x01*\b\x01\x10\x01\x1a\"player_inbox.GmCurrencyGainPayload @\x12^\n" +
@@ -1875,7 +2166,10 @@ const file_proto_player_inbox_player_inbox_proto_rawDesc = "" +
 	"(PLAYER_INBOX_MSG_GM_ATTACH_CURRENCY_DEBT\x10\x03\x1a0\x92\x8a\xcd\x01+\b\x01\x10\x01\x1a\"player_inbox.GmCurrencyDebtPayload \x80\b\x12K\n" +
 	"\"PLAYER_INBOX_MSG_BATTLE_SETTLEMENT\x10\x04\x1a#\x92\x8a\xcd\x01\x1e\b\x02\x10\x01\x1a\x14BattleSettlementData \x80\x80\x01\x12T\n" +
 	"#PLAYER_INBOX_MSG_GM_BLOCK_ITEM_GAIN\x10\x05\x1a+\x92\x8a\xcd\x01&\b\x01\x10\x01\x1a\x1eplayer_inbox.GmItemGainPayload @\x12V\n" +
-	"%PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN\x10\x06\x1a+\x92\x8a\xcd\x01&\b\x01\x10\x01\x1a\x1eplayer_inbox.GmItemGainPayload @*\xdc\x01\n" +
+	"%PLAYER_INBOX_MSG_GM_UNBLOCK_ITEM_GAIN\x10\x06\x1a+\x92\x8a\xcd\x01&\b\x01\x10\x01\x1a\x1eplayer_inbox.GmItemGainPayload @\x12_\n" +
+	"%PLAYER_INBOX_MSG_COSMETIC_GIFT_CREDIT\x10\a\x1a4\x92\x8a\xcd\x01/\b\x03\x10\x01\x1a&player_inbox.CosmeticGiftCreditPayload \x80\x04\x12_\n" +
+	"%PLAYER_INBOX_MSG_COSMETIC_GIFT_REFUND\x10\b\x1a4\x92\x8a\xcd\x01/\b\x03\x10\x01\x1a&player_inbox.CosmeticGiftRefundPayload \x80\x04\x12_\n" +
+	"%PLAYER_INBOX_MSG_COSMETIC_GIFT_REVOKE\x10\t\x1a4\x92\x8a\xcd\x01/\b\x01\x10\x01\x1a&player_inbox.CosmeticGiftRevokePayload \x80\x04*\xdc\x01\n" +
 	"\x14PlayerInboxItemState\x12!\n" +
 	"\x1dPLAYER_INBOX_ITEM_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19PLAYER_INBOX_ITEM_PENDING\x10\x01\x12\x1d\n" +
@@ -1940,7 +2234,7 @@ func file_proto_player_inbox_player_inbox_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_player_inbox_player_inbox_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
-var file_proto_player_inbox_player_inbox_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_player_inbox_player_inbox_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_proto_player_inbox_player_inbox_proto_goTypes = []any{
 	(PlayerInboxClass)(0),                 // 0: player_inbox.PlayerInboxClass
 	(PlayerInboxProducerKind)(0),          // 1: player_inbox.PlayerInboxProducerKind
@@ -1958,60 +2252,63 @@ var file_proto_player_inbox_player_inbox_proto_goTypes = []any{
 	(*GmCurrencyGainPayload)(nil),         // 13: player_inbox.GmCurrencyGainPayload
 	(*GmCurrencyDebtPayload)(nil),         // 14: player_inbox.GmCurrencyDebtPayload
 	(*GmItemGainPayload)(nil),             // 15: player_inbox.GmItemGainPayload
-	(*BattleSettlementInboxRequest)(nil),  // 16: player_inbox.BattleSettlementInboxRequest
-	(*BattleSettlementInboxResponse)(nil), // 17: player_inbox.BattleSettlementInboxResponse
-	(*FetchPlayerInboxRequest)(nil),       // 18: player_inbox.FetchPlayerInboxRequest
-	(*PlayerInboxItem)(nil),               // 19: player_inbox.PlayerInboxItem
-	(*FetchPlayerInboxResponse)(nil),      // 20: player_inbox.FetchPlayerInboxResponse
-	(*PlayerInboxDecisionReport)(nil),     // 21: player_inbox.PlayerInboxDecisionReport
-	(*AckPlayerInboxRequest)(nil),         // 22: player_inbox.AckPlayerInboxRequest
-	(*PlayerInboxAckItem)(nil),            // 23: player_inbox.PlayerInboxAckItem
-	(*AckPlayerInboxResponse)(nil),        // 24: player_inbox.AckPlayerInboxResponse
-	(*base.ServiceCallAuth)(nil),          // 25: common.base.ServiceCallAuth
-	(*base.TipInfoMessage)(nil),           // 26: TipInfoMessage
-	(*base.RoleAdmissionIdentity)(nil),    // 27: common.base.RoleAdmissionIdentity
-	(*descriptorpb.EnumValueOptions)(nil), // 28: google.protobuf.EnumValueOptions
+	(*CosmeticGiftCreditPayload)(nil),     // 16: player_inbox.CosmeticGiftCreditPayload
+	(*CosmeticGiftRefundPayload)(nil),     // 17: player_inbox.CosmeticGiftRefundPayload
+	(*CosmeticGiftRevokePayload)(nil),     // 18: player_inbox.CosmeticGiftRevokePayload
+	(*BattleSettlementInboxRequest)(nil),  // 19: player_inbox.BattleSettlementInboxRequest
+	(*BattleSettlementInboxResponse)(nil), // 20: player_inbox.BattleSettlementInboxResponse
+	(*FetchPlayerInboxRequest)(nil),       // 21: player_inbox.FetchPlayerInboxRequest
+	(*PlayerInboxItem)(nil),               // 22: player_inbox.PlayerInboxItem
+	(*FetchPlayerInboxResponse)(nil),      // 23: player_inbox.FetchPlayerInboxResponse
+	(*PlayerInboxDecisionReport)(nil),     // 24: player_inbox.PlayerInboxDecisionReport
+	(*AckPlayerInboxRequest)(nil),         // 25: player_inbox.AckPlayerInboxRequest
+	(*PlayerInboxAckItem)(nil),            // 26: player_inbox.PlayerInboxAckItem
+	(*AckPlayerInboxResponse)(nil),        // 27: player_inbox.AckPlayerInboxResponse
+	(*base.ServiceCallAuth)(nil),          // 28: common.base.ServiceCallAuth
+	(*base.TipInfoMessage)(nil),           // 29: TipInfoMessage
+	(*base.RoleAdmissionIdentity)(nil),    // 30: common.base.RoleAdmissionIdentity
+	(*descriptorpb.EnumValueOptions)(nil), // 31: google.protobuf.EnumValueOptions
 }
 var file_proto_player_inbox_player_inbox_proto_depIdxs = []int32{
 	2,  // 0: player_inbox.PlayerInboxTypeSpec.domain:type_name -> player_inbox.PlayerInboxDomain
 	0,  // 1: player_inbox.PlayerInboxTypeSpec.klass:type_name -> player_inbox.PlayerInboxClass
-	25, // 2: player_inbox.BattleSettlementInboxRequest.auth:type_name -> common.base.ServiceCallAuth
-	26, // 3: player_inbox.BattleSettlementInboxResponse.error_message:type_name -> TipInfoMessage
+	28, // 2: player_inbox.BattleSettlementInboxRequest.auth:type_name -> common.base.ServiceCallAuth
+	29, // 3: player_inbox.BattleSettlementInboxResponse.error_message:type_name -> TipInfoMessage
 	4,  // 4: player_inbox.BattleSettlementInboxResponse.state:type_name -> player_inbox.PlayerInboxItemState
-	25, // 5: player_inbox.BattleSettlementInboxResponse.auth:type_name -> common.base.ServiceCallAuth
+	28, // 5: player_inbox.BattleSettlementInboxResponse.auth:type_name -> common.base.ServiceCallAuth
 	2,  // 6: player_inbox.FetchPlayerInboxRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	27, // 7: player_inbox.FetchPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
-	25, // 8: player_inbox.FetchPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
+	30, // 7: player_inbox.FetchPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
+	28, // 8: player_inbox.FetchPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
 	3,  // 9: player_inbox.PlayerInboxItem.msg_type:type_name -> player_inbox.PlayerInboxMessageType
 	5,  // 10: player_inbox.PlayerInboxItem.directive:type_name -> player_inbox.PlayerInboxDirective
 	6,  // 11: player_inbox.PlayerInboxItem.void_reason:type_name -> player_inbox.PlayerInboxVoidReason
-	26, // 12: player_inbox.FetchPlayerInboxResponse.error_message:type_name -> TipInfoMessage
+	29, // 12: player_inbox.FetchPlayerInboxResponse.error_message:type_name -> TipInfoMessage
 	2,  // 13: player_inbox.FetchPlayerInboxResponse.domain:type_name -> player_inbox.PlayerInboxDomain
 	9,  // 14: player_inbox.FetchPlayerInboxResponse.fence:type_name -> player_inbox.PlayerInboxFenceVerdict
-	19, // 15: player_inbox.FetchPlayerInboxResponse.items:type_name -> player_inbox.PlayerInboxItem
+	22, // 15: player_inbox.FetchPlayerInboxResponse.items:type_name -> player_inbox.PlayerInboxItem
 	8,  // 16: player_inbox.PlayerInboxDecisionReport.outcome:type_name -> player_inbox.PlayerInboxOutcome
 	2,  // 17: player_inbox.AckPlayerInboxRequest.domain:type_name -> player_inbox.PlayerInboxDomain
-	21, // 18: player_inbox.AckPlayerInboxRequest.decisions:type_name -> player_inbox.PlayerInboxDecisionReport
-	27, // 19: player_inbox.AckPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
-	25, // 20: player_inbox.AckPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
+	24, // 18: player_inbox.AckPlayerInboxRequest.decisions:type_name -> player_inbox.PlayerInboxDecisionReport
+	30, // 19: player_inbox.AckPlayerInboxRequest.admission:type_name -> common.base.RoleAdmissionIdentity
+	28, // 20: player_inbox.AckPlayerInboxRequest.auth:type_name -> common.base.ServiceCallAuth
 	10, // 21: player_inbox.PlayerInboxAckItem.result:type_name -> player_inbox.PlayerInboxAckResult
 	4,  // 22: player_inbox.PlayerInboxAckItem.state:type_name -> player_inbox.PlayerInboxItemState
-	26, // 23: player_inbox.AckPlayerInboxResponse.error_message:type_name -> TipInfoMessage
+	29, // 23: player_inbox.AckPlayerInboxResponse.error_message:type_name -> TipInfoMessage
 	2,  // 24: player_inbox.AckPlayerInboxResponse.domain:type_name -> player_inbox.PlayerInboxDomain
 	9,  // 25: player_inbox.AckPlayerInboxResponse.fence:type_name -> player_inbox.PlayerInboxFenceVerdict
-	23, // 26: player_inbox.AckPlayerInboxResponse.results:type_name -> player_inbox.PlayerInboxAckItem
-	28, // 27: player_inbox.OptionPlayerInboxDomain:extendee -> google.protobuf.EnumValueOptions
-	28, // 28: player_inbox.OptionPlayerInboxType:extendee -> google.protobuf.EnumValueOptions
+	26, // 26: player_inbox.AckPlayerInboxResponse.results:type_name -> player_inbox.PlayerInboxAckItem
+	31, // 27: player_inbox.OptionPlayerInboxDomain:extendee -> google.protobuf.EnumValueOptions
+	31, // 28: player_inbox.OptionPlayerInboxType:extendee -> google.protobuf.EnumValueOptions
 	11, // 29: player_inbox.OptionPlayerInboxDomain:type_name -> player_inbox.PlayerInboxDomainSpec
 	12, // 30: player_inbox.OptionPlayerInboxType:type_name -> player_inbox.PlayerInboxTypeSpec
-	18, // 31: player_inbox.PlayerInbox.FetchItems:input_type -> player_inbox.FetchPlayerInboxRequest
-	22, // 32: player_inbox.PlayerInbox.AckItems:input_type -> player_inbox.AckPlayerInboxRequest
-	16, // 33: player_inbox.PlayerInbox.EnqueueBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
-	16, // 34: player_inbox.PlayerInbox.LookupBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
-	20, // 35: player_inbox.PlayerInbox.FetchItems:output_type -> player_inbox.FetchPlayerInboxResponse
-	24, // 36: player_inbox.PlayerInbox.AckItems:output_type -> player_inbox.AckPlayerInboxResponse
-	17, // 37: player_inbox.PlayerInbox.EnqueueBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
-	17, // 38: player_inbox.PlayerInbox.LookupBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
+	21, // 31: player_inbox.PlayerInbox.FetchItems:input_type -> player_inbox.FetchPlayerInboxRequest
+	25, // 32: player_inbox.PlayerInbox.AckItems:input_type -> player_inbox.AckPlayerInboxRequest
+	19, // 33: player_inbox.PlayerInbox.EnqueueBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
+	19, // 34: player_inbox.PlayerInbox.LookupBattleSettlement:input_type -> player_inbox.BattleSettlementInboxRequest
+	23, // 35: player_inbox.PlayerInbox.FetchItems:output_type -> player_inbox.FetchPlayerInboxResponse
+	27, // 36: player_inbox.PlayerInbox.AckItems:output_type -> player_inbox.AckPlayerInboxResponse
+	20, // 37: player_inbox.PlayerInbox.EnqueueBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
+	20, // 38: player_inbox.PlayerInbox.LookupBattleSettlement:output_type -> player_inbox.BattleSettlementInboxResponse
 	35, // [35:39] is the sub-list for method output_type
 	31, // [31:35] is the sub-list for method input_type
 	29, // [29:31] is the sub-list for extension type_name
@@ -2030,7 +2327,7 @@ func file_proto_player_inbox_player_inbox_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_player_inbox_player_inbox_proto_rawDesc), len(file_proto_player_inbox_player_inbox_proto_rawDesc)),
 			NumEnums:      11,
-			NumMessages:   14,
+			NumMessages:   17,
 			NumExtensions: 2,
 			NumServices:   1,
 		},

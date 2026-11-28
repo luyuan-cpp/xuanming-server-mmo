@@ -1,6 +1,7 @@
 {
  "data": [
   {
+   "bundle_discount_bps": 8500,
    "completion_badge_name": "留灯同袍",
    "desc": "归元城面铺与月汐湾渡口间，总有一盏留到深夜的灯。",
    "enabled": 1,
@@ -9,9 +10,11 @@
    "id": 1,
    "name": "留灯院旧友",
    "series_key": "lantern_courtyard",
-   "sort_order": 1
+   "sort_order": 1,
+   "unit_price_diamond": 100
   },
   {
+   "bundle_discount_bps": 8500,
    "completion_badge_name": "三灵同契",
    "desc": "霜刃、赤符、沧澜三系灵法同出玄冥，各守一脉气象。",
    "enabled": 1,
@@ -20,9 +23,11 @@
    "id": 2,
    "name": "水火冰锋",
    "series_key": "elemental_blades",
-   "sort_order": 2
+   "sort_order": 2,
+   "unit_price_diamond": 100
   },
   {
+   "bundle_discount_bps": 8500,
    "completion_badge_name": "清音杏林",
    "desc": "青莲抚伤，瑶琴涤尘，乱世中守住一方安宁。",
    "enabled": 1,
@@ -31,7 +36,8 @@
    "id": 3,
    "name": "清音济世",
    "series_key": "lotus_melody",
-   "sort_order": 3
+   "sort_order": 3,
+   "unit_price_diamond": 100
   }
  ]
 }

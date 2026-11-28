@@ -35,19 +35,20 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_afk_5fpass_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\030afk_pass_error_tip.proto*\257\001\n\016afk_pass_"
+    "\n\030afk_pass_error_tip.proto*\341\001\n\016afk_pass_"
     "error\022\025\n\021kAfk_pass_errorOK\020\000\022\032\n\024kAfkPass"
     "PriceChanged\020\200\372\001\022\037\n\031kAfkPassCurrencyNotE"
     "nough\020\201\372\001\022\030\n\022kAfkPassStackLimit\020\202\372\001\022\024\n\016k"
     "AfkPassFrozen\020\203\372\001\022\031\n\023kAfkPassUnavailable"
-    "\020\204\372\001B$\n\016com.game.tableZ\022generated/pb/tab"
-    "leb\006proto3"
+    "\020\204\372\001\022\025\n\017kAfkPassBagFull\020\205\372\001\022\031\n\023kAfkPassP"
+    "lanInvalid\020\206\372\001B$\n\016com.game.tableZ\022genera"
+    "ted/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_afk_5fpass_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_afk_5fpass_5ferror_5ftip_2eproto = {
     false,
     false,
-    250,
+    300,
     descriptor_table_protodef_afk_5fpass_5ferror_5ftip_2eproto,
     "afk_pass_error_tip.proto",
     &descriptor_table_afk_5fpass_5ferror_5ftip_2eproto_once,
@@ -66,7 +67,7 @@ afk_pass_error_descriptor() {
   return file_level_enum_descriptors_afk_5fpass_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t afk_pass_error_internal_data_[] = {
-    65536u, 327680u, 32003u, 32001u, 32004u, 32000u, 32002u, };
+    65536u, 458752u, 32003u, 32001u, 32005u, 32000u, 32002u, 32004u, 32006u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

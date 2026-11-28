@@ -400,7 +400,21 @@ func (s *Store) Send(ctx context.Context, in *chatpb.SendChatRequest) (SendResul
 		}
 	}
 	var payload []byte
-	message := &chatpb.ChatMessage{SenderPlayerId: actor, TargetPlayerId: peer, Channel: in.Message.Channel, Content: content, SendTimeMs: int64(now)}
+	// M-6 权威覆写：聊天气泡与分享卡底纹只信 data_service 读出的玩家持久档案，绝不信任客户端自报值。
+	var bubbleSkinId, shareCardSkinId uint32
+	if hasProfile {
+		bubbleSkinId = profile.BubbleSkinId
+		shareCardSkinId = profile.ShareCardSkinId
+	}
+	message := &chatpb.ChatMessage{
+		SenderPlayerId:  actor,
+		TargetPlayerId:  peer,
+		Channel:         in.Message.Channel,
+		Content:         content,
+		SendTimeMs:      int64(now),
+		BubbleSkinId:    bubbleSkinId,
+		ShareCardSkinId: shareCardSkinId,
+	}
 	payload, err = (proto.MarshalOptions{Deterministic: true}).Marshal(message)
 	if err != nil {
 		return SendResult{}, err

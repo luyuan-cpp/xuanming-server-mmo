@@ -20,6 +20,7 @@ message RewardedAdSlotTable {
 	uint64 reward_amount = 9;
 	uint32 require_ssv = 10;
 	uint32 platform_mask = 11;
+	uint32 reward_kind = 12;
 }
 
 message RewardedAdSlotTableData {

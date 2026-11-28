@@ -376,3 +376,49 @@ func (scenePetClientPlayerRpc) decodeAscendPetTier(reply *base.MessageContent, e
 	}
 	return resp, nil
 }
+
+// SavePetSquadPreset 异步调用 ScenePetClientPlayer.SavePetSquadPreset(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) SavePetSquadPreset(c *pkg.GameClient, req *scene.SavePetSquadPresetRequest, timeout time.Duration, done func(*scene.SavePetSquadPresetResponse, error)) {
+	c.Call(game.ScenePetClientPlayerSavePetSquadPresetMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeSavePetSquadPreset(reply, err))
+	})
+}
+
+// SavePetSquadPresetSync 同步调用 ScenePetClientPlayer.SavePetSquadPreset(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) SavePetSquadPresetSync(ctx context.Context, c *pkg.GameClient, req *scene.SavePetSquadPresetRequest, timeout time.Duration) (*scene.SavePetSquadPresetResponse, error) {
+	return r.decodeSavePetSquadPreset(c.CallSync(ctx, game.ScenePetClientPlayerSavePetSquadPresetMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeSavePetSquadPreset(reply *base.MessageContent, err error) (*scene.SavePetSquadPresetResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.SavePetSquadPresetResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.SavePetSquadPreset reply: %w", err)
+	}
+	return resp, nil
+}
+
+// UnlockPetSquadPresetSlot 异步调用 ScenePetClientPlayer.UnlockPetSquadPresetSlot(REQUEST),done 的契约见 ScenePetClientPlayer。
+func (r scenePetClientPlayerRpc) UnlockPetSquadPresetSlot(c *pkg.GameClient, req *scene.UnlockPetSquadPresetSlotRequest, timeout time.Duration, done func(*scene.UnlockPetSquadPresetSlotResponse, error)) {
+	c.Call(game.ScenePetClientPlayerUnlockPetSquadPresetSlotMessageId, req, timeout, func(reply *base.MessageContent, err error) {
+		done(r.decodeUnlockPetSquadPresetSlot(reply, err))
+	})
+}
+
+// UnlockPetSquadPresetSlotSync 同步调用 ScenePetClientPlayer.UnlockPetSquadPresetSlot(REQUEST);禁止在 RecvLoop goroutine 上调用。
+func (r scenePetClientPlayerRpc) UnlockPetSquadPresetSlotSync(ctx context.Context, c *pkg.GameClient, req *scene.UnlockPetSquadPresetSlotRequest, timeout time.Duration) (*scene.UnlockPetSquadPresetSlotResponse, error) {
+	return r.decodeUnlockPetSquadPresetSlot(c.CallSync(ctx, game.ScenePetClientPlayerUnlockPetSquadPresetSlotMessageId, req, timeout))
+}
+
+func (scenePetClientPlayerRpc) decodeUnlockPetSquadPresetSlot(reply *base.MessageContent, err error) (*scene.UnlockPetSquadPresetSlotResponse, error) {
+	if err != nil {
+		return nil, err
+	}
+	resp := &scene.UnlockPetSquadPresetSlotResponse{}
+	if err = proto.Unmarshal(reply.GetSerializedMessage(), resp); err != nil {
+		return nil, fmt.Errorf("rpc: decode ScenePetClientPlayer.UnlockPetSquadPresetSlot reply: %w", err)
+	}
+	return resp, nil
+}

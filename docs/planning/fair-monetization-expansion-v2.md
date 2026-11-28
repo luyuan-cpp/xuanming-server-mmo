@@ -89,7 +89,7 @@
      - 复用既有 Redis 投影 `player:afk_pass:{<player_id>}`（`go/trade` 直接读取，零新增跨服务 RPC，读失败 fail-safe 按普通玩家基础档降级不阻断挂单）：
        - 集市同时在售挂单上限：普通玩家 `10` 单 → 轻享卡生效期 **`20` 单**；
        - 离线摆摊单次营业时长（`stall-system.md` 实施时同步挂载）：普通 `48 小时` → 轻享卡生效期 **`96 小时`**；
-       - `AfkPassInfo` 末尾透出 `uint32 market_listing_limit = 13;`、`uint32 stall_duration_hours = 14;`、`uint32 monthly_free_trial_quota = 15;`、`uint32 monthly_free_trial_used = 16;` 与 `repeated AfkPassPlanView plans = 17;`。
+       - `AfkPassInfo` 末尾透出 `uint32 market_listing_limit = 13;`、`uint32 stall_duration_hours = 14;`、`uint32 weekly_free_trial_quota = 15;`、`uint32 weekly_free_trial_used = 16;` 与 `repeated AfkPassPlanView plans = 17;`。
   4. **月卡期「衣柜随心试穿」特权**：
      - 普通玩家每个未拥有角色终身 1 次 1 小时免费试穿（`appearance_trial_used_bits`）；
      - 轻享卡生效期间，角色每自然周（UTC+8 周一 05:00，非日清防打卡）额外享有 **3 次「随心试穿（1 小时）」**，可对任意已试用过但尚未拥有的角色形象再次发起 1 小时试穿（**不授予永久权**，到期照常还原并温和弹出单行“喜欢可在衣柜永久收藏”提示），既让轻享卡第 1 天就有强体感，又直接拉动衣柜永久买断。

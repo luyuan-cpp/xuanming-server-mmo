@@ -1521,8 +1521,10 @@ type BatchCheckSocialRelationsRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SideAPlayerIds []uint64               `protobuf:"varint,1,rep,packed,name=side_a_player_ids,json=sideAPlayerIds,proto3" json:"side_a_player_ids,omitempty"`
 	SideBPlayerIds []uint64               `protobuf:"varint,2,rep,packed,name=side_b_player_ids,json=sideBPlayerIds,proto3" json:"side_b_player_ids,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 可选：要求双方互为好友的最低持续时长（毫秒；0 = 不限，仅校验当前互为好友；好友外观赠礼传 7 天 = 604800000）。
+	MinFriendDurationMs int64 `protobuf:"varint,3,opt,name=min_friend_duration_ms,json=minFriendDurationMs,proto3" json:"min_friend_duration_ms,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BatchCheckSocialRelationsRequest) Reset() {
@@ -1567,6 +1569,13 @@ func (x *BatchCheckSocialRelationsRequest) GetSideBPlayerIds() []uint64 {
 		return x.SideBPlayerIds
 	}
 	return nil
+}
+
+func (x *BatchCheckSocialRelationsRequest) GetMinFriendDurationMs() int64 {
+	if x != nil {
+		return x.MinFriendDurationMs
+	}
+	return 0
 }
 
 type BatchCheckSocialRelationsResponse struct {
@@ -1731,10 +1740,11 @@ const file_proto_friend_friend_proto_rawDesc = "" +
 	"\x06reason\x18\x01 \x01(\x0e2\x1b.friendpb.FriendEventReasonR\x06reason\x12 \n" +
 	"\fby_player_id\x18\x02 \x01(\x04R\n" +
 	"byPlayerId\x12\x13\n" +
-	"\x05ts_ms\x18\x03 \x01(\x03R\x04tsMs\"x\n" +
+	"\x05ts_ms\x18\x03 \x01(\x03R\x04tsMs\"\xad\x01\n" +
 	" BatchCheckSocialRelationsRequest\x12)\n" +
 	"\x11side_a_player_ids\x18\x01 \x03(\x04R\x0esideAPlayerIds\x12)\n" +
-	"\x11side_b_player_ids\x18\x02 \x03(\x04R\x0esideBPlayerIds\"\xa5\x01\n" +
+	"\x11side_b_player_ids\x18\x02 \x03(\x04R\x0esideBPlayerIds\x123\n" +
+	"\x16min_friend_duration_ms\x18\x03 \x01(\x03R\x13minFriendDurationMs\"\xa5\x01\n" +
 	"!BatchCheckSocialRelationsResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12\"\n" +
 	"\rhas_any_block\x18\x02 \x01(\bR\vhasAnyBlock\x12&\n" +
